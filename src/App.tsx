@@ -12,6 +12,8 @@ import { SecretPage } from "./pages/SecretPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import "./App.css";
 import GalaxyBackground from "./components/GalaxyBackground";
+import { MapPage } from "./pages/MapPage";
+import { PhotoboothPage } from "./pages/PhotoboothPage";
 
 // One dark theme for every antd component in the app (buttons, inputs,
 // cards, skeletons, alerts, toasts, ...) instead of re-declaring
@@ -50,9 +52,9 @@ export default function App() {
               <Route path="/music" element={<MusicPage />} />
               <Route path="/secret" element={<SecretPage />} />
               <Route path="/history" element={<HistoryPage />} />
-              {/* Map and Photobooth are next — each substantial enough
-                  (Leaflet, webcam capture, MediaPipe gesture detection) to
-                  warrant their own dedicated pass. */}
+               <Route path="/map" element={<MapPage />} />
+            <Route path="/photobooth" element={<PhotoboothPage />} />
+
             </Routes>
           </BrowserRouter>
         </PlayerProvider>

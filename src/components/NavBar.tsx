@@ -11,6 +11,8 @@ const NAV_ITEMS: { label: string; path: string }[] = [
   { label: "Music", path: "/music" },
   { label: "His-tory", path: "/history" },
   { label: "Relax", path: "/relax" },
+  { label: "Map", path: "/map" },
+  { label: "Photobooth", path: "/photobooth" },
   { label: "???", path: "/secret" },
 ];
 
