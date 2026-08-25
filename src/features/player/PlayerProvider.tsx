@@ -42,7 +42,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // component itself already does its own client-side shuffle when
     // mode === "shuffle" (see hooks/usePlayerEngine.ts), so no
     // shuffling needs to happen here — just pass the mode through.
-    if(mode == "shuffle"){
+    if(newMode == "Shuffle"){
       tracks = shuffleArray(tracks)
     }
     setQueue(tracks);
