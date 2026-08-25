@@ -109,10 +109,10 @@ export function HomePage() {
   return (
     <div className="page">
 
-      <h1 className="hero-title">EVOL Space</h1>
+      {/* <h1 className="hero-title">EVOL Space</h1> */}
       <TypingQuote />
       <FacebookEmbed />
-      <hr style={{ borderColor: "#2a2a2a", margin: "24px 0" }} />
+      {/* <hr style={{ borderColor: "#2a2a2a", margin: "24px 0" }} /> */}
     </div>
   );
 }

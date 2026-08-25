@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 /**
  * GalaxyRing
@@ -8,6 +8,7 @@ import React, { useMemo, useState } from "react";
  * drop it into whatever backdrop you already have.
  */
 const GalaxyRing = ({
+   trigger="0",
   size = 400,
   strokeWidth = 18,
   duration = 2.8,
@@ -15,7 +16,9 @@ const GalaxyRing = ({
   className = "",
 }) => {
   const [animKey, setAnimKey] = useState(0);
-
+useEffect(() => {
+    setAnimKey((k) => k + 1);
+  }, [trigger]);
   const maxRadius = minRadius + strokeWidth;
   const cx = size / 2;
   const cy = size / 2;

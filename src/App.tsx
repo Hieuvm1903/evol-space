@@ -10,6 +10,7 @@ import { RelaxPage } from "./pages/RelaxPage";
 import { MusicPage } from "./pages/MusicPage";
 import { SecretPage } from "./pages/SecretPage";
 import { HistoryPage } from "./pages/HistoryPage";
+import { BlankPage } from "./pages/BlankPage";
 import "./App.css";
 import GalaxyBackground from "./components/GalaxyBackground";
 import { MapPage } from "./pages/MapPage";
@@ -43,6 +44,7 @@ export default function App() {
             once the Music page is ported. */}
         <PlayerProvider>
           <BrowserRouter>
+         
             <GalaxyBackground />
             <NavBar />
             <Routes>
@@ -53,6 +55,7 @@ export default function App() {
               <Route path="/secret" element={<SecretPage />} />
               <Route path="/history" element={<HistoryPage />} />
                <Route path="/map" element={<MapPage />} />
+               <Route path="/blank" element={<BlankPage />} />
             <Route path="/photobooth" element={<PhotoboothPage />} />
 
             </Routes>
