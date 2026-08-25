@@ -1,37 +1,40 @@
-// Ported from config.py's PLACE_ICON_CHOICES. Stored icon values in the
-// `places` table are "faName|colorHex" strings (e.g. "home|#3388ff") —
-// same format the old Streamlit app wrote, so existing migrated rows
-// display correctly here. We don't need actual Font Awesome in React
-// (the Python side only used the fa name to look up an emoji anyway via
-// _icon_emoji_for_key), so this just maps straight to emoji.
-export const PLACE_ICON_CHOICES: { emoji: string; name: string }[] = [
-  { emoji: "📍", name: "map-marker" },
-  { emoji: "🏠", name: "home" },
-  { emoji: "⭐", name: "star" },
-  { emoji: "❤️", name: "heart" },
-  { emoji: "☕", name: "coffee" },
-  { emoji: "🌳", name: "tree" },
-  { emoji: "🍽️", name: "cutlery" },
-  { emoji: "🏨", name: "bed" },
-  { emoji: "🎓", name: "graduation-cap" },
-  { emoji: "🎁", name: "gift" },
-  { emoji: "🚩", name: "flag" },
-  { emoji: "🎵", name: "music" },
-  { emoji: "🎉", name: "glass" },
-  { emoji: "🛍️", name: "shopping-cart" },
-  { emoji: "🎬", name: "film" },
-  { emoji: "📷", name: "camera-retro" },
-  { emoji: "🏛️", name: "university" },
-  { emoji: "🚗", name: "car" },
-  { emoji: "🌊", name: "tint" },
-  { emoji: "🎡", name: "ticket" },
+import {
+  MapPin, Home, Star, Heart, Coffee, TreePine, UtensilsCrossed, BedDouble,
+  GraduationCap, Gift, Flag, Music2, PartyPopper, ShoppingBag, Film, Camera,
+  Landmark, Car, Waves, Ticket, type LucideIcon,
+} from "lucide-react";
+
+export const PLACE_ICON_CHOICES: { icon: LucideIcon; name: string; label: string }[] = [
+  { icon: MapPin, name: "map-marker", label: "Marker" },
+  { icon: Home, name: "home", label: "Home" },
+  { icon: Star, name: "star", label: "Star" },
+  { icon: Heart, name: "heart", label: "Heart" },
+  { icon: Coffee, name: "coffee", label: "Coffee" },
+  { icon: TreePine, name: "tree", label: "Nature" },
+  { icon: UtensilsCrossed, name: "cutlery", label: "Food" },
+  { icon: BedDouble, name: "bed", label: "Stay" },
+  { icon: GraduationCap, name: "graduation-cap", label: "School" },
+  { icon: Gift, name: "gift", label: "Gift" },
+  { icon: Flag, name: "flag", label: "Flag" },
+  { icon: Music2, name: "music", label: "Music" },
+  { icon: PartyPopper, name: "glass", label: "Party" },
+  { icon: ShoppingBag, name: "shopping-cart", label: "Shopping" },
+  { icon: Film, name: "film", label: "Cinema" },
+  { icon: Camera, name: "camera-retro", label: "Photo" },
+  { icon: Landmark, name: "university", label: "Landmark" },
+  { icon: Car, name: "car", label: "Transport" },
+  { icon: Waves, name: "tint", label: "Water" },
+  { icon: Ticket, name: "ticket", label: "Event" },
 ];
 
 export const DEFAULT_ICON_NAME = "map-marker";
-export const DEFAULT_COLOR = "#3388ff";
+export const DEFAULT_COLOR = "#8b6ff5"; // galaxy violet
 
-export function emojiForIconName(name: string): string {
-  return PLACE_ICON_CHOICES.find((c) => c.name === name)?.emoji ?? "📍";
+export function iconForName(name: string): LucideIcon {
+  return PLACE_ICON_CHOICES.find((c) => c.name === name)?.icon ?? MapPin;
+}
+export function labelForName(name: string): string {
+  return PLACE_ICON_CHOICES.find((c) => c.name === name)?.label ?? "Marker";
 }
 
 export function splitIcon(iconValue: string | null | undefined): { name: string; color: string } {

@@ -22,12 +22,12 @@ import { PhotoboothPage } from "./pages/PhotoboothPage";
 const evolAntdTheme = {
   algorithm: antdTheme.darkAlgorithm,
   token: {
-    colorPrimary: "#02ab21",
-    colorInfo: "#02ab21",
-    colorBgContainer: "#161616",
-    colorBgElevated: "#1c1c1c",
-    colorBorder: "#2a2a2a",
-    colorTextBase: "#e6e6e6",
+    colorPrimary: "#8b6ff5",
+    colorInfo: "#22d3ee",
+    colorBgContainer: "#14121f",
+    colorBgElevated: "#1a1830",
+    colorBorder: "#2a2740",
+    colorTextBase: "#e8e6f5",
     borderRadius: 10,
     fontFamily: `"Be Vietnam Pro", sans-serif`,
   },

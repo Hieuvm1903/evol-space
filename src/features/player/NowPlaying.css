@@ -1,5 +1,4 @@
-html, body { margin: 0 !important; padding: 0 !important; background: transparent !important; font-family: Poppins, sans-serif; }
-
+#now-playing-widget { font-family: Poppins, sans-serif; }
 @keyframes np-fade-scale {
   from { opacity: 0; transform: translateY(-6px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }

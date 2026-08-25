@@ -12,18 +12,19 @@
 @tailwind utilities;
 
 :root {
-  --evol-green: #02ab21;
-  --evol-green-light: #3ddc57;
-  --evol-bg: #0a0a0a;
-  --evol-card: #161616;
-  --evol-border: #2a2a2a;
-  --evol-text: #e6e6e6;
-  --evol-muted: #9a9a9a;
+  --evol-green: #8b6ff5;        /* galaxy violet — was #02ab21 */
+  --evol-green-light: #22d3ee;  /* galaxy cyan glow — was #3ddc57 */
+  --evol-accent-pink: #e879f9;  /* nebula accent, new */
+  --evol-bg: #07060f;           /* deep space, slightly blue/purple instead of flat black */
+  --evol-card: #14121f;
+  --evol-border: #2a2740;
+  --evol-text: #e8e6f5;
+  --evol-muted: #9c97b8;
 
-  --evol-glass-bg: rgba(22, 22, 22, 0.66);
-  --evol-glass-border: rgba(255, 255, 255, 0.08);
-  --evol-glow: 0 0 0 1px rgba(2, 171, 33, 0.25), 0 10px 30px -8px rgba(2, 171, 33, 0.35);
-  --evol-shadow-soft: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --evol-glass-bg: rgba(20, 18, 33, 0.66);
+  --evol-glass-border: rgba(196, 181, 253, 0.10);
+  --evol-glow: 0 0 0 1px rgba(139, 111, 245, 0.35), 0 10px 30px -8px rgba(34, 211, 238, 0.35);
+  --evol-shadow-soft: 0 6px 20px rgba(0, 0, 0, 0.45);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --background: oklch(1 0 0);
@@ -67,14 +68,15 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(2, 171, 33, 0.08), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(61, 220, 87, 0.05), transparent 55%),
+    radial-gradient(1200px 600px at 15% -10%, rgba(139, 111, 245, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(34, 211, 238, 0.07), transparent 55%),
+    radial-gradient(700px 500px at 50% 100%, rgba(232, 121, 249, 0.05), transparent 60%),
     var(--evol-bg);
   color: var(--evol-text);
   font-family: "Be Vietnam Pro", sans-serif;
 }
 
-::selection { background: rgba(2, 171, 33, 0.35); color: #fff; }
+::selection { background: rgba(139, 111, 245, 0.4); color: #fff; }
 
 /* ---------------------------------------------------------------------
    Keyframes
