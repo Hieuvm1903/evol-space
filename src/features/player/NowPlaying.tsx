@@ -95,7 +95,12 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
           onTogglePlayPause={engine.togglePlayPause}
         />
 
-        <div id="panel" style={{ display: expanded ? "block" : "none" }}>
+        {/* Kept permanently mounted (never conditionally rendered) — only
+            opacity/visibility toggle via className, so #yt-main (a child
+            further down) is never unmounted and playback survives
+            collapse/expand. Swapping the old display:none/block for
+            classes lets the panel animate in/out instead of popping. */}
+        <div id="panel" className={expanded ? "panel-visible" : "panel-hidden"}>
           <PanelHeader
             headerRef={headerRef}
             view={view}

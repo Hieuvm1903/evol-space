@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { message } from "antd";
 import { supabase } from "../lib/supabaseClient";
 
 interface Note {
@@ -45,8 +46,11 @@ export function RelaxPage() {
     const { error } = await supabase.from("notes").insert({ content: `{${text}}` });
     setSubmitting(false);
     if (!error) {
+      message.success("Sent 💭");
       setText("");
       loadNotes();
+    } else {
+      message.error("Couldn't save that — try again.");
     }
   }
 
@@ -69,8 +73,8 @@ export function RelaxPage() {
       {loading ? (
         <p className="placeholder-note">Loading…</p>
       ) : (
-        notes.map((note) => (
-          <div className="evol-card" key={note.id}>
+        notes.map((note, i) => (
+          <div className="evol-card stagger-item" style={{ animationDelay: `${Math.min(i, 15) * 40}ms` }} key={note.id}>
             <div className="evol-card-meta">{formatTime(note.time)}</div>
             <div className="evol-card-body">{note.content}</div>
           </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Skeleton, Empty, Popconfirm, message } from "antd";
 import { useAuth } from "../contexts/AuthContext";
 import { usePlayer } from "../features/player/PlayerProvider";
 import * as musicService from "../lib/musicService";
@@ -44,6 +45,22 @@ export function MusicPage() {
 }
 
 // ---------------------------------------------------------------------------
+// Loading skeletons — swapped in wherever a plain "Loading…" line used to be
+// ---------------------------------------------------------------------------
+
+function CardSkeletons({ count = 3 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div className="evol-card stagger-item" style={{ animationDelay: `${i * 70}ms` }} key={i}>
+          <Skeleton active title={{ width: "40%" }} paragraph={{ rows: 1, width: "20%" }} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // List view
 // ---------------------------------------------------------------------------
 
@@ -71,6 +88,7 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
     if (!newName.trim()) return;
     setCreating(true);
     await musicService.createPlaylist(userId, newName.trim());
+    message.success(`Created "${newName.trim()}"`);
     setNewName("");
     setCreating(false);
     load();
@@ -78,13 +96,13 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
 
   async function handlePlay(playlistId: number, mode: string) {
     const tracks = await musicService.getPlaylistTracks(playlistId);
-    if (!tracks.length) { alert("This playlist is empty."); return; }
+    if (!tracks.length) { message.warning("This playlist is empty."); return; }
     onPlay(tracks, mode);
   }
 
-  async function handleDelete(playlistId: number) {
-    if (!confirm("Delete this playlist?")) return;
+  async function handleDelete(playlistId: number, name: string) {
     await musicService.deletePlaylist(playlistId);
+    message.success(`Deleted "${name}"`);
     load();
   }
 
@@ -114,12 +132,16 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
       />
 
       {loading ? (
-        <p className="placeholder-note">Loading…</p>
+        <CardSkeletons />
       ) : filtered.length === 0 ? (
-        <p className="placeholder-note">No playlists yet — create one above.</p>
+        <Empty
+          className="fade-in"
+          description={playlists.length === 0 ? "No playlists yet — create one above." : "No playlists match your search."}
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
       ) : (
-        filtered.map((p) => (
-          <div className="evol-card music-playlist-row" key={p.id}>
+        filtered.map((p, i) => (
+          <div className="evol-card music-playlist-row stagger-item" style={{ animationDelay: `${i * 45}ms` }} key={p.id}>
             <button className="music-playlist-name" onClick={() => onOpen(p.id)}>
               🎵 {p.name}
             </button>
@@ -127,7 +149,16 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
               <button onClick={() => handlePlay(p.id, "Normal")} title="Play">▶</button>
               <button onClick={() => handlePlay(p.id, "Shuffle")} title="Shuffle">🔀</button>
               <button onClick={() => handlePlay(p.id, "Repeat All")} title="Repeat all">🔁</button>
-              <button onClick={() => handleDelete(p.id)} title="Delete">🗑</button>
+              <Popconfirm
+                title="Delete this playlist?"
+                description="This can't be undone."
+                okText="Delete"
+                cancelText="Cancel"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => handleDelete(p.id, p.name)}
+              >
+                <button title="Delete">🗑</button>
+              </Popconfirm>
             </div>
           </div>
         ))
@@ -139,19 +170,19 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
 function ImportPanel({ userId, onImported }: { userId: string; onImported: () => void }) {
   const [raw, setRaw] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   async function handleImport() {
     if (!raw.trim()) return;
     setBusy(true);
     const result = await musicService.importPlaylist(userId, raw);
     setBusy(false);
-    setMessage({ text: result.message, ok: result.ok });
-    if (result.ok) { setRaw(""); onImported(); }
+    setMsg({ text: result.message, ok: result.ok });
+    if (result.ok) { message.success(result.message); setRaw(""); onImported(); }
   }
 
   return (
-    <div className="evol-card">
+    <div className="evol-card fade-in-up">
       <p className="evol-card-meta">
         Paste JSON exported from EVOL Space's Export button, or plain text with one "Title - URL" per line.
       </p>
@@ -164,7 +195,7 @@ function ImportPanel({ userId, onImported }: { userId: string; onImported: () =>
       <button onClick={handleImport} disabled={busy || !raw.trim()} style={{ marginTop: 8 }}>
         {busy ? "…" : "Import"}
       </button>
-      {message && <p className={message.ok ? "success" : "error"}>{message.text}</p>}
+      {msg && <p className={msg.ok ? "success" : "error"}>{msg.text}</p>}
     </div>
   );
 }
@@ -210,6 +241,7 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
     e.preventDefault();
     if (!renameValue.trim() || renameValue.trim() === playlist?.name) return;
     await musicService.renamePlaylist(playlistId, renameValue.trim());
+    message.success("Renamed.");
     load();
   }
 
@@ -225,7 +257,7 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
   }
 
   function playOrWarn(mode: string) {
-    if (!tracks.length) { alert("This playlist is empty."); return; }
+    if (!tracks.length) { message.warning("This playlist is empty."); return; }
     onPlay(tracks, mode);
   }
 
@@ -249,15 +281,23 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
     a.download = `playlist.${format === "json" ? "json" : "txt"}`;
     a.click();
     URL.revokeObjectURL(url);
+    message.success("Download started.");
   }
 
-  if (loading) return <p className="placeholder-note">Loading…</p>;
+  if (loading) {
+    return (
+      <div>
+        <p className="placeholder-note">Loading…</p>
+        <CardSkeletons count={4} />
+      </div>
+    );
+  }
   if (!playlist) return <p>Playlist not found.</p>;
 
   const otherPlaylists = allPlaylists.filter((p) => p.id !== playlistId);
 
   return (
-    <div>
+    <div className="fade-in-up">
       <button onClick={onBack} className="music-back-btn">← Back to playlists</button>
 
       <form onSubmit={handleRename} className="music-rename-form">
@@ -278,7 +318,7 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
       )}
 
       {showExportPanel && (
-        <div className="evol-card">
+        <div className="evol-card fade-in-up">
           <p className="evol-card-meta">Copy tracks from another playlist</p>
           {otherPlaylists.length === 0 ? (
             <p className="placeholder-note">No other playlists yet.</p>
@@ -304,10 +344,10 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
       )}
 
       {tracks.length === 0 ? (
-        <p className="placeholder-note">No tracks yet — add some above.</p>
+        <Empty className="fade-in" description="No tracks yet — add some above." image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
-        tracks.map((t) => (
-          <div className="evol-card" key={t.id}>
+        tracks.map((t, i) => (
+          <div className="evol-card stagger-item" style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }} key={t.id}>
             <div className="music-track-row">
               <div>
                 <div>{t.title}</div>
@@ -321,7 +361,15 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
                 >
                   ⋯
                 </button>
-                <button onClick={() => handleRemove(t.id!)} title="Remove from playlist">🗑</button>
+                <Popconfirm
+                  title="Remove from playlist?"
+                  okText="Remove"
+                  cancelText="Cancel"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={() => handleRemove(t.id!)}
+                >
+                  <button title="Remove from playlist">🗑</button>
+                </Popconfirm>
               </div>
             </div>
             {expandedTrackId === t.id && (
@@ -355,6 +403,7 @@ function TrackManagePanel({ playlistId, track, onChanged }: {
   async function handleSaveRename() {
     if (!customTitle.trim()) return;
     await musicService.renameTrackInPlaylist(playlistId, track.id!, customTitle.trim());
+    message.success("Renamed in this playlist.");
     onChanged();
   }
 
@@ -365,6 +414,7 @@ function TrackManagePanel({ playlistId, track, onChanged }: {
 
   async function handleSaveDetails() {
     await musicService.updateTrackDetails(track.id!, { artist, lyricsUrl });
+    message.success("Track details saved.");
     onChanged();
   }
 
@@ -405,15 +455,17 @@ function AddTrackPanel({ playlistId, addedBy, onAdded }: {
   const [tab, setTab] = useState<"link" | "search" | "playlist">("search");
 
   return (
-    <div className="evol-card">
+    <div className="evol-card fade-in-up">
       <div className="tabs">
         <button className={tab === "search" ? "active" : ""} onClick={() => setTab("search")}>Search</button>
         <button className={tab === "link" ? "active" : ""} onClick={() => setTab("link")}>Paste link</button>
         <button className={tab === "playlist" ? "active" : ""} onClick={() => setTab("playlist")}>YT playlist</button>
       </div>
-      {tab === "search" && <AddBySearch playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
-      {tab === "link" && <AddByLink playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
-      {tab === "playlist" && <AddByPlaylistImport playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
+      <div className="fade-in" key={tab}>
+        {tab === "search" && <AddBySearch playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
+        {tab === "link" && <AddByLink playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
+        {tab === "playlist" && <AddByPlaylistImport playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
+      </div>
     </div>
   );
 }
@@ -423,7 +475,7 @@ function AddByLink({ playlistId, addedBy, onAdded }: {
 }) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -431,15 +483,15 @@ function AddByLink({ playlistId, addedBy, onAdded }: {
     setBusy(true);
     const result = await musicService.addTrackAndAttach(playlistId, url.trim(), addedBy);
     setBusy(false);
-    setMessage({ text: result.message, ok: result.ok });
-    if (result.ok) { setUrl(""); onAdded(); }
+    setMsg({ text: result.message, ok: result.ok });
+    if (result.ok) { message.success(result.message); setUrl(""); onAdded(); }
   }
 
   return (
     <form onSubmit={handleSubmit} className="music-add-form">
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=..." />
       <button type="submit" disabled={busy || !url.trim()}>{busy ? "…" : "Fetch & add"}</button>
-      {message && <p className={message.ok ? "success" : "error"}>{message.text}</p>}
+      {msg && <p className={msg.ok ? "success" : "error"}>{msg.text}</p>}
     </form>
   );
 }
@@ -467,6 +519,7 @@ function AddBySearch({ playlistId, addedBy, onAdded }: {
       { title: r.title, thumbnail_url: r.thumbnail_url, artist: r.artist },
     );
     setAddingId(null);
+    message.success(`Added "${r.title}"`);
     onAdded();
   }
 
@@ -476,18 +529,22 @@ function AddBySearch({ playlistId, addedBy, onAdded }: {
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="song title or artist..." />
         <button type="submit" disabled={searching || !query.trim()}>{searching ? "…" : "Search"}</button>
       </form>
-      {results.map((r) => (
-        <div className="music-search-result" key={r.video_id}>
-          {r.thumbnail_url && <img src={r.thumbnail_url} width={48} height={48} alt="" />}
-          <div className="music-search-result-info">
-            <div>{r.title}</div>
-            <div className="evol-card-meta">{r.artist}{r.duration ? ` · ${r.duration}` : ""}</div>
+      {searching ? (
+        <Skeleton active paragraph={{ rows: 2 }} className="fade-in" />
+      ) : (
+        results.map((r, i) => (
+          <div className="music-search-result stagger-item" style={{ animationDelay: `${i * 35}ms` }} key={r.video_id}>
+            {r.thumbnail_url && <img src={r.thumbnail_url} width={48} height={48} alt="" />}
+            <div className="music-search-result-info">
+              <div>{r.title}</div>
+              <div className="evol-card-meta">{r.artist}{r.duration ? ` · ${r.duration}` : ""}</div>
+            </div>
+            <button onClick={() => handleAdd(r)} disabled={addingId === r.video_id}>
+              {addingId === r.video_id ? "…" : "+"}
+            </button>
           </div>
-          <button onClick={() => handleAdd(r)} disabled={addingId === r.video_id}>
-            {addingId === r.video_id ? "…" : "+"}
-          </button>
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 }
@@ -524,7 +581,7 @@ function AddByPlaylistImport({ playlistId, addedBy, onAdded }: {
     );
     setAddingId(null);
     setSearchMessage({ text: result.message, ok: result.ok });
-    if (result.ok) onAdded();
+    if (result.ok) { message.success(result.message); onAdded(); }
   }
 
   async function handleSubmitLink(e: React.FormEvent) {
@@ -534,7 +591,7 @@ function AddByPlaylistImport({ playlistId, addedBy, onAdded }: {
     const result = await musicService.addPlaylistFromYoutube(playlistId, url.trim(), addedBy);
     setLinkBusy(false);
     setLinkMessage({ text: result.message, ok: result.ok });
-    if (result.ok) { setUrl(""); onAdded(); }
+    if (result.ok) { message.success(result.message); setUrl(""); onAdded(); }
   }
 
   return (
@@ -548,26 +605,30 @@ function AddByPlaylistImport({ playlistId, addedBy, onAdded }: {
         <button type="submit" disabled={searching || !query.trim()}>{searching ? "…" : "Search"}</button>
       </form>
 
-      {results.map((pr) => (
-        <div className="music-search-result" key={pr.playlist_id}>
-          {pr.thumbnail_url && <img src={pr.thumbnail_url} width={48} height={48} alt="" />}
-          <div className="music-search-result-info">
-            <div>{pr.title}</div>
-            <div className="evol-card-meta">
-              {pr.author}{pr.item_count ? ` · ${pr.item_count} tracks` : ""}
+      {searching ? (
+        <Skeleton active paragraph={{ rows: 2 }} className="fade-in" />
+      ) : (
+        results.map((pr, i) => (
+          <div className="music-search-result stagger-item" style={{ animationDelay: `${i * 35}ms` }} key={pr.playlist_id}>
+            {pr.thumbnail_url && <img src={pr.thumbnail_url} width={48} height={48} alt="" />}
+            <div className="music-search-result-info">
+              <div>{pr.title}</div>
+              <div className="evol-card-meta">
+                {pr.author}{pr.item_count ? ` · ${pr.item_count} tracks` : ""}
+              </div>
             </div>
+            <button
+              onClick={() => handleAddFromSearch(pr)}
+              disabled={addingId === pr.playlist_id}
+              title="Import this playlist"
+            >
+              {addingId === pr.playlist_id ? "…" : "+"}
+            </button>
           </div>
-          <button
-            onClick={() => handleAddFromSearch(pr)}
-            disabled={addingId === pr.playlist_id}
-            title="Import this playlist"
-          >
-            {addingId === pr.playlist_id ? "…" : "+"}
-          </button>
-        </div>
-      ))}
+        ))
+      )}
       {searched && !searching && results.length === 0 && (
-        <p className="placeholder-note">No importable playlists found for "{query.trim()}".</p>
+        <Empty className="fade-in" image={Empty.PRESENTED_IMAGE_SIMPLE} description={`No importable playlists found for "${query.trim()}".`} />
       )}
       {searchMessage && <p className={searchMessage.ok ? "success" : "error"}>{searchMessage.text}</p>}
 

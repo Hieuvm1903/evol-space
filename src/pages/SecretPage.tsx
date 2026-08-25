@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { message } from "antd";
 import { supabase } from "../lib/supabaseClient";
 
 interface Post {
@@ -28,6 +29,7 @@ export function SecretPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [warning, setWarning] = useState<string | null>(null);
+  const [shake, setShake] = useState(false);
 
   async function loadPosts() {
     setLoading(true);
@@ -43,18 +45,23 @@ export function SecretPage() {
     setWarning(null);
     if (!keyInput.includes(SECRET_KEY)) {
       setWarning("Don't ya remember it, EVOL?");
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
       return;
     }
     const { error } = await supabase.from("blog").insert({ content: text.trim() });
     if (!error) {
+      message.success("Posted.");
       setText("");
       loadPosts();
+    } else {
+      message.error("Couldn't post — try again.");
     }
   }
 
   return (
     <div className="page">
-      <div className="secret-form-row">
+      <div className={`secret-form-row${shake ? " shake" : ""}`}>
         <input
           value={keyInput}
           onChange={(e) => setKeyInput(e.target.value)}
@@ -73,8 +80,8 @@ export function SecretPage() {
       {loading ? (
         <p className="placeholder-note">Loading…</p>
       ) : (
-        posts.map((post) => (
-          <div className="evol-card" key={post.id}>
+        posts.map((post, i) => (
+          <div className="evol-card stagger-item" style={{ animationDelay: `${Math.min(i, 15) * 40}ms` }} key={post.id}>
             <div className="evol-card-meta">{formatTime(post.time)}</div>
             <div className="evol-card-body">{post.content}</div>
           </div>

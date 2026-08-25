@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import NowPlaying, { Track } from "./NowPlaying";
+import { shuffleArray } from "./utils/queueOrder";
 
 interface PlayerContextValue {
   /** Equivalent of ui/now_playing_widget.py's load_queue(). Call this
@@ -41,8 +42,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // component itself already does its own client-side shuffle when
     // mode === "shuffle" (see hooks/usePlayerEngine.ts), so no
     // shuffling needs to happen here — just pass the mode through.
+    if(mode == "shuffle"){
+      tracks = shuffleArray(tracks)
+    }
     setQueue(tracks);
-    setMode(()=>newMode);
+    setMode(newMode);
   }
 
   function handleClose() {

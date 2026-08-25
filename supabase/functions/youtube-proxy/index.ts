@@ -222,8 +222,9 @@ async function fetchPlaylistVideos(url: string, limit = 200) {
 async function fetchSearchPage(query: string, sp?: string): Promise<any | null> {
   const params = new URLSearchParams({ search_query: query });
   if (sp) params.set("sp", sp);
+  const targetUrl = `https://www.youtube.com/results?${params.toString()}`;
   try {
-    const resp = await fetch(`https://www.youtube.com/results?${params.toString()}`, {
+    const resp = await fetch(targetUrl, {
       headers: {
         "User-Agent": UA,
         "Accept-Language": "en-US,en;q=0.9",
@@ -232,8 +233,17 @@ async function fetchSearchPage(query: string, sp?: string): Promise<any | null> 
       signal: AbortSignal.timeout(10000),
     });
     const html = await resp.text();
-    return parseYtInitialData(html);
-  } catch {
+    console.log(`fetchSearchPage: status=${resp.status} html_length=${html.length} url=${targetUrl}`);
+    const data = parseYtInitialData(html);
+    console.log(`fetchSearchPage: ytInitialData ${data ? "FOUND" : "NOT FOUND"}`);
+    if (!data) {
+      // Log a small sample so we can see what YouTube actually sent back
+      // (e.g. a consent/captcha page instead of real results).
+      console.log(`fetchSearchPage: html sample: ${html.slice(0, 300)}`);
+    }
+    return data;
+  } catch (e) {
+    console.log(`fetchSearchPage: FETCH ERROR: ${e}`);
     return null;
   }
 }
@@ -244,6 +254,7 @@ async function searchSongs(query: string, limit = 8) {
 
   const renderers: any[] = [];
   walkForRenderers(data, ["videoRenderer"], renderers, limit * 3); // over-fetch, filter below
+  console.log(`searchSongs: found ${renderers.length} videoRenderer nodes`);
 
   const results = [];
   for (const r of renderers) {
@@ -258,6 +269,7 @@ async function searchSongs(query: string, limit = 8) {
       duration: r.lengthText?.simpleText ?? "",
     });
   }
+  console.log(`searchSongs: returning ${results.length} results`);
   return results;
 }
 

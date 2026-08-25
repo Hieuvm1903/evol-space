@@ -30,7 +30,23 @@ export interface SearchPlaylistResult {
 
 async function callProxy<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("youtube-proxy", { body });
-  if (error) throw error;
+  if (error) {
+    // supabase-js's FunctionsHttpError/FunctionsRelayError don't always
+    // put the useful part in .message — try to pull the actual response
+    // body too, since that's usually where the real reason lives (e.g.
+    // "function not found" vs. a runtime error inside the function).
+    let detail = error.message;
+    try {
+      const ctx = (error as any).context;
+      if (ctx?.json) {
+        const body = await ctx.json();
+        if (body?.error) detail = body.error;
+      }
+    } catch {
+      // ignore — fall back to error.message
+    }
+    throw new Error(`youtube-proxy call failed: ${detail}`);
+  }
   return data as T;
 }
 
