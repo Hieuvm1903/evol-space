@@ -10,17 +10,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-.app {
-  position: relative;
-  min-height: 100vh;
-  isolation: isolate;
-  background: #020617;
-}
 
-.page-content {
-  position: relative;
-  z-index: 1;
-}
 :root {
   --evol-green: #02ab21;
   --evol-green-light: #3ddc57;
