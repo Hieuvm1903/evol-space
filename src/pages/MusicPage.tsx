@@ -2,18 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { usePlayer } from "../features/player/PlayerProvider";
 import * as musicService from "../lib/musicService";
-import { searchSongs, SearchSongResult } from "../lib/youtube";
+import { searchSongs, searchPlaylists, SearchSongResult, SearchPlaylistResult } from "../lib/youtube";
 import type { Track } from "../features/player/types";
-
-// NOT YET PORTED from ui/pages/music.py (straightforward follow-ups,
-// same patterns as what's here — flagging honestly rather than silently
-// dropping them):
-//   - Export/import playlist as JSON or plain text
-//   - Copy tracks from one playlist into another
-//   - Per-playlist track rename / reset-to-library-title
-//   - Editing a track's artist/lyrics URL from the playlist view (the
-//     Now Playing widget's lyrics panel already does this for the
-//     currently-playing track, via PlayerProvider's persistLyricsSelection)
 
 type ViewMode = "list" | "detail";
 
@@ -67,6 +57,7 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
   const [search, setSearch] = useState("");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -101,10 +92,19 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
 
   return (
     <div>
-      <form onSubmit={handleCreate} className="music-new-form">
-        <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New playlist name" />
-        <button type="submit" disabled={creating || !newName.trim()}>+ New</button>
-      </form>
+      <div className="music-toolbar">
+        <form onSubmit={handleCreate} className="music-new-form">
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New playlist name" />
+          <button type="submit" disabled={creating || !newName.trim()}>+ New</button>
+        </form>
+        <button className="music-secondary-btn" onClick={() => setShowImport((v) => !v)}>
+          {showImport ? "− Close import" : "⇩ Import"}
+        </button>
+      </div>
+
+      {showImport && (
+        <ImportPanel userId={userId} onImported={() => { setShowImport(false); load(); }} />
+      )}
 
       <input
         className="music-search"
@@ -136,6 +136,39 @@ function PlaylistListView({ userId, onOpen, onPlay }: {
   );
 }
 
+function ImportPanel({ userId, onImported }: { userId: string; onImported: () => void }) {
+  const [raw, setRaw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function handleImport() {
+    if (!raw.trim()) return;
+    setBusy(true);
+    const result = await musicService.importPlaylist(userId, raw);
+    setBusy(false);
+    setMessage({ text: result.message, ok: result.ok });
+    if (result.ok) { setRaw(""); onImported(); }
+  }
+
+  return (
+    <div className="evol-card">
+      <p className="evol-card-meta">
+        Paste JSON exported from EVOL Space's Export button, or plain text with one "Title - URL" per line.
+      </p>
+      <textarea
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        placeholder="Paste playlist data..."
+        rows={6}
+      />
+      <button onClick={handleImport} disabled={busy || !raw.trim()} style={{ marginTop: 8 }}>
+        {busy ? "…" : "Import"}
+      </button>
+      {message && <p className={message.ok ? "success" : "error"}>{message.text}</p>}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Detail view
 // ---------------------------------------------------------------------------
@@ -147,10 +180,16 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
   onPlay: (tracks: Track[], mode: string) => void;
 }) {
   const [playlist, setPlaylist] = useState<musicService.Playlist | null>(null);
+  const [allPlaylists, setAllPlaylists] = useState<musicService.Playlist[]>([]);
   const [tracks, setTracks] = useState<musicService.PlaylistTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [renameValue, setRenameValue] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [expandedTrackId, setExpandedTrackId] = useState<number | null>(null);
+  const [copySourceId, setCopySourceId] = useState<number | "">("");
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -158,6 +197,7 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
       musicService.getPlaylists(userId),
       musicService.getPlaylistTracks(playlistId),
     ]);
+    setAllPlaylists(playlists);
     const p = playlists.find((pl) => pl.id === playlistId) ?? null;
     setPlaylist(p);
     setRenameValue(p?.name ?? "");
@@ -189,8 +229,32 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
     onPlay(tracks, mode);
   }
 
+  async function handleCopy() {
+    if (!copySourceId) return;
+    setCopyBusy(true);
+    const added = await musicService.copyPlaylistTracks(Number(copySourceId), playlistId);
+    setCopyBusy(false);
+    setCopyMessage(`Copied ${added} new track(s).`);
+    load();
+  }
+
+  async function downloadExport(format: "json" | "text") {
+    const content = format === "json"
+      ? await musicService.exportPlaylistJson(playlistId)
+      : await musicService.exportPlaylistText(playlistId);
+    const blob = new Blob([content], { type: format === "json" ? "application/json" : "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `playlist.${format === "json" ? "json" : "txt"}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (loading) return <p className="placeholder-note">Loading…</p>;
   if (!playlist) return <p>Playlist not found.</p>;
+
+  const otherPlaylists = allPlaylists.filter((p) => p.id !== playlistId);
 
   return (
     <div>
@@ -206,28 +270,127 @@ function PlaylistDetailView({ userId, playlistId, onBack, onPlay }: {
         <button onClick={() => playOrWarn("Shuffle")}>🔀 Shuffle</button>
         <button onClick={() => playOrWarn("Repeat All")}>🔁 Repeat all</button>
         <button onClick={() => setShowAddPanel((v) => !v)}>{showAddPanel ? "− Close" : "+ Add track"}</button>
+        <button onClick={() => setShowExportPanel((v) => !v)}>{showExportPanel ? "− Close" : "⇧ Export"}</button>
       </div>
 
       {showAddPanel && (
         <AddTrackPanel playlistId={playlistId} addedBy={userId} onAdded={load} />
       )}
 
+      {showExportPanel && (
+        <div className="evol-card">
+          <p className="evol-card-meta">Copy tracks from another playlist</p>
+          {otherPlaylists.length === 0 ? (
+            <p className="placeholder-note">No other playlists yet.</p>
+          ) : (
+            <div className="music-copy-row">
+              <select value={copySourceId} onChange={(e) => setCopySourceId(e.target.value ? Number(e.target.value) : "")}>
+                <option value="">Choose a playlist…</option>
+                {otherPlaylists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <button onClick={handleCopy} disabled={!copySourceId || copyBusy}>
+                {copyBusy ? "…" : "Copy tracks"}
+              </button>
+            </div>
+          )}
+          {copyMessage && <p className="success">{copyMessage}</p>}
+
+          <p className="evol-card-meta" style={{ marginTop: 14 }}>Export / share</p>
+          <div className="music-copy-row">
+            <button onClick={() => downloadExport("json")}>Download JSON</button>
+            <button onClick={() => downloadExport("text")}>Download text</button>
+          </div>
+        </div>
+      )}
+
       {tracks.length === 0 ? (
         <p className="placeholder-note">No tracks yet — add some above.</p>
       ) : (
         tracks.map((t) => (
-          <div className="evol-card music-track-row" key={t.id}>
-            <div>
-              <div>{t.title}</div>
-              {t.artist && <div className="evol-card-meta">{t.artist}</div>}
+          <div className="evol-card" key={t.id}>
+            <div className="music-track-row">
+              <div>
+                <div>{t.title}</div>
+                {t.artist && <div className="evol-card-meta">{t.artist}</div>}
+              </div>
+              <div className="music-playlist-actions">
+                <button onClick={() => handlePlayFromHere(t.id!)} title="Play from here">▶</button>
+                <button
+                  onClick={() => setExpandedTrackId(expandedTrackId === t.id ? null : t.id!)}
+                  title="Manage"
+                >
+                  ⋯
+                </button>
+                <button onClick={() => handleRemove(t.id!)} title="Remove from playlist">🗑</button>
+              </div>
             </div>
-            <div className="music-playlist-actions">
-              <button onClick={() => handlePlayFromHere(t.id!)} title="Play from here">▶</button>
-              <button onClick={() => handleRemove(t.id!)} title="Remove from playlist">🗑</button>
-            </div>
+            {expandedTrackId === t.id && (
+              <TrackManagePanel
+                playlistId={playlistId}
+                track={t}
+                onChanged={load}
+              />
+            )}
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-track management panel — rename-in-playlist, reset, artist/lyrics edit
+// ---------------------------------------------------------------------------
+
+function TrackManagePanel({ playlistId, track, onChanged }: {
+  playlistId: number;
+  track: musicService.PlaylistTrack;
+  onChanged: () => void;
+}) {
+  const [customTitle, setCustomTitle] = useState(track.title !== track.original_title ? track.title : "");
+  const [artist, setArtist] = useState(track.artist ?? "");
+  const [lyricsUrl, setLyricsUrl] = useState(track.lyrics_url ?? "");
+  const isRenamed = track.title !== track.original_title;
+
+  async function handleSaveRename() {
+    if (!customTitle.trim()) return;
+    await musicService.renameTrackInPlaylist(playlistId, track.id!, customTitle.trim());
+    onChanged();
+  }
+
+  async function handleResetRename() {
+    await musicService.resetTrackTitleInPlaylist(playlistId, track.id!);
+    onChanged();
+  }
+
+  async function handleSaveDetails() {
+    await musicService.updateTrackDetails(track.id!, { artist, lyricsUrl });
+    onChanged();
+  }
+
+  return (
+    <div className="music-track-manage">
+      <div className="music-manage-row">
+        <label>Rename in this playlist (library: {track.original_title})</label>
+        <div className="music-copy-row">
+          <input value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} placeholder={track.original_title} />
+          <button onClick={handleSaveRename}>Save</button>
+          {isRenamed && <button onClick={handleResetRename}>Reset</button>}
+        </div>
+      </div>
+      <div className="music-manage-row">
+        <label>Artist / lyrics (library-wide)</label>
+        <div className="music-copy-row">
+          <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" />
+        </div>
+        <div className="music-copy-row">
+          <input value={lyricsUrl} onChange={(e) => setLyricsUrl(e.target.value)} placeholder="Lyrics URL" />
+          <button onClick={handleSaveDetails}>Save</button>
+        </div>
+        {lyricsUrl.trim() && (
+          <a href={lyricsUrl} target="_blank" rel="noreferrer" className="music-lyrics-link">Open lyrics ↗</a>
+        )}
+      </div>
     </div>
   );
 }
@@ -332,25 +495,88 @@ function AddBySearch({ playlistId, addedBy, onAdded }: {
 function AddByPlaylistImport({ playlistId, addedBy, onAdded }: {
   playlistId: number; addedBy: string; onAdded: () => void;
 }) {
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchPlaylistResult[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [searchMessage, setSearchMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const [url, setUrl] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkMessage, setLinkMessage] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!query.trim()) return;
+    setSearching(true);
+    const r = await searchPlaylists(query.trim());
+    setResults(r);
+    setSearched(true);
+    setSearching(false);
+  }
+
+  async function handleAddFromSearch(pr: SearchPlaylistResult) {
+    setAddingId(pr.playlist_id);
+    setSearchMessage(null);
+    const result = await musicService.addPlaylistFromYoutube(
+      playlistId, `https://www.youtube.com/playlist?list=${pr.playlist_id}`, addedBy,
+    );
+    setAddingId(null);
+    setSearchMessage({ text: result.message, ok: result.ok });
+    if (result.ok) onAdded();
+  }
+
+  async function handleSubmitLink(e: React.FormEvent) {
     e.preventDefault();
     if (!url.trim()) return;
-    setBusy(true);
+    setLinkBusy(true);
     const result = await musicService.addPlaylistFromYoutube(playlistId, url.trim(), addedBy);
-    setBusy(false);
-    setMessage({ text: result.message, ok: result.ok });
+    setLinkBusy(false);
+    setLinkMessage({ text: result.message, ok: result.ok });
     if (result.ok) { setUrl(""); onAdded(); }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="music-add-form">
-      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/playlist?list=..." />
-      <button type="submit" disabled={busy || !url.trim()}>{busy ? "…" : "Add all"}</button>
-      {message && <p className={message.ok ? "success" : "error"}>{message.text}</p>}
-    </form>
+    <div>
+      <p className="evol-card-meta">
+        Search for a playlist, or paste a playlist link directly, to add every track in it at once.
+      </p>
+
+      <form onSubmit={handleSearch} className="music-add-form">
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="playlist name..." />
+        <button type="submit" disabled={searching || !query.trim()}>{searching ? "…" : "Search"}</button>
+      </form>
+
+      {results.map((pr) => (
+        <div className="music-search-result" key={pr.playlist_id}>
+          {pr.thumbnail_url && <img src={pr.thumbnail_url} width={48} height={48} alt="" />}
+          <div className="music-search-result-info">
+            <div>{pr.title}</div>
+            <div className="evol-card-meta">
+              {pr.author}{pr.item_count ? ` · ${pr.item_count} tracks` : ""}
+            </div>
+          </div>
+          <button
+            onClick={() => handleAddFromSearch(pr)}
+            disabled={addingId === pr.playlist_id}
+            title="Import this playlist"
+          >
+            {addingId === pr.playlist_id ? "…" : "+"}
+          </button>
+        </div>
+      ))}
+      {searched && !searching && results.length === 0 && (
+        <p className="placeholder-note">No importable playlists found for "{query.trim()}".</p>
+      )}
+      {searchMessage && <p className={searchMessage.ok ? "success" : "error"}>{searchMessage.text}</p>}
+
+      <p className="evol-card-meta" style={{ marginTop: 14 }}>Or paste a playlist link directly</p>
+      <form onSubmit={handleSubmitLink} className="music-add-form">
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/playlist?list=..." />
+        <button type="submit" disabled={linkBusy || !url.trim()}>{linkBusy ? "…" : "Add all"}</button>
+      </form>
+      {linkMessage && <p className={linkMessage.ok ? "success" : "error"}>{linkMessage.text}</p>}
+    </div>
   );
 }

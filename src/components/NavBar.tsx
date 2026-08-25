@@ -9,7 +9,9 @@ const NAV_ITEMS: { label: string; path: string }[] = [
   { label: "Home", path: "/" },
   { label: "Login", path: "/login" },
   { label: "Music", path: "/music" },
+  { label: "His-tory", path: "/history" },
   { label: "Relax", path: "/relax" },
+  { label: "???", path: "/secret" },
 ];
 
 export function NavBar() {

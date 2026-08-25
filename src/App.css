@@ -251,6 +251,94 @@ form button:disabled { opacity: 0.6; cursor: default; }
   cursor: pointer;
   flex-shrink: 0;
 }
+.music-toolbar { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 14px; }
+.music-toolbar .music-new-form { flex: 1; margin-bottom: 0; }
+.music-secondary-btn {
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: var(--evol-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.music-secondary-btn:hover { border-color: var(--evol-green); }
+.music-copy-row { display: flex; gap: 8px; margin: 6px 0; }
+.music-copy-row select, .music-copy-row input {
+  flex: 1;
+  background: var(--evol-bg);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--evol-text);
+}
+.music-copy-row button {
+  background: var(--evol-green);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.music-copy-row button:disabled { opacity: 0.5; cursor: default; }
+.music-track-manage {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--evol-border);
+}
+.music-manage-row { margin-bottom: 10px; }
+.music-manage-row label { display: block; font-size: 0.75rem; color: var(--evol-muted); margin-bottom: 4px; }
+.music-lyrics-link { font-size: 0.8rem; color: var(--evol-green-light); }
+
+/* Secret blog page */
+.secret-form-row { display: flex; gap: 8px; margin-bottom: 20px; align-items: flex-end; }
+.secret-form-row input {
+  width: 160px;
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--evol-text);
+}
+.secret-form-row textarea {
+  flex: 1;
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--evol-text);
+  font-family: inherit;
+  resize: vertical;
+}
+.secret-form-row button {
+  background: var(--evol-green);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* His-tory page */
+.history-track { margin-bottom: 20px; }
+.history-track-title { font-weight: 500; margin-bottom: 6px; }
+.history-embed-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 */
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+.history-embed-wrap iframe {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border: none;
+}
 
 /* Now-playing floating widget — ported from ui/styles.py's
    .st-key-now_playing_drawer rule. useDragPosition.ts positions this via

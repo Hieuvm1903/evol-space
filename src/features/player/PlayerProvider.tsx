@@ -42,7 +42,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // mode === "shuffle" (see hooks/usePlayerEngine.ts), so no
     // shuffling needs to happen here — just pass the mode through.
     setQueue(tracks);
-    setMode(newMode);
+    setMode(()=>newMode);
   }
 
   function handleClose() {

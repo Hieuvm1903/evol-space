@@ -12,6 +12,7 @@ export interface Playlist {
 export interface PlaylistTrack extends Track {
   position: number;
   original_title: string;
+  youtube_url: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,4 +227,138 @@ export async function addPlaylistFromYoutube(
     return { ok: false, added: 0, message: "Every track in that playlist is already in this playlist." };
   }
   return { ok: true, added, message: `Added ${added} track(s) from the YouTube playlist.` };
+}
+
+// ---------------------------------------------------------------------------
+// Cross-playlist copy
+// ---------------------------------------------------------------------------
+
+export async function copyPlaylistTracks(sourcePlaylistId: number, targetPlaylistId: number): Promise<number> {
+  const sourceTracks = await getPlaylistTracks(sourcePlaylistId);
+  if (!sourceTracks.length) return 0;
+  const existingIds = new Set((await getPlaylistTracks(targetPlaylistId)).map((t) => t.id!));
+  let added = 0;
+  for (const t of sourceTracks) {
+    if (!existingIds.has(t.id!)) {
+      await addTrackToPlaylist(targetPlaylistId, t.id!);
+      added++;
+    }
+  }
+  return added;
+}
+
+// ---------------------------------------------------------------------------
+// Per-playlist track title override
+// ---------------------------------------------------------------------------
+
+export async function renameTrackInPlaylist(playlistId: number, trackId: number, newTitle: string): Promise<void> {
+  const trimmed = newTitle.trim();
+  if (!trimmed) return;
+  const { error } = await supabase
+    .from("playlist_tracks").update({ custom_title: trimmed })
+    .eq("playlist_id", playlistId).eq("track_id", trackId);
+  if (error) throw error;
+}
+
+export async function resetTrackTitleInPlaylist(playlistId: number, trackId: number): Promise<void> {
+  const { error } = await supabase
+    .from("playlist_tracks").update({ custom_title: "" })
+    .eq("playlist_id", playlistId).eq("track_id", trackId);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Track details (artist / lyrics URL) — library-wide, same as the Now
+// Playing widget's lyrics panel already does via PlayerProvider.
+// ---------------------------------------------------------------------------
+
+export async function updateTrackDetails(
+  trackId: number, changes: { artist?: string; lyricsUrl?: string },
+): Promise<void> {
+  const payload: Record<string, string> = {};
+  if (changes.artist !== undefined) payload.artist = changes.artist.trim();
+  if (changes.lyricsUrl !== undefined) payload.lyrics_url = changes.lyricsUrl.trim();
+  if (Object.keys(payload).length === 0) return;
+  const { error } = await supabase.from("tracks").update(payload).eq("id", trackId);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Export / import (share a playlist between accounts)
+// ---------------------------------------------------------------------------
+
+async function playlistName(playlistId: number): Promise<string> {
+  const { data } = await supabase.from("playlists").select("name").eq("id", playlistId).single();
+  return data?.name ?? "Untitled playlist";
+}
+
+export async function exportPlaylistJson(playlistId: number): Promise<string> {
+  const name = await playlistName(playlistId);
+  const tracks = await getPlaylistTracks(playlistId);
+  return JSON.stringify({
+    playlist_name: name,
+    tracks: tracks.map((t) => ({ title: t.title, youtube_url: t.youtube_url })),
+  }, null, 2);
+}
+
+export async function exportPlaylistText(playlistId: number): Promise<string> {
+  const name = await playlistName(playlistId);
+  const tracks = await getPlaylistTracks(playlistId);
+  const lines = [`# ${name}`, ...tracks.map((t) => `${t.title} - ${t.youtube_url}`)];
+  return lines.join("\n");
+}
+
+export async function importPlaylist(
+  userId: string, raw: string,
+): Promise<{ ok: boolean; message: string; added: number }> {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: false, message: "Nothing to import.", added: 0 };
+
+  let name: string | null = null;
+  const entries: { title: string | null; url: string }[] = [];
+
+  let parsed: any = null;
+  try { parsed = JSON.parse(trimmed); } catch { parsed = null; }
+
+  if (parsed && typeof parsed === "object" && Array.isArray(parsed.tracks)) {
+    name = parsed.playlist_name || "Imported playlist";
+    for (const t of parsed.tracks) {
+      const url = t.youtube_url || t.url;
+      if (url) entries.push({ title: t.title ?? null, url });
+    }
+  } else {
+    for (const rawLine of trimmed.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      if (line.startsWith("#")) {
+        if (name === null) name = line.replace(/^#+/, "").trim();
+        continue;
+      }
+      const sepIdx = line.lastIndexOf(" - ");
+      if (sepIdx !== -1) {
+        entries.push({ title: line.slice(0, sepIdx).trim(), url: line.slice(sepIdx + 3).trim() });
+      } else {
+        entries.push({ title: null, url: line });
+      }
+    }
+  }
+
+  if (entries.length === 0) return { ok: false, message: "Couldn't find any tracks to import in that text.", added: 0 };
+
+  const finalName = name || "Imported playlist";
+  await createPlaylist(userId, finalName);
+  const playlists = await getPlaylists(userId);
+  const playlistId = playlists[0].id; // most recently created
+
+  let added = 0;
+  for (const entry of entries) {
+    const result = await addTrackAndAttach(playlistId, entry.url, userId, entry.title ? { title: entry.title } : undefined);
+    if (result.ok) added++;
+  }
+
+  if (added === 0) {
+    await deletePlaylist(playlistId);
+    return { ok: false, message: "Couldn't import any valid tracks from that text.", added: 0 };
+  }
+  return { ok: true, message: `Imported "${finalName}" with ${added} track(s).`, added };
 }

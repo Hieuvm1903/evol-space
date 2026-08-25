@@ -8,7 +8,6 @@ if (!url || !anonKey) {
     "Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY — copy .env.example to .env and fill them in."
   );
 }
-console.log({url,anonKey})
 
 // persistSession + autoRefreshToken (both default true) give us the
 // browser-side equivalent of the old "remember me" cookie for free —

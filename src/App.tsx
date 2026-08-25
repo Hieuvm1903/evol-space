@@ -7,6 +7,8 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RelaxPage } from "./pages/RelaxPage";
 import { MusicPage } from "./pages/MusicPage";
+import { SecretPage } from "./pages/SecretPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import "./App.css";
 
 export default function App() {
@@ -24,8 +26,11 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/relax" element={<RelaxPage />} />
             <Route path="/music" element={<MusicPage />} />
-            {/* Each later step adds one line here, e.g.:
-                <Route path="/secret" element={<ProtectedRoute><SecretPage /></ProtectedRoute>} /> */}
+            <Route path="/secret" element={<SecretPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            {/* Map and Photobooth are next — each substantial enough
+                (Leaflet, webcam capture, MediaPipe gesture detection) to
+                warrant their own dedicated pass. */}
           </Routes>
         </BrowserRouter>
       </PlayerProvider>
