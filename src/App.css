@@ -1,0 +1,271 @@
+/* Same palette as the old ui/styles.py GLOBAL_CSS: dark background, green accent (#02ab21) */
+:root {
+  --evol-green: #02ab21;
+  --evol-green-light: #3ddc57;
+  --evol-bg: #0a0a0a;
+  --evol-card: #161616;
+  --evol-border: #2a2a2a;
+  --evol-text: #e6e6e6;
+  --evol-muted: #9a9a9a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--evol-bg);
+  color: var(--evol-text);
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 20px;
+  background: #0f0f0f;
+  border-bottom: 1px solid var(--evol-border);
+}
+.navbar-brand { font-weight: 700; }
+.navbar-links { display: flex; gap: 14px; flex: 1; }
+.navbar-links a { color: var(--evol-muted); text-decoration: none; font-size: 0.9rem; }
+.navbar-links a.active, .navbar-links a:hover { color: #fff; }
+.navbar-user { color: var(--evol-green-light); font-size: 0.85rem; }
+
+.page { max-width: 720px; margin: 0 auto; padding: 32px 20px; }
+
+.hero-title {
+  text-align: center;
+  font-size: clamp(2.2rem, 5vw, 3.2rem);
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--evol-green), var(--evol-green-light) 45%, var(--evol-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 8px;
+}
+
+.evol-quote-card {
+  position: relative;
+  max-width: 680px;
+  margin: 0 auto 32px;
+  padding: 8px 48px 28px;
+  text-align: center;
+  animation: evol-fade-up 0.6s ease both;
+}
+@keyframes evol-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.evol-quote-mark {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 3.2rem;
+  line-height: 1;
+  color: var(--evol-green);
+  opacity: 0.35;
+  user-select: none;
+}
+.evol-quote-mark-open { text-align: left; margin: 0 0 -8px 4px; }
+.evol-quote-mark-close { text-align: right; margin: -14px 4px 0 0; }
+.evol-quote-typing p {
+  font-family: "Be Vietnam Pro", sans-serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(1.1rem, 2.4vw, 1.45rem);
+  line-height: 1.9;
+  color: #d8d8d8;
+  letter-spacing: 0.01em;
+  margin: 0;
+  text-align: center;
+}
+.evol-quote-typing strong { color: var(--evol-green); font-weight: 600; font-style: normal; }
+.evol-quote-cursor p:last-child::after {
+  content: "▍";
+  color: var(--evol-green);
+  animation: evol-cursor-blink 0.9s steps(1) infinite;
+}
+@keyframes evol-cursor-blink { 50% { opacity: 0; } }
+
+.placeholder-note { color: var(--evol-muted); font-style: italic; font-size: 0.85rem; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tabs button {
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  color: var(--evol-muted);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tabs button.active { border-color: var(--evol-green); color: #fff; }
+
+form { display: flex; flex-direction: column; gap: 12px; }
+form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--evol-muted); }
+form input {
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--evol-text);
+  font-size: 0.95rem;
+}
+form textarea {
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--evol-text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+}
+.relax-form { margin-bottom: 24px; }
+form button {
+  margin-top: 6px;
+  background: var(--evol-green);
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+form button:disabled { opacity: 0.6; cursor: default; }
+
+/* Reusable dark "card" block — ported from ui/styles.py's render_card(),
+   used by Relax now and by the secret blog page next. */
+.evol-card {
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.evol-card-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; }
+.evol-card-meta { font-size: 0.78rem; color: var(--evol-muted); margin-bottom: 8px; }
+.evol-card-body { font-size: 0.95rem; color: var(--evol-text); white-space: pre-wrap; }
+
+.success { color: var(--evol-green-light); }
+.error { color: #e05555; }
+
+.loading-screen { padding: 40px; text-align: center; color: var(--evol-muted); }
+
+/* Music page */
+.music-new-form, .music-add-form, .music-rename-form {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.music-new-form input, .music-add-form input, .music-rename-form input {
+  flex: 1;
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--evol-text);
+}
+.music-new-form button, .music-add-form button, .music-rename-form button {
+  background: var(--evol-green);
+  border: none;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.music-search {
+  width: 100%;
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--evol-text);
+  margin-bottom: 14px;
+}
+.music-playlist-row, .music-track-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.music-playlist-name {
+  background: none;
+  border: none;
+  color: var(--evol-text);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+.music-playlist-name:hover { color: var(--evol-green-light); }
+.music-playlist-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.music-playlist-actions button {
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--evol-text);
+}
+.music-playlist-actions button:hover { border-color: var(--evol-green); }
+.music-back-btn {
+  background: none;
+  border: none;
+  color: var(--evol-muted);
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+}
+.music-back-btn:hover { color: #fff; }
+.music-control-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.music-control-row button {
+  background: var(--evol-card);
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: var(--evol-text);
+  cursor: pointer;
+}
+.music-control-row button:hover { border-color: var(--evol-green); }
+.music-search-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--evol-border);
+}
+.music-search-result img { border-radius: 4px; object-fit: cover; }
+.music-search-result-info { flex: 1; min-width: 0; }
+.music-search-result button {
+  background: var(--evol-green);
+  border: none;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Now-playing floating widget — ported from ui/styles.py's
+   .st-key-now_playing_drawer rule. useDragPosition.ts positions this via
+   inline left/top styles once the user drags it; this just sets the
+   initial fixed-corner spot and stacking order. */
+#now-playing-widget {
+  position: fixed;
+  top: 4.5rem;
+  right: 1.25rem;
+  z-index: 9999;
+}
+#now-playing-widget.evol-dragging {
+  transition: left 0.2s ease, top 0.2s ease, box-shadow 0.15s ease;
+  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
+}
+#now-playing-widget.evol-snapping {
+  transition: left 0.2s ease, top 0.2s ease;
+}
