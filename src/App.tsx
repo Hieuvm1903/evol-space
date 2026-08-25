@@ -11,6 +11,7 @@ import { MusicPage } from "./pages/MusicPage";
 import { SecretPage } from "./pages/SecretPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import "./App.css";
+import GalaxyBackground from "./components/GalaxyBackground";
 
 // One dark theme for every antd component in the app (buttons, inputs,
 // cards, skeletons, alerts, toasts, ...) instead of re-declaring
@@ -40,6 +41,7 @@ export default function App() {
             once the Music page is ported. */}
         <PlayerProvider>
           <BrowserRouter>
+            <GalaxyBackground />
             <NavBar />
             <Routes>
               <Route path="/" element={<HomePage />} />

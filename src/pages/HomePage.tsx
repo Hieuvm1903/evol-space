@@ -108,6 +108,7 @@ function FacebookEmbed() {
 export function HomePage() {
   return (
     <div className="page">
+
       <h1 className="hero-title">EVOL Space</h1>
       <TypingQuote />
       <FacebookEmbed />
