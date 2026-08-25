@@ -140,7 +140,7 @@ export function MapPage() {
     if (form.editId !== null) {
       await placesService.updatePlace(form.editId, finalName, lat, lon, form.description.trim(), icon, form.tags);
     } else {
-      await placesService.addPlace(user.id, finalName, lat, lon, form.description.trim(), icon, form.tags);
+      await placesService.addPlace(user!.id, finalName, lat, lon, form.description.trim(), icon, form.tags);
     }
     setPanelMode("none");
     load();
@@ -148,7 +148,7 @@ export function MapPage() {
 
   async function handleDelete(placeId: number) {
     if (!confirm("Delete this place?")) return;
-    await placesService.deletePlace(placeId, user.id);
+    await placesService.deletePlace(placeId, user!.id);
     if (selectedId === placeId) setSelectedId(null);
     load();
   }
