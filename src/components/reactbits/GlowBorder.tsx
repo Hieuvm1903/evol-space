@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import "./GlowBorder.css";
 
-// Reactbits-style "Border Glow": a conic-gradient ring, masked down to just
-// the border, that only rotates while `active` (e.g. a track is playing).
-// The mouse-tracked bloom on hover is written directly to the DOM via a
-// throttled rAF instead of React state — this component wraps the
-// draggable pill/panel, and updating state on every raw mousemove was
-// forcing a re-render on every pixel of pointer movement, which starved
-// useDragPosition's own rAF loop and made dragging look like a teleport
-// (no visible movement until drop). Writing a CSS custom property
-// directly sidesteps React entirely for this purely cosmetic effect.
+// Reactbits-style "Border Glow". Two independent effects, both written
+// straight to the DOM (never React state) so neither fights the drag
+// code's own rAF loop:
+//  1. A masked gradient ring (padding-box + mask-composite exclude) whose
+//     colors slowly DRIFT via background-position — never rotated. A full
+//     transform: rotate() on this kind of masked ring is what produced the
+//     stray diagonal seam artifacts before; animating background-position
+//     instead can never look like spinning, by construction.
+//  2. A mouse-tracked radial bloom on hover, position written via
+//     CSS custom properties in a throttled requestAnimationFrame.
 interface GlowBorderProps {
   children: React.ReactNode;
   className?: string;
@@ -24,7 +25,7 @@ export default function GlowBorder({
   className = "",
   style,
   borderRadius = 16,
-  colors = ["#8b6ff5", "#22d3ee", "#e879f9", "#8b6ff5"],
+  colors = ["#8b6ff5", "#22d3ee", "#e879f9"],
   active = false,
 }: GlowBorderProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -60,12 +61,14 @@ export default function GlowBorder({
       onMouseMove={handleMouseMove}
       style={{
         borderRadius,
-        ["--glow-gradient" as any]: `conic-gradient(from 0deg, ${colors.join(", ")})`,
+        ["--glow-c1" as any]: colors[0],
+        ["--glow-c2" as any]: colors[1] ?? colors[0],
+        ["--glow-c3" as any]: colors[2] ?? colors[0],
         ...style,
       }}
     >
       <div className="glow-border-ring" style={{ borderRadius }} />
-      <div className="glow-border-content" style={{ borderRadius: Math.max(borderRadius - 1, 0) }}>
+      <div className="glow-border-content" style={{ borderRadius: Math.max(borderRadius - 1.5, 0) }}>
         {children}
       </div>
     </div>
