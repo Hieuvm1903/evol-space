@@ -17,34 +17,28 @@ import LyricsView from "./components/LyricsView";
 import TransportControls from "./components/TransportControls";
 import ModeRow from "./components/ModeRow";
 import VolumeRow from "./components/VolumeRow";
+import PillView from "./components/PillView";
+
+import GlowBorder from "../../components/reactbits/GlowBorder";
+import GlassSurface from "../../components/reactbits/GlassSurface";
+import ElasticSlider from "../../components/reactbits/ElasticSlider";
 
 import "./NowPlaying.css";
-import PillView from "./components/PillView";
 
 export type { Track };
 
 interface Props {
   queue: Track[];
   initialMode: string;
-  /** Called when the user hits the close (X) button — host clears its queue state. */
   onClose: () => void;
-  /** Called whenever the user picks/confirms a lyrics match for a track. */
   onPersistLyrics: PersistLyricsSelection;
-  /** Called whenever the live engine's mode/playing/track state changes,
-   * plus a `setMode` control — lets the host (PlayerProvider) drive mode
-   * changes into this exact running player instance instead of only
-   * being able to restart it via `initialMode`. */
   onEngineUpdate?: (
     state: { mode: Mode; playing: boolean; currentTrackIdx: number },
     controls: { setMode: (m: Mode) => void },
   ) => void;
 }
 
-// NOTE: this used to also call useFrameHeight(rootRef) here, which
-// reported this component's height to Streamlit so its iframe could
-// resize to fit. A component rendered directly in the page (not inside
-// an iframe) just... has a height. Nothing to report.
-export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics, onEngineUpdate }: Props) {
+export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics,onEngineUpdate }: Props) {
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(EXPANDED_KEY) === "1"; } catch { return false; }
   });
@@ -52,6 +46,12 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
   const rootRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+
+  // Local seek preview: while the user is dragging the progress slider we
+  // show their drag position instead of the live curTime (which is still
+  // updating every 500ms from the actual player), so the thumb doesn't
+  // fight the drag. Cleared shortly after the real seek lands.
+  const [dragProgress, setDragProgress] = useState<number | null>(null);
 
   const engine = usePlayerEngine(queue, initialMode);
   const { startDrag, resetPos, applySavedPosition, snapEnabled, setSnapMode } = useDragPosition();
@@ -88,20 +88,27 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
     engine.seekToTime(time);
   }
 
-  function handleProgressBarClick(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const frac = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
-    engine.seekToFraction(frac);
-  }
-
   if (!queue.length) return null;
   const track = queue[engine.currentTrackIdx];
+
+  const livePercent = engine.duration ? (engine.curTime / engine.duration) * 100 : 0;
+  const progressPercent = dragProgress ?? livePercent;
+
+  function handleProgressChange(v: number) {
+    setDragProgress(v);
+  }
+  function handleProgressCommit(v: number) {
+    engine.seekToFraction(v / 100);
+    // Give the player a moment to report the new curTime before handing
+    // display back to the live value, avoiding a visible snap-back.
+    setTimeout(() => setDragProgress(null), 300);
+  }
 
   return (
     <ConfigProvider
       theme={{
         algorithm: antdTheme.darkAlgorithm,
-        token: { colorPrimary: "#8b6ff5", colorBgContainer: "#161622", borderRadius: 10 },
+        token: { colorPrimary: "#8b6ff5", colorBgContainer: "#14121f", borderRadius: 10 },
       }}
     >
       <div ref={rootRef}>
@@ -115,66 +122,71 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
           onTogglePlayPause={engine.togglePlayPause}
         />
 
-        {/* Kept permanently mounted (never conditionally rendered) — only
-            opacity/visibility toggle via className, so #yt-main (a child
-            further down) is never unmounted and playback survives
-            collapse/expand. Swapping the old display:none/block for
-            classes lets the panel animate in/out instead of popping. */}
         <div id="panel" className={expanded ? "panel-visible" : "panel-hidden"}>
-          <PanelHeader
-            headerRef={headerRef}
-            view={view}
-            onViewChange={setView}
-            onStartDrag={startDrag}
-            onCollapse={() => toggleExpand(false)}
-            onResetPos={resetPos}
-            onClose={closeWidget}
-            snapEnabled={snapEnabled}
-            onToggleSnap={setSnapMode}
-          />
+          <GlowBorder borderRadius={16} active={engine.playing} className="panel-glow">
+            <GlassSurface borderRadius={16} blur={16} backgroundOpacity={0.32} className="panel-glass">
+              <div className="panel-inner">
+                <PanelHeader
+                  headerRef={headerRef}
+                  view={view}
+                  onViewChange={setView}
+                  onStartDrag={startDrag}
+                  onCollapse={() => toggleExpand(false)}
+                  onResetPos={resetPos}
+                  onClose={closeWidget}
+                  snapEnabled={snapEnabled}
+                  onToggleSnap={setSnapMode}
+                />
 
-          {engine.showUnmute && (
-            <div id="unmute-banner" onClick={engine.unmuteNow}>Sound off — tap to unmute</div>
-          )}
+                {engine.showUnmute && (
+                  <div id="unmute-banner" onClick={engine.unmuteNow}>Sound off — tap to unmute</div>
+                )}
 
-          <VideoView visible={view === "video"} />
-          <LyricsView visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={handleSeekFromLyrics} />
+                <VideoView visible={view === "video"} />
+                <LyricsView visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={handleSeekFromLyrics} />
 
-          <Typography.Text ellipsis style={{ display: "block", marginTop: 8, fontWeight: 600, fontSize: 13.5, color: "#e6e6e6" }}>
-            {track.title}
-          </Typography.Text>
+                <Typography.Text ellipsis style={{ display: "block", marginTop: 8, fontWeight: 600, fontSize: 13.5, color: "#e6e6e6" }}>
+                  {track.title}
+                </Typography.Text>
 
-          <div id="progress-row">
-            <span>{formatTime(engine.curTime)}</span>
-            <div id="progress-bar" onClick={handleProgressBarClick}>
-              <div id="progress-fill" style={{ width: engine.duration ? `${(engine.curTime / engine.duration) * 100}%` : "0%" }} />
-            </div>
-            <span>{formatTime(engine.duration)}</span>
-          </div>
+                <div id="progress-row">
+                  <span>{formatTime(engine.curTime)}</span>
+                  <ElasticSlider
+                    className="progress-elastic-slider"
+                    value={progressPercent}
+                    onChange={handleProgressChange}
+                    onChangeComplete={handleProgressCommit}
+                    trackHeight={5}
+                  />
+                  <span>{formatTime(engine.duration)}</span>
+                </div>
 
-          <TransportControls
-            track={track}
-            playing={engine.playing}
-            onPrev={() => engine.advance(-1)}
-            onNext={() => engine.advance(1)}
-            onTogglePlayPause={engine.togglePlayPause}
-          />
+                <TransportControls
+                  track={track}
+                  playing={engine.playing}
+                  onPrev={() => engine.advance(-1)}
+                  onNext={() => engine.advance(1)}
+                  onTogglePlayPause={engine.togglePlayPause}
+                />
 
-          <ModeRow
-            mode={engine.mode}
-            onModeChange={engine.setMode}
-            onReshuffle={() => engine.setOrder(shuffleQueue(engine.queueRef.current.length))}
-          />
+                <ModeRow
+                  mode={engine.mode}
+                  onModeChange={engine.setMode}
+                  onReshuffle={() => engine.setOrder(shuffleQueue(engine.queueRef.current.length))}
+                />
 
-          <VolumeRow volume={engine.volume} onChange={engine.setVolume} />
+                <VolumeRow volume={engine.volume} onChange={engine.setVolume} />
 
-          <QueueList
-            order={engine.order}
-            queue={queue}
-            currentTrackIdx={engine.currentTrackIdx}
-            onReorder={engine.setOrder}
-            onPlay={engine.playTrackIdx}
-          />
+                <QueueList
+                  order={engine.order}
+                  queue={queue}
+                  currentTrackIdx={engine.currentTrackIdx}
+                  onReorder={engine.setOrder}
+                  onPlay={engine.playTrackIdx}
+                />
+              </div>
+            </GlassSurface>
+          </GlowBorder>
         </div>
 
         <div id="yt-preload" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", opacity: 0, pointerEvents: "none" }} />

@@ -71,7 +71,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const setEngineModeRef = useRef<((m: Mode) => void) | null>(null);
 
   function loadQueue(tracks: Track[], newMode: string, playlistId?: number) {
-    
     setQueue(tracks);
     setMode(newMode);
     setPlayingPlaylistId(playlistId ?? null);

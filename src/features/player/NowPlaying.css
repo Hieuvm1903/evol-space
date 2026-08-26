@@ -22,31 +22,23 @@
 #pill-wrap { padding: 2px; }
 
 #pill {
-  display: flex; align-items: center; gap: 8px; width: 260px;
-  background: rgba(20, 18, 33, 0.85);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid #8b6ff5; border-radius: 999px;
-  padding: 6px 10px; cursor: grab; box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 10px; cursor: grab;
   touch-action: none; user-select: none;
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  transition: transform 0.15s ease;
 }
-#pill:hover { border-color: #22d3ee; background: #1a1830; box-shadow: 0 6px 18px rgba(139, 111, 245, 0.3); transform: translateY(-1px); }
+#pill:hover { transform: translateY(-1px); }
 #pill:active, #pill.evol-active { cursor: grabbing; transform: scale(0.99); }
 
 #panel {
   width: min(300px, calc(100vw - 24px));
-  background: rgba(20, 18, 33, 0.82);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid #8b6ff5; border-radius: 14px;
-  padding: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 30px -14px rgba(139,111,245,0.5);
   transform-origin: top right;
   transition: opacity 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), visibility 0.2s;
 }
 #panel.panel-visible { opacity: 1; transform: translateY(0) scale(1); visibility: visible; animation: np-fade-scale 0.22s cubic-bezier(0.34,1.56,0.64,1); }
 #panel.panel-hidden { opacity: 0; transform: translateY(-8px) scale(0.97); visibility: hidden; pointer-events: none; }
-
+.panel-glow { width: 100%; }
+.panel-inner { padding: 12px; }
 .panel-header {
   display: flex; align-items: center; gap: 8px; cursor: grab;
   font-size: 0.75rem; color: #9c97b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.03em;
@@ -174,20 +166,13 @@
 }
 @keyframes lyrics-spin { to { transform: rotate(360deg); } }
 
-#progress-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.68rem; color: #9c97b8; }
-#progress-bar { flex: 1; height: 5px; background: #2a2740; border-radius: 3px; cursor: pointer; position: relative; overflow: hidden; }
-#progress-fill {
-  position: absolute; left: 0; top: 0; height: 100%;
-  background: linear-gradient(90deg, #8b6ff5, #22d3ee);
-  border-radius: 3px;
-  transition: width 0.25s linear;
-}
-#progress-fill::after {
-  content: "";
-  position: absolute; top: 0; left: 0; height: 100%; width: 40%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
-  animation: np-shine 2.2s ease-in-out infinite;
-}
+#progress-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.68rem; color: #9a9a9a; }
+.progress-elastic-slider { flex: 1; min-width: 0; }
+.progress-elastic-slider .elastic-slider-track-wrap { padding: 8px 0; }
+
+#volume-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+#volume-row .elastic-slider { flex: 1; }#progress-bar { flex: 1; height: 5px; background: #2a2740; border-radius: 3px; cursor: pointer; position: relative; overflow: hidden; }
+
 #controls-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
 #controls-row .ant-btn { transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1); }
 #controls-row .ant-btn:hover { transform: scale(1.1); }

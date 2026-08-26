@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
-import Galaxy from "./Galaxy";
-import "./Galaxy.css";
+import Galaxy from "./reactbits/Galaxy";
+import "./reactbits/Galaxy.css";
 import GalaxyRing from "./ImperfectCircle";
 
 export default function GalaxyBackground() {

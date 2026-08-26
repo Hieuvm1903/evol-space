@@ -1,19 +1,29 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Select, Input, Button, Popconfirm, Empty, Skeleton, Segmented, Tooltip, Typography, message } from "antd";
+import { Select, Input, Button, Popconfirm, Empty, Skeleton, Tooltip, message } from "antd";
 import {
   Music2, ListMusic, Plus, Search, Play, Shuffle, Repeat, Trash2, Pencil,
-  X, Link2, Upload, Copy, FileJson, FileText, Sparkles, Check, RadioTower,
+  Link2, Upload, Download, Copy, FileJson, FileText, Sparkles, Check, RadioTower,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { usePlayer } from "../features/player/PlayerProvider";
 import * as musicService from "../lib/musicService";
 import { searchSongs, searchPlaylists, SearchSongResult, SearchPlaylistResult } from "../lib/youtube";
-import "./MusicPage.css";
 import SpotlightCard from "../components/SpotlightCard";
+import CardSwap from "../components/CardSwap";
+import "./MusicPage.css";
 
-const { Text } = Typography;
-
-type RightTab = "overview" | "add" | "export";
+// Small galaxy palette so each album card in the CardSwap stack gets a
+// distinct, on-theme cover gradient instead of every card looking the same.
+const PLAYLIST_GRADIENTS = [
+  "linear-gradient(135deg, #8b6ff5, #22d3ee)",
+  "linear-gradient(135deg, #e879f9, #8b6ff5)",
+  "linear-gradient(135deg, #22d3ee, #60a5fa)",
+  "linear-gradient(135deg, #f472b6, #8b6ff5)",
+  "linear-gradient(135deg, #60a5fa, #22d3ee)",
+];
+function gradientForIndex(i: number) {
+  return PLAYLIST_GRADIENTS[i % PLAYLIST_GRADIENTS.length];
+}
 
 export function MusicPage() {
   const { user } = useAuth();
@@ -34,7 +44,7 @@ export function MusicPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace — playlist toolbar + tracklist (left) + detail (right)
+// Workspace — album picker (left) + playlist/tracklist (right)
 // ---------------------------------------------------------------------------
 
 function MusicWorkspace({ userId }: { userId: string }) {
@@ -46,9 +56,6 @@ function MusicWorkspace({ userId }: { userId: string }) {
 
   const [tracks, setTracks] = useState<musicService.PlaylistTrack[]>([]);
   const [loadingTracks, setLoadingTracks] = useState(false);
-  const [trackSearch, setTrackSearch] = useState("");
-  const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
-  const [rightTab, setRightTab] = useState<RightTab>("overview");
 
   const [showNewPlaylist, setShowNewPlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
@@ -76,21 +83,10 @@ function MusicWorkspace({ userId }: { userId: string }) {
   }
   useEffect(() => {
     loadTracks();
-    setSelectedTrackId(null);
-    setRightTab("overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlaylistId]);
 
   const selectedPlaylist = playlists.find((p) => p.id === selectedPlaylistId) ?? null;
-  const selectedTrack = tracks.find((t) => t.id === selectedTrackId) ?? null;
-
-  const filteredTracks = useMemo(() => {
-    const q = trackSearch.trim().toLowerCase();
-    if (!q) return tracks;
-    return tracks.filter(
-      (t) => t.title.toLowerCase().includes(q) || (t.artist ?? "").toLowerCase().includes(q),
-    );
-  }, [tracks, trackSearch]);
 
   async function handleCreatePlaylist() {
     const name = newPlaylistName.trim();
@@ -131,7 +127,6 @@ function MusicWorkspace({ userId }: { userId: string }) {
   async function handleRemoveTrack(trackId: number) {
     if (!selectedPlaylistId) return;
     await musicService.removeTrackFromPlaylist(selectedPlaylistId, trackId);
-    if (selectedTrackId === trackId) setSelectedTrackId(null);
     loadTracks();
   }
 
@@ -141,120 +136,71 @@ function MusicWorkspace({ userId }: { userId: string }) {
     <div className="page music-page-shell">
       <div className="music-shell-header fade-in-up">
         <h2 className="music-title"><Sparkles size={20} className="music-title-icon" /> Music</h2>
-        <p className="music-subtitle">Your galaxy of playlists — search, spin, and share.</p>
+        <p className="music-subtitle">Your galaxy of playlists — swap an album, then dive into the tracklist.</p>
       </div>
-
-      <div className="music-toolbar fade-in-up">
-        <Select
-          className="playlist-select"
-          value={selectedPlaylistId ?? undefined}
-          placeholder="Choose a playlist"
-          loading={loadingPlaylists}
-          onChange={(v) => setSelectedPlaylistId(v)}
-          suffixIcon={<ListMusic size={15} />}
-          options={playlists.map((p) => ({ value: p.id, label: p.name }))}
-          notFoundContent={<Empty description="No playlists yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
-        />
-        <Tooltip title="New playlist">
-          <Button className="glow-icon-btn" icon={<Plus size={16} />} onClick={() => setShowNewPlaylist((v) => !v)} />
-        </Tooltip>
-        <Tooltip title="Import playlist">
-          <Button className="glow-icon-btn" icon={<Upload size={16} />} onClick={() => setShowImport((v) => !v)} />
-        </Tooltip>
-      </div>
-
-      {showNewPlaylist && (
-        <SpotlightCard className="evol-glass-card music-inline-form fade-in-up">
-          <Input
-            value={newPlaylistName}
-            onChange={(e) => setNewPlaylistName(e.target.value)}
-            placeholder="New playlist name"
-            onPressEnter={handleCreatePlaylist}
-            autoFocus
-          />
-          <Button type="primary" className="btn-glow" loading={creating} disabled={!newPlaylistName.trim()} onClick={handleCreatePlaylist}>
-            Create
-          </Button>
-        </SpotlightCard>
-      )}
-
-      {showImport && (
-        <ImportPanel userId={userId} onImported={() => { setShowImport(false); loadPlaylists(); }} />
-      )}
 
       {playlists.length === 0 && !loadingPlaylists ? (
-        <Empty className="fade-in music-empty-state" description="No playlists yet — create one above to get started." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <div className="music-workspace">
+          <AlbumPickerPane
+            playlists={playlists}
+            loadingPlaylists={loadingPlaylists}
+            selectedPlaylistId={selectedPlaylistId}
+            onSelect={setSelectedPlaylistId}
+            showNewPlaylist={showNewPlaylist}
+            setShowNewPlaylist={setShowNewPlaylist}
+            newPlaylistName={newPlaylistName}
+            setNewPlaylistName={setNewPlaylistName}
+            creating={creating}
+            onCreate={handleCreatePlaylist}
+            showImport={showImport}
+            setShowImport={setShowImport}
+            userId={userId}
+            onImported={() => { setShowImport(false); loadPlaylists(); }}
+          />
+          <div className="music-pane music-pane-right">
+            <Empty className="fade-in music-empty-state" description="No playlists yet — tap + on the left to create one." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          </div>
+        </div>
       ) : (
         <div className="music-workspace">
-          {/* LEFT — tracklist */}
-          <div className="music-pane music-pane-left">
-            <div className="music-pane-left-header">
-              <Input
-                className="music-track-search"
-                value={trackSearch}
-                onChange={(e) => setTrackSearch(e.target.value)}
-                placeholder="Search tracks..."
-                prefix={<Search size={14} color="var(--evol-muted)" />}
-                allowClear
-              />
-              <span className="music-track-count">{tracks.length} track{tracks.length === 1 ? "" : "s"}</span>
-            </div>
+          <AlbumPickerPane
+            playlists={playlists}
+            loadingPlaylists={loadingPlaylists}
+            selectedPlaylistId={selectedPlaylistId}
+            onSelect={setSelectedPlaylistId}
+            showNewPlaylist={showNewPlaylist}
+            setShowNewPlaylist={setShowNewPlaylist}
+            newPlaylistName={newPlaylistName}
+            setNewPlaylistName={setNewPlaylistName}
+            creating={creating}
+            onCreate={handleCreatePlaylist}
+            showImport={showImport}
+            setShowImport={setShowImport}
+            userId={userId}
+            onImported={() => { setShowImport(false); loadPlaylists(); }}
+          />
 
-            <div className="music-track-list">
-              {loadingTracks ? (
-                <Skeleton active paragraph={{ rows: 5 }} className="fade-in" />
-              ) : filteredTracks.length === 0 ? (
-                <Empty
-                  className="fade-in"
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={tracks.length === 0 ? "No tracks yet — add some from the panel." : "No tracks match your search."}
-                />
-              ) : (
-                filteredTracks.map((t, i) => (
-                  <TrackRow
-                    key={t.id}
-                    index={i}
-                    track={t}
-                    active={selectedTrackId === t.id}
-                    playing={isThisPlaylistPlaying && player.nowPlayingTrackId === t.id}
-                    onSelect={() => { setSelectedTrackId(t.id!); setRightTab("overview"); }}
-                    onPlay={() => playFromTrack(t.id!)}
-                    onRemove={() => handleRemoveTrack(t.id!)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* RIGHT — detail */}
           <div className="music-pane music-pane-right">
-            {selectedTrack ? (
-              <TrackDetailPanel
-                key={selectedTrack.id}
-                playlistId={selectedPlaylistId!}
-                track={selectedTrack}
-                onBack={() => setSelectedTrackId(null)}
-                onChanged={loadTracks}
-                onRemoved={() => handleRemoveTrack(selectedTrack.id!)}
-              />
-            ) : selectedPlaylist ? (
-              <PlaylistDetailPanel
+            {selectedPlaylist ? (
+              <PlaylistPane
                 key={selectedPlaylist.id}
                 userId={userId}
                 playlist={selectedPlaylist}
                 playlists={playlists}
                 tracks={tracks}
-                tab={rightTab}
-                onTabChange={setRightTab}
+                loadingTracks={loadingTracks}
+                isPlaying={isThisPlaylistPlaying && player.isPlaying}
+                nowPlayingTrackId={player.nowPlayingTrackId}
+                currentMode={isThisPlaylistPlaying ? player.currentMode : null}
+                onPlayMode={playMode}
+                onPlayFromTrack={playFromTrack}
+                onRemoveTrack={handleRemoveTrack}
                 onRenamed={loadPlaylists}
                 onDeleted={handleDeletePlaylist}
-                onPlayMode={playMode}
-                isPlaying={isThisPlaylistPlaying && player.isPlaying}
-                currentMode={isThisPlaylistPlaying ? player.currentMode : null}
                 onTracksChanged={loadTracks}
               />
             ) : (
-              <Empty className="fade-in" description="Select a playlist" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty className="fade-in" description="Pick an album on the left" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             )}
           </div>
         </div>
@@ -264,155 +210,111 @@ function MusicWorkspace({ userId }: { userId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Track row (left pane)
+// Left pane — CardSwap album picker + create/import
 // ---------------------------------------------------------------------------
 
-function TrackRow({ index, track, active, playing, onSelect, onPlay, onRemove }: {
-  index: number;
-  track: musicService.PlaylistTrack;
-  active: boolean;
-  playing: boolean;
-  onSelect: () => void;
-  onPlay: () => void;
-  onRemove: () => void;
+function AlbumPickerPane({
+  playlists, loadingPlaylists, selectedPlaylistId, onSelect,
+  showNewPlaylist, setShowNewPlaylist, newPlaylistName, setNewPlaylistName, creating, onCreate,
+  showImport, setShowImport, userId, onImported,
+}: {
+  playlists: musicService.Playlist[];
+  loadingPlaylists: boolean;
+  selectedPlaylistId: number | null;
+  onSelect: (id: number) => void;
+  showNewPlaylist: boolean;
+  setShowNewPlaylist: React.Dispatch<React.SetStateAction<boolean>>;
+  newPlaylistName: string;
+  setNewPlaylistName: (v: string) => void;
+  creating: boolean;
+  onCreate: () => void;
+  showImport: boolean;
+  setShowImport: React.Dispatch<React.SetStateAction<boolean>>;
+  userId: string;
+  onImported: () => void;
 }) {
   return (
-    <div
-      className={`track-row stagger-item${active ? " track-row-active" : ""}${playing ? " track-row-playing" : ""}`}
-      style={{ animationDelay: `${Math.min(index, 14) * 30}ms` }}
-      onClick={onSelect}
-    >
-      <button className="track-row-play" onClick={(e) => { e.stopPropagation(); onPlay(); }} title="Play from here">
-        {playing ? <span className="track-eq"><span /><span /><span /></span> : <Play size={13} />}
-      </button>
-
-      {track.thumbnail_url ? (
-        <img className="track-row-thumb" src={track.thumbnail_url} alt="" />
-      ) : (
-        <div className="track-row-thumb track-row-thumb-empty"><Music2 size={14} /></div>
-      )}
-
-      <div className="track-row-info">
-        <div className="track-row-title">{track.title}</div>
-        {track.artist && <div className="track-row-artist">{track.artist}</div>}
+    <div className="music-pane music-pane-left album-picker-pane">
+      <div className="album-picker-header">
+        <h3 className="album-picker-title"><ListMusic size={15} /> Albums</h3>
+        <div className="album-picker-actions">
+          <Tooltip title="New playlist">
+            <Button
+              className="glow-icon-btn" size="small" icon={<Plus size={14} />}
+              onClick={() => { setShowNewPlaylist((v) => !v); setShowImport(false); }}
+            />
+          </Tooltip>
+          <Tooltip title="Import playlist">
+            <Button
+              className="glow-icon-btn" size="small" icon={<Upload size={14} />}
+              onClick={() => { setShowImport((v) => !v); setShowNewPlaylist(false); }}
+            />
+          </Tooltip>
+        </div>
       </div>
 
-      <Popconfirm
-        title="Remove from playlist?"
-        okText="Remove"
-        cancelText="Cancel"
-        okButtonProps={{ danger: true }}
-        onConfirm={(e) => { e?.stopPropagation?.(); onRemove(); }}
-      >
-        <button className="track-row-remove" onClick={(e) => e.stopPropagation()} title="Remove">
-          <Trash2 size={13} />
-        </button>
-      </Popconfirm>
+      {showNewPlaylist && (
+        <SpotlightCard className="evol-glass-card music-inline-form fade-in-up">
+          <Input
+            size="small"
+            value={newPlaylistName}
+            onChange={(e) => setNewPlaylistName(e.target.value)}
+            placeholder="New playlist name"
+            onPressEnter={onCreate}
+            autoFocus
+          />
+          <Button size="small" type="primary" className="btn-glow" loading={creating} disabled={!newPlaylistName.trim()} onClick={onCreate}>
+            Create
+          </Button>
+        </SpotlightCard>
+      )}
+
+      {showImport && <ImportPanel userId={userId} onImported={onImported} />}
+
+      {loadingPlaylists ? (
+        <Skeleton active paragraph={{ rows: 3 }} className="fade-in" />
+      ) : playlists.length === 0 ? (
+        <Empty className="fade-in" description="No playlists yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <CardSwap
+          items={playlists.map((p, i) => ({ id: p.id, title: p.name, subtitle: "Playlist", gradient: gradientForIndex(i) }))}
+          activeId={selectedPlaylistId}
+          onSelect={onSelect}
+        />
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Track detail panel (right pane — when a track is selected)
+// Right pane — the selected playlist: header, transport, tools, tracklist
 // ---------------------------------------------------------------------------
 
-function TrackDetailPanel({ playlistId, track, onBack, onChanged, onRemoved }: {
-  playlistId: number;
-  track: musicService.PlaylistTrack;
-  onBack: () => void;
-  onChanged: () => void;
-  onRemoved: () => void;
-}) {
-  const [customTitle, setCustomTitle] = useState(track.title !== track.original_title ? track.title : "");
-  const [artist, setArtist] = useState(track.artist ?? "");
-  const [lyricsUrl, setLyricsUrl] = useState(track.lyrics_url ?? "");
-  const isRenamed = track.title !== track.original_title;
-
-  async function saveRename() {
-    if (!customTitle.trim()) return;
-    await musicService.renameTrackInPlaylist(playlistId, track.id!, customTitle.trim());
-    message.success("Renamed in this playlist.");
-    onChanged();
-  }
-  async function resetRename() {
-    await musicService.resetTrackTitleInPlaylist(playlistId, track.id!);
-    onChanged();
-  }
-  async function saveDetails() {
-    await musicService.updateTrackDetails(track.id!, { artist, lyricsUrl });
-    message.success("Track details saved.");
-    onChanged();
-  }
-
-  return (
-    <SpotlightCard className="evol-glass-card detail-card fade-in-up">
-      <button className="detail-back-btn" onClick={onBack}><X size={14} /> Close</button>
-
-      <div className="detail-track-hero">
-        {track.thumbnail_url
-          ? <img src={track.thumbnail_url} alt="" />
-          : <div className="detail-track-hero-empty"><Music2 size={26} /></div>}
-        <div>
-          <Text className="detail-track-title">{track.title}</Text>
-          <Text className="detail-track-meta">{track.artist || "Unknown artist"}</Text>
-        </div>
-      </div>
-
-      <div className="detail-section">
-        <label><Pencil size={13} /> Rename in this playlist</label>
-        <p className="detail-hint">Library title: {track.original_title}</p>
-        <div className="detail-row">
-          <Input value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} placeholder={track.original_title} />
-          <Button className="btn-glow" onClick={saveRename}>Save</Button>
-          {isRenamed && <Button onClick={resetRename}>Reset</Button>}
-        </div>
-      </div>
-
-      <div className="detail-section">
-        <label><Music2 size={13} /> Artist &amp; lyrics (library-wide)</label>
-        <div className="detail-row">
-          <Input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" />
-        </div>
-        <div className="detail-row">
-          <Input value={lyricsUrl} onChange={(e) => setLyricsUrl(e.target.value)} placeholder="Lyrics URL" />
-          <Button className="btn-glow" onClick={saveDetails}>Save</Button>
-        </div>
-        {lyricsUrl.trim() && (
-          <a href={lyricsUrl} target="_blank" rel="noreferrer" className="detail-lyrics-link">
-            <Link2 size={12} /> Open lyrics
-          </a>
-        )}
-      </div>
-
-      <Popconfirm title="Remove from playlist?" okText="Remove" cancelText="Cancel" okButtonProps={{ danger: true }} onConfirm={onRemoved}>
-        <Button danger icon={<Trash2 size={14} />} className="detail-remove-btn">Remove from playlist</Button>
-      </Popconfirm>
-    </SpotlightCard>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Playlist detail panel (right pane — default, no track selected)
-// ---------------------------------------------------------------------------
-
-function PlaylistDetailPanel({
-  userId, playlist, playlists, tracks, tab, onTabChange, onRenamed, onDeleted,
-  onPlayMode, isPlaying, currentMode, onTracksChanged,
+function PlaylistPane({
+  userId, playlist, playlists, tracks, loadingTracks,
+  isPlaying, nowPlayingTrackId, currentMode,
+  onPlayMode, onPlayFromTrack, onRemoveTrack, onRenamed, onDeleted, onTracksChanged,
 }: {
   userId: string;
   playlist: musicService.Playlist;
   playlists: musicService.Playlist[];
   tracks: musicService.PlaylistTrack[];
-  tab: RightTab;
-  onTabChange: (t: RightTab) => void;
+  loadingTracks: boolean;
+  isPlaying: boolean;
+  nowPlayingTrackId: number | null;
+  currentMode: string | null;
+  onPlayMode: (mode: string) => void;
+  onPlayFromTrack: (trackId: number) => void;
+  onRemoveTrack: (trackId: number) => void;
   onRenamed: () => void;
   onDeleted: () => void;
-  onPlayMode: (mode: string) => void;
-  isPlaying: boolean;
-  currentMode: string | null;
   onTracksChanged: () => void;
 }) {
   const [renameValue, setRenameValue] = useState(playlist.name);
+  const [trackSearch, setTrackSearch] = useState("");
+  const [expandedTrackId, setExpandedTrackId] = useState<number | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [copySourceId, setCopySourceId] = useState<number | undefined>(undefined);
   const [copyBusy, setCopyBusy] = useState(false);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -449,16 +351,16 @@ function PlaylistDetailPanel({
   }
 
   const otherPlaylists = playlists.filter((p) => p.id !== playlist.id);
+  const filteredTracks = useMemo(() => {
+    const q = trackSearch.trim().toLowerCase();
+    if (!q) return tracks;
+    return tracks.filter((t) => t.title.toLowerCase().includes(q) || (t.artist ?? "").toLowerCase().includes(q));
+  }, [tracks, trackSearch]);
 
   return (
-    <SpotlightCard className="evol-glass-card detail-card fade-in-up">
-      <div className="detail-row">
-        <Input
-          className="playlist-name-input"
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          onPressEnter={saveRename}
-        />
+    <div className="playlist-pane-body fade-in-up">
+      <div className="playlist-header-row">
+        <Input className="playlist-name-input" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onPressEnter={saveRename} />
         <Tooltip title="Save name">
           <Button className="btn-glow" icon={<Check size={14} />} onClick={saveRename} />
         </Tooltip>
@@ -492,71 +394,213 @@ function PlaylistDetailPanel({
             <Repeat size={16} />
           </button>
         </Tooltip>
-        {isPlaying && (
-          <span className="transport-live-badge"><RadioTower size={11} /> Live</span>
-        )}
+        {isPlaying && <span className="transport-live-badge"><RadioTower size={11} /> Live</span>}
       </div>
 
-      <Segmented
-        className="detail-tabs"
-        block
-        value={tab}
-        onChange={(v) => onTabChange(v as RightTab)}
-        options={[
-          { label: "Overview", value: "overview" },
-          { label: "Add tracks", value: "add" },
-          { label: "Export", value: "export" },
-        ]}
-      />
+      <div className="playlist-toolbar-row">
+        <Input
+          className="music-track-search"
+          value={trackSearch}
+          onChange={(e) => setTrackSearch(e.target.value)}
+          placeholder="Search tracks..."
+          prefix={<Search size={14} color="var(--evol-muted)" />}
+          allowClear
+        />
+        <Tooltip title="Add tracks">
+          <Button
+            className={`glow-icon-btn${showAdd ? " glow-icon-btn-active" : ""}`}
+            icon={<Plus size={15} />}
+            onClick={() => { setShowAdd((v) => !v); setShowExport(false); }}
+          />
+        </Tooltip>
+        <Tooltip title="Export / copy">
+          <Button
+            className={`glow-icon-btn${showExport ? " glow-icon-btn-active" : ""}`}
+            icon={<Download size={15} />}
+            onClick={() => { setShowExport((v) => !v); setShowAdd(false); }}
+          />
+        </Tooltip>
+      </div>
 
-      <div className="detail-tab-body fade-in" key={tab}>
-        {tab === "overview" && (
-          <div className="playlist-overview-body">
-            <p className="evol-card-meta">{tracks.length} track{tracks.length === 1 ? "" : "s"} in this playlist.</p>
-            <p className="detail-hint">
-              Pick a track on the left to rename it, edit its artist, or attach lyrics — or use the tabs above to add more music or export this playlist.
-              {isPlaying && " Playback follows whatever mode you pick above, live — no need to hit play again."}
-            </p>
-          </div>
-        )}
+      {showAdd && (
+        <SpotlightCard className="evol-glass-card music-inline-panel fade-in-up">
+          <AddTrackPanel playlistId={playlist.id} addedBy={userId} onAdded={onTracksChanged} />
+        </SpotlightCard>
+      )}
 
-        {tab === "add" && <AddTrackPanel playlistId={playlist.id} addedBy={userId} onAdded={onTracksChanged} />}
-
-        {tab === "export" && (
-          <div className="playlist-export-body">
-            <p className="evol-card-meta">Copy tracks from another playlist</p>
-            {otherPlaylists.length === 0 ? (
-              <p className="placeholder-note">No other playlists yet.</p>
-            ) : (
-              <div className="detail-row">
-                <Select
-                  className="copy-select"
-                  value={copySourceId}
-                  placeholder="Choose a playlist…"
-                  onChange={(v) => setCopySourceId(v)}
-                  options={otherPlaylists.map((p) => ({ value: p.id, label: p.name }))}
-                />
-                <Button className="btn-glow" disabled={!copySourceId} loading={copyBusy} icon={<Copy size={14} />} onClick={handleCopy}>
-                  Copy
-                </Button>
-              </div>
-            )}
-            {copyMessage && <p className="success">{copyMessage}</p>}
-
-            <p className="evol-card-meta" style={{ marginTop: 16 }}>Download</p>
+      {showExport && (
+        <SpotlightCard className="evol-glass-card music-inline-panel fade-in-up">
+          <p className="evol-card-meta">Copy tracks from another playlist</p>
+          {otherPlaylists.length === 0 ? (
+            <p className="placeholder-note">No other playlists yet.</p>
+          ) : (
             <div className="detail-row">
-              <Button icon={<FileJson size={14} />} onClick={() => downloadExport("json")}>JSON</Button>
-              <Button icon={<FileText size={14} />} onClick={() => downloadExport("text")}>Text</Button>
+              <Select
+                className="copy-select"
+                value={copySourceId}
+                placeholder="Choose a playlist…"
+                onChange={(v) => setCopySourceId(v)}
+                options={otherPlaylists.map((p) => ({ value: p.id, label: p.name }))}
+              />
+              <Button className="btn-glow" disabled={!copySourceId} loading={copyBusy} icon={<Copy size={14} />} onClick={handleCopy}>
+                Copy
+              </Button>
             </div>
+          )}
+          {copyMessage && <p className="success">{copyMessage}</p>}
+          <p className="evol-card-meta" style={{ marginTop: 14 }}>Download</p>
+          <div className="detail-row">
+            <Button icon={<FileJson size={14} />} onClick={() => downloadExport("json")}>JSON</Button>
+            <Button icon={<FileText size={14} />} onClick={() => downloadExport("text")}>Text</Button>
           </div>
+        </SpotlightCard>
+      )}
+
+      <div className="playlist-track-count">{tracks.length} track{tracks.length === 1 ? "" : "s"}</div>
+
+      <div className="playlist-track-list">
+        {loadingTracks ? (
+          <Skeleton active paragraph={{ rows: 5 }} className="fade-in" />
+        ) : filteredTracks.length === 0 ? (
+          <Empty
+            className="fade-in"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={tracks.length === 0 ? "No tracks yet — tap + above to add some." : "No tracks match your search."}
+          />
+        ) : (
+          filteredTracks.map((t, i) => (
+            <TrackRow
+              key={t.id}
+              index={i}
+              track={t}
+              playlistId={playlist.id}
+              expanded={expandedTrackId === t.id}
+              playing={isPlaying && nowPlayingTrackId === t.id}
+              onToggleExpand={() => setExpandedTrackId(expandedTrackId === t.id ? null : t.id!)}
+              onPlay={() => onPlayFromTrack(t.id!)}
+              onRemove={() => onRemoveTrack(t.id!)}
+              onChanged={onTracksChanged}
+            />
+          ))
         )}
       </div>
-    </SpotlightCard>
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Import panel (top toolbar)
+// Track row + inline manage panel (right pane)
+// ---------------------------------------------------------------------------
+
+function TrackRow({ index, track, playlistId, expanded, playing, onToggleExpand, onPlay, onRemove, onChanged }: {
+  index: number;
+  track: musicService.PlaylistTrack;
+  playlistId: number;
+  expanded: boolean;
+  playing: boolean;
+  onToggleExpand: () => void;
+  onPlay: () => void;
+  onRemove: () => void;
+  onChanged: () => void;
+}) {
+  return (
+    <div className="track-row-wrap stagger-item" style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}>
+      <div className={`track-row${expanded ? " track-row-expanded" : ""}${playing ? " track-row-playing" : ""}`}>
+        <button className="track-row-play" onClick={(e) => { e.stopPropagation(); onPlay(); }} title="Play from here">
+          {playing ? <span className="track-eq"><span /><span /><span /></span> : <Play size={13} />}
+        </button>
+
+        {track.thumbnail_url ? (
+          <img className="track-row-thumb" src={track.thumbnail_url} alt="" />
+        ) : (
+          <div className="track-row-thumb track-row-thumb-empty"><Music2 size={14} /></div>
+        )}
+
+        <div className="track-row-info" onClick={onToggleExpand}>
+          <div className="track-row-title">{track.title}</div>
+          {track.artist && <div className="track-row-artist">{track.artist}</div>}
+        </div>
+
+        <button className="track-row-manage" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }} title="Manage">
+          <Pencil size={13} />
+        </button>
+
+        <Popconfirm
+          title="Remove from playlist?"
+          okText="Remove"
+          cancelText="Cancel"
+          okButtonProps={{ danger: true }}
+          onConfirm={(e) => { e?.stopPropagation?.(); onRemove(); }}
+        >
+          <button className="track-row-remove" onClick={(e) => e.stopPropagation()} title="Remove">
+            <Trash2 size={13} />
+          </button>
+        </Popconfirm>
+      </div>
+
+      {expanded && <TrackManagePanel playlistId={playlistId} track={track} onChanged={onChanged} />}
+    </div>
+  );
+}
+
+function TrackManagePanel({ playlistId, track, onChanged }: {
+  playlistId: number;
+  track: musicService.PlaylistTrack;
+  onChanged: () => void;
+}) {
+  const [customTitle, setCustomTitle] = useState(track.title !== track.original_title ? track.title : "");
+  const [artist, setArtist] = useState(track.artist ?? "");
+  const [lyricsUrl, setLyricsUrl] = useState(track.lyrics_url ?? "");
+  const isRenamed = track.title !== track.original_title;
+
+  async function saveRename() {
+    if (!customTitle.trim()) return;
+    await musicService.renameTrackInPlaylist(playlistId, track.id!, customTitle.trim());
+    message.success("Renamed in this playlist.");
+    onChanged();
+  }
+  async function resetRename() {
+    await musicService.resetTrackTitleInPlaylist(playlistId, track.id!);
+    onChanged();
+  }
+  async function saveDetails() {
+    await musicService.updateTrackDetails(track.id!, { artist, lyricsUrl });
+    message.success("Track details saved.");
+    onChanged();
+  }
+
+  return (
+    <div className="track-manage-panel fade-in-up">
+      <div className="track-manage-field">
+        <label><Pencil size={11} /> Rename in this playlist</label>
+        <div className="track-manage-row">
+          <Input size="small" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} placeholder={track.original_title} />
+          <Button size="small" className="btn-glow" onClick={saveRename}>Save</Button>
+          {isRenamed && <Button size="small" onClick={resetRename}>Reset</Button>}
+        </div>
+      </div>
+      <div className="track-manage-field">
+        <label><Music2 size={11} /> Artist</label>
+        <Input size="small" value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" />
+      </div>
+      <div className="track-manage-field">
+        <label><Link2 size={11} /> Lyrics URL</label>
+        <div className="track-manage-row">
+          <Input size="small" value={lyricsUrl} onChange={(e) => setLyricsUrl(e.target.value)} placeholder="Lyrics URL" />
+          <Button size="small" className="btn-glow" onClick={saveDetails}>Save</Button>
+        </div>
+        {lyricsUrl.trim() && (
+          <a href={lyricsUrl} target="_blank" rel="noreferrer" className="detail-lyrics-link">
+            <Link2 size={11} /> Open lyrics
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Import panel (album picker pane)
 // ---------------------------------------------------------------------------
 
 function ImportPanel({ userId, onImported }: { userId: string; onImported: () => void }) {
@@ -576,7 +620,7 @@ function ImportPanel({ userId, onImported }: { userId: string; onImported: () =>
   return (
     <SpotlightCard className="evol-glass-card music-inline-form music-import-form fade-in-up">
       <p className="evol-card-meta">Paste JSON exported from EVOL Space, or plain text with one "Title - URL" per line.</p>
-      <Input.TextArea value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Paste playlist data..." rows={5} />
+      <Input.TextArea value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Paste playlist data..." rows={4} />
       <Button className="btn-glow" loading={busy} disabled={!raw.trim()} onClick={handleImport} icon={<Upload size={14} />}>
         Import
       </Button>
@@ -586,7 +630,7 @@ function ImportPanel({ userId, onImported }: { userId: string; onImported: () =>
 }
 
 // ---------------------------------------------------------------------------
-// Add-track panel — three tabs: search / paste link / YT playlist import
+// Add-track panel — search / paste link / YT playlist import
 // ---------------------------------------------------------------------------
 
 function AddTrackPanel({ playlistId, addedBy, onAdded }: { playlistId: number; addedBy: string; onAdded: () => void }) {
@@ -594,18 +638,18 @@ function AddTrackPanel({ playlistId, addedBy, onAdded }: { playlistId: number; a
 
   return (
     <div>
-      <Segmented
-        size="small"
-        block
-        value={tab}
-        onChange={(v) => setTab(v as "search" | "link" | "playlist")}
-        options={[
-          { label: "Search", value: "search" },
-          { label: "Paste link", value: "link" },
-          { label: "YT playlist", value: "playlist" },
-        ]}
-        style={{ marginBottom: 10 }}
-      />
+      <div className="add-track-tabs">
+        {(["search", "link", "playlist"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={`add-track-tab-btn${tab === t ? " add-track-tab-btn-active" : ""}`}
+            onClick={() => setTab(t)}
+          >
+            {t === "search" ? "Search" : t === "link" ? "Paste link" : "YT playlist"}
+          </button>
+        ))}
+      </div>
       <div className="fade-in" key={tab}>
         {tab === "search" && <AddBySearch playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
         {tab === "link" && <AddByLink playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}

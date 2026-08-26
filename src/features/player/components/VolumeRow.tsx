@@ -1,6 +1,6 @@
 import React from "react";
-import { Slider } from "antd";
 import { SoundOutlined } from "@ant-design/icons";
+import ElasticSlider from "../../../components/reactbits/ElasticSlider";
 
 interface Props {
   volume: number;
@@ -10,12 +10,11 @@ interface Props {
 export default function VolumeRow({ volume, onChange }: Props) {
   return (
     <div id="volume-row">
-      <SoundOutlined style={{ color: "#9a9a9a" }} />
-      <Slider
-        className="volume-slider"
-        min={0} max={100} value={volume}
-        onChange={(v) => onChange(v as number)}
-        tooltip={{ formatter: (v) => `${v}%` }}
+      <ElasticSlider
+        value={volume}
+        onChange={onChange}
+        leftIcon={<SoundOutlined style={{ fontSize: 12 }} />}
+        trackHeight={5}
       />
     </div>
   );
