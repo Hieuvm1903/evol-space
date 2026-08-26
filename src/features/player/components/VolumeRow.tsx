@@ -1,6 +1,6 @@
 import React from "react";
 import { SoundOutlined } from "@ant-design/icons";
-import ElasticSlider from "../../../components/reactbits/ElasticSlider";
+import ElasticSlider from "../../../components/ElasticSlider";
 
 interface Props {
   volume: number;
