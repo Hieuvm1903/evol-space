@@ -1,0 +1,4 @@
+.history-heading { display: flex; align-items: center; }
+.history-tabs .ant-tabs-tab { color: var(--evol-muted); }
+.history-tabs .ant-tabs-tab-active .ant-tabs-tab-btn { color: #fff !important; }
+.history-tabs .ant-tabs-ink-bar { background: linear-gradient(90deg, #8b6ff5, #22d3ee); height: 3px; }

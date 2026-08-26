@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Button, Select, Input, Segmented, Empty } from "antd";
+import { Camera, Download, Save, Timer, MousePointerClick, Trash2, LogIn } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { PHOTO_FILTERS, applyFilter, canvasToBlob } from "../lib/imageFilters";
 import * as photosService from "../lib/photosService";
@@ -34,7 +36,6 @@ export function PhotoboothPage() {
   const [photos, setPhotos] = useState<(Photo & { url: string | null })[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
 
-  // Start the camera once on mount, stop it on unmount.
   useEffect(() => {
     let cancelled = false;
     navigator.mediaDevices
@@ -56,7 +57,6 @@ export function PhotoboothPage() {
     };
   }, []);
 
-  // Re-render the filtered preview whenever the raw capture or filter changes.
   useEffect(() => {
     if (!rawCanvas) { setPreviewUrl(null); return; }
     const filtered = applyFilter(rawCanvas, rawCanvas.width, rawCanvas.height, filterName);
@@ -126,7 +126,10 @@ export function PhotoboothPage() {
 
   return (
     <div className="page">
-      <h2>📸 Photobooth</h2>
+      <h2>
+        <Camera size={22} style={{ verticalAlign: -4, marginRight: 8, color: "#8b6ff5" }} />
+        Photobooth
+      </h2>
       <p className="evol-card-meta">
         {user
           ? "Snap a pic, add a filter, download it or save it to your gallery."
@@ -141,53 +144,74 @@ export function PhotoboothPage() {
           </div>
           {cameraError && <p className="error">{cameraError}</p>}
 
-          <div className="tabs" style={{ marginTop: 10 }}>
-            <button className={mode === "click" ? "active" : ""} onClick={() => setMode("click")}>Click to capture</button>
-            <button className={mode === "timer" ? "active" : ""} onClick={() => setMode("timer")}>Timer capture</button>
-          </div>
+          <Segmented
+            style={{ marginTop: 10 }}
+            block
+            value={mode}
+            onChange={(v) => setMode(v as "click" | "timer")}
+            options={[
+              { label: <span><MousePointerClick size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Click to capture</span>, value: "click" },
+              { label: <span><Timer size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Timer capture</span>, value: "timer" },
+            ]}
+          />
 
           {mode === "click" ? (
-            <button onClick={captureFrame} disabled={!cameraReady} style={{ marginTop: 10 }}>📸 Capture</button>
+            <Button
+              type="primary" icon={<Camera size={15} />} className="btn-glow"
+              onClick={captureFrame} disabled={!cameraReady} style={{ marginTop: 10 }} block
+            >
+              Capture
+            </Button>
           ) : (
             <div className="music-copy-row" style={{ marginTop: 10 }}>
-              <select value={timerSeconds} onChange={(e) => setTimerSeconds(Number(e.target.value))}>
-                {TIMER_OPTIONS.map((s) => <option key={s} value={s}>{s}s</option>)}
-              </select>
-              <button onClick={startTimerCapture} disabled={!cameraReady || countdown !== null}>
+              <Select
+                value={timerSeconds}
+                onChange={setTimerSeconds}
+                options={TIMER_OPTIONS.map((s) => ({ value: s, label: `${s}s` }))}
+                style={{ width: 100 }}
+              />
+              <Button
+                type="primary" icon={<Timer size={15} />} className="btn-glow"
+                onClick={startTimerCapture} disabled={!cameraReady || countdown !== null}
+              >
                 Start countdown
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
         <div>
           <label className="evol-card-meta">Filter</label>
-          <select
+          <Select
             value={filterName}
-            onChange={(e) => setFilterName(e.target.value)}
+            onChange={setFilterName}
+            options={PHOTO_FILTERS.map((f) => ({ value: f, label: f }))}
             style={{ display: "block", width: "100%", marginBottom: 10 }}
-          >
-            {PHOTO_FILTERS.map((f) => <option key={f} value={f}>{f}</option>)}
-          </select>
+          />
 
-          <input
+          <Input
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             placeholder="Caption (optional)"
-            style={{ width: "100%", marginBottom: 10 }}
+            style={{ marginBottom: 10 }}
           />
 
           {previewUrl ? (
             <>
               <img src={previewUrl} alt="Preview" className="photobooth-preview" />
               <div className="music-copy-row" style={{ marginTop: 10 }}>
-                <button onClick={handleDownload}>Download</button>
+                <Button icon={<Download size={14} />} onClick={handleDownload}>Download</Button>
                 {user ? (
-                  <button onClick={handleSaveToGallery} disabled={saving}>
-                    {saving ? "…" : "Save to gallery"}
-                  </button>
+                  <Button
+                    type="primary" icon={<Save size={14} />} className="btn-glow"
+                    onClick={handleSaveToGallery} loading={saving}
+                  >
+                    Save to gallery
+                  </Button>
                 ) : (
-                  <button disabled title="Log in to save photos to a personal gallery">Log in to save</button>
+                  <Button disabled icon={<LogIn size={14} />} title="Log in to save photos to a personal gallery">
+                    Log in to save
+                  </Button>
                 )}
               </div>
             </>
@@ -203,7 +227,7 @@ export function PhotoboothPage() {
       ) : galleryLoading ? (
         <p className="placeholder-note">Loading…</p>
       ) : photos.length === 0 ? (
-        <p className="placeholder-note">No photos yet — take one above and save it!</p>
+        <Empty className="fade-in" description={<span style={{ color: "#9c97b8" }}>No photos yet — take one above and save it!</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <div className="photobooth-gallery-grid">
           {photos.map((p) => (
@@ -213,7 +237,9 @@ export function PhotoboothPage() {
                 {new Date(p.time).toLocaleString()} · {p.filter}
               </div>
               {p.caption && <div className="evol-card-body">{p.caption}</div>}
-              <button onClick={() => handleDeletePhoto(p)} style={{ marginTop: 8 }}>Delete</button>
+              <Button danger size="small" icon={<Trash2 size={13} />} onClick={() => handleDeletePhoto(p)} style={{ marginTop: 8 }}>
+                Delete
+              </Button>
             </div>
           ))}
         </div>

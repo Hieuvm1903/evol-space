@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { message } from "antd";
+import { Button, Input, message } from "antd";
+import { KeyRound, Send } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
 interface Post {
@@ -40,8 +41,7 @@ export function SecretPage() {
 
   useEffect(() => { loadPosts(); }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setWarning(null);
     if (!keyInput.includes(SECRET_KEY)) {
       setWarning("Don't ya remember it, EVOL?");
@@ -61,19 +61,26 @@ export function SecretPage() {
 
   return (
     <div className="page">
+      <h2>
+        <KeyRound size={22} style={{ verticalAlign: -4, marginRight: 8, color: "#e879f9" }} />
+        ???
+      </h2>
       <div className={`secret-form-row${shake ? " shake" : ""}`}>
-        <input
+        <Input
           value={keyInput}
           onChange={(e) => setKeyInput(e.target.value)}
           placeholder="Key???"
+          style={{ width: 160 }}
         />
-        <textarea
+        <Input.TextArea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="My thought"
           rows={2}
         />
-        <button onClick={handleSubmit}>Submit</button>
+        <Button type="primary" icon={<Send size={14} />} className="btn-glow" onClick={handleSubmit}>
+          Submit
+        </Button>
       </div>
       {warning && <p className="error">{warning}</p>}
 

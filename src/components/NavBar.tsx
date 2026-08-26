@@ -1,20 +1,17 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
+import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
-// Mirrors config.MENU_OPTIONS from the Python app. Routes for pages not
-// yet ported (Music, His-tory, Relax, Map, Photobooth, ???) point
-// nowhere real yet — they'll light up as each step ports that page.
-const NAV_ITEMS: { label: string; path: string }[] = [
-  { label: "Home", path: "/" },
-  { label: "Login", path: "/login" },
-  { label: "Music", path: "/music" },
-  // { label: "His-tory", path: "/history" },
-  // { label: "Relax", path: "/relax" },
-  { label: "Map", path: "/map" },
-  { label: "Photobooth", path: "/photobooth" },
-  { label: "Blank", path: "/blank" },
-  // { label: "???", path: "/secret" },
+const NAV_ITEMS: { label: string; path: string; icon: React.ElementType }[] = [
+  { label: "Home", path: "/", icon: Sparkles },
+  { label: "Login", path: "/login", icon: LogIn },
+  { label: "Music", path: "/music", icon: Music2 },
+  { label: "His-tory", path: "/history", icon: Clock },
+  { label: "Relax", path: "/relax", icon: Wind },
+  { label: "Map", path: "/map", icon: MapIcon },
+  { label: "Photobooth", path: "/photobooth", icon: Camera },
+  { label: "???", path: "/secret", icon: KeyRound },
 ];
 
 export function NavBar() {
@@ -23,17 +20,24 @@ export function NavBar() {
 
   return (
     <nav className="navbar">
-      <span className="navbar-brand">🌙 EVOL Space</span>
+      <span className="navbar-brand">
+        <Sparkles size={16} style={{ verticalAlign: -2, marginRight: 6, color: "#22d3ee" }} />
+        EVOL Space
+      </span>
       <div className="navbar-links">
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={location.pathname === item.path ? "active" : ""}
-          >
-            {item.label}
-          </Link>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={location.pathname === item.path ? "active" : ""}
+            >
+              <Icon size={14} style={{ verticalAlign: -2, marginRight: 5 }} />
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
       {user && <span className="navbar-user">{user.username}</span>}
     </nav>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { message } from "antd";
+import { Button, Input, message, Empty } from "antd";
+import { Wind, Send } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
 interface Note {
@@ -8,7 +9,6 @@ interface Note {
   time: string; // ISO timestamptz from Postgres
 }
 
-// Same formatting as ui/pages/relax.py's row["time"].strftime("%m/%d/%Y, %H:%M:%S")
 function formatTime(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -36,8 +36,7 @@ export function RelaxPage() {
     loadNotes();
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     if (!text.trim()) return;
     setSubmitting(true);
     // Same "{" + text + "}" wrapping the original notes_service.add_note()
@@ -56,22 +55,36 @@ export function RelaxPage() {
 
   return (
     <div className="page">
-      <h2>🧘 Relax</h2>
+      <h2>
+        <Wind size={22} style={{ verticalAlign: -4, marginRight: 8, color: "#22d3ee" }} />
+        Relax
+      </h2>
 
-      <form onSubmit={handleSubmit} className="relax-form">
-        <textarea
+      <div className="evol-glass-card relax-form" style={{ padding: 16 }}>
+        <Input.TextArea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Tâm sự vào đây (Ẩn danh 100%)"
           rows={4}
+          autoSize={{ minRows: 4, maxRows: 8 }}
         />
-        <button type="submit" disabled={submitting || !text.trim()}>
-          {submitting ? "…" : "Submit"}
-        </button>
-      </form>
+        <Button
+          type="primary"
+          icon={<Send size={14} />}
+          onClick={handleSubmit}
+          loading={submitting}
+          disabled={!text.trim()}
+          className="btn-glow"
+          style={{ marginTop: 10 }}
+        >
+          Submit
+        </Button>
+      </div>
 
       {loading ? (
         <p className="placeholder-note">Loading…</p>
+      ) : notes.length === 0 ? (
+        <Empty className="fade-in" description={<span style={{ color: "#9c97b8" }}>No thoughts shared yet.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         notes.map((note, i) => (
           <div className="evol-card stagger-item" style={{ animationDelay: `${Math.min(i, 15) * 40}ms` }} key={note.id}>

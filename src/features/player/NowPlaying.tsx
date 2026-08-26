@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ConfigProvider, theme as antdTheme, Typography } from "antd";
 
-import type { Track, View } from "./types";
+import type { Mode, Track, View } from "./types";
 import { EXPANDED_KEY } from "./constants";
 import { formatTime } from "./utils/time";
 import { shuffleQueue } from "./utils/queueOrder";
@@ -30,13 +30,21 @@ interface Props {
   onClose: () => void;
   /** Called whenever the user picks/confirms a lyrics match for a track. */
   onPersistLyrics: PersistLyricsSelection;
+  /** Called whenever the live engine's mode/playing/track state changes,
+   * plus a `setMode` control — lets the host (PlayerProvider) drive mode
+   * changes into this exact running player instance instead of only
+   * being able to restart it via `initialMode`. */
+  onEngineUpdate?: (
+    state: { mode: Mode; playing: boolean; currentTrackIdx: number },
+    controls: { setMode: (m: Mode) => void },
+  ) => void;
 }
 
 // NOTE: this used to also call useFrameHeight(rootRef) here, which
 // reported this component's height to Streamlit so its iframe could
 // resize to fit. A component rendered directly in the page (not inside
 // an iframe) just... has a height. Nothing to report.
-export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics }: Props) {
+export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics, onEngineUpdate }: Props) {
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(EXPANDED_KEY) === "1"; } catch { return false; }
   });
@@ -48,6 +56,18 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
   const engine = usePlayerEngine(queue, initialMode);
   const { startDrag, resetPos, applySavedPosition, snapEnabled, setSnapMode } = useDragPosition();
   const lyrics = useLyrics(queue, engine.currentTrackIdx, engine.curTime, onPersistLyrics);
+
+  // Bubble the engine's live state (and a way to control it) up to
+  // whoever owns this widget — PlayerProvider uses this so external UI
+  // (the Music page's Play/Shuffle/Repeat buttons) can steer whatever is
+  // already playing instead of only being able to restart it.
+  useEffect(() => {
+    onEngineUpdate?.(
+      { mode: engine.mode, playing: engine.playing, currentTrackIdx: engine.currentTrackIdx },
+      { setMode: engine.setMode },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.mode, engine.playing, engine.currentTrackIdx]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => applySavedPosition());
@@ -81,7 +101,7 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
     <ConfigProvider
       theme={{
         algorithm: antdTheme.darkAlgorithm,
-        token: { colorPrimary: "#02ab21", colorBgContainer: "#161616", borderRadius: 10 },
+        token: { colorPrimary: "#8b6ff5", colorBgContainer: "#161622", borderRadius: 10 },
       }}
     >
       <div ref={rootRef}>
