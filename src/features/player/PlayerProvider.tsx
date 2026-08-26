@@ -3,6 +3,7 @@ import { supabase } from "../../lib/supabaseClient";
 import NowPlaying, { Track } from "./NowPlaying";
 import { MODE_MAP } from "./constants";
 import type { Mode } from "./types";
+import { shuffleArray } from "./utils/queueOrder";
 
 interface EngineState {
   mode: Mode;
@@ -71,6 +72,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const setEngineModeRef = useRef<((m: Mode) => void) | null>(null);
 
   function loadQueue(tracks: Track[], newMode: string, playlistId?: number) {
+    if(newMode.toLowerCase() == "shuffle"){
+      tracks = shuffleArray(tracks)
+    }
     setQueue(tracks);
     setMode(newMode);
     setPlayingPlaylistId(playlistId ?? null);

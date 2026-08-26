@@ -19,16 +19,21 @@ export default function PillView({ track, playing, pillRef, visible, onStartDrag
   return (
     <div id="pill-wrap" style={{ display: visible ? "block" : "none" }}>
       {/* <GlowBorder borderRadius={999} active={playing} style={{ width: 260 }}> */}
-      <GlassSurface displace={0.5}
-      height = {50}
-      width = {260}
+      <GlassSurface
+        borderRadius = {999}
+        height={50}
+        width={260}
+        blur={10}
+        backgroundOpacity={0.25}
+        saturation={1.6}
         distortionScale={-180}
         redOffset={0}
         greenOffset={10}
         blueOffset={20}
         brightness={50}
         opacity={100}
-        mixBlendMode="hue" >
+        mixBlendMode="screen"
+      >
         <div
           id="pill"
           ref={pillRef}

@@ -19,7 +19,6 @@
   50%      { box-shadow: 0 0 0 6px rgba(34, 211, 238, 0); }
 }
 
-#pill-wrap { padding: 2px; }
 
 #pill {
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -30,13 +29,34 @@
 #pill:hover { transform: translateY(-1px); }
 #pill:active, #pill.evol-active { cursor: grabbing; transform: scale(0.99); }
 
+#pill-wrap {
+  padding: 2px;
+  pointer-events: auto;   /* ← add: pill itself stays clickable */
+}
+
 #panel {
   width: min(300px, calc(100vw - 24px));
   transform-origin: top right;
   transition: opacity 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), visibility 0.2s;
+  background: var(--evol-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--evol-glass-border);
+  border-radius: 16px;
+  box-shadow: var(--evol-shadow-soft);
+  overflow: hidden;
+  position: absolute;     /* ← add: stop it from expanding the ancestor's layout box */
+  top: 0;
+  right: 0;
 }
-#panel.panel-visible { opacity: 1; transform: translateY(0) scale(1); visibility: visible; animation: np-fade-scale 0.22s cubic-bezier(0.34,1.56,0.64,1); }
-#panel.panel-hidden { opacity: 0; transform: translateY(-8px) scale(0.97); visibility: hidden; pointer-events: none; }
+#panel.panel-visible {
+  opacity: 1; transform: translateY(0) scale(1); visibility: visible;
+  animation: np-fade-scale 0.22s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: auto;   /* ← add: only clickable while actually shown */
+}
+#panel.panel-hidden {
+  opacity: 0; transform: translateY(-8px) scale(0.97); visibility: hidden; pointer-events: none;
+}
 .panel-glow { width: 100%; }
 .panel-inner { padding: 12px; }
 .panel-header {

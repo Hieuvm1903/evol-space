@@ -1,75 +1,65 @@
-.slider-container {
+.elastic-slider {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  width: 12rem;
-}
-
-.slider-wrapper {
-  display: flex;
+  gap: 8px;
   width: 100%;
   touch-action: none;
   user-select: none;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
 }
 
-.slider-root {
-  position: relative;
+.elastic-slider-icon {
+  flex-shrink: 0;
   display: flex;
-  width: 100%;
-  max-width: 200px;
-  flex-grow: 1;
+  align-items: center;
+  color: #9c97b8;
+}
+
+.elastic-slider-track-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
   cursor: grab;
   touch-action: none;
-  user-select: none;
-  align-items: center;
-  padding: 1rem 0;
+}
+.elastic-slider-track-wrap:active { cursor: grabbing; }
+
+.elastic-slider-track-scale {
+  width: 100%;
 }
 
-.slider-root:active {
-  cursor: grabbing;
-}
-
-.slider-track-wrapper {
-  display: flex;
-  flex-grow: 1;
-}
-
-.slider-track {
+.elastic-slider-track {
   position: relative;
-  height: 100%;
-  flex-grow: 1;
-  overflow: hidden;
-  border-radius: 9999px;
-  background-color: rgba(128, 128, 128, 0.4);
+  width: 100%;
+  border-radius: 999px;
+  background: #2a2740;
+  overflow: visible;
 }
 
-.slider-range {
+.elastic-slider-fill {
   position: absolute;
+  top: 0;
+  left: 0;
   height: 100%;
-  background-color: #888;
-  border-radius: 9999px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8b6ff5, #22d3ee);
+  pointer-events: none;
 }
 
-.value-indicator {
-  color: #808080;
+.elastic-slider-thumb {
   position: absolute;
-  transform: translateY(-1rem);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.05em;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  translate: -50% -50%;
+  box-shadow: 0 0 0 3px rgba(139, 111, 245, 0.5), 0 0 12px rgba(34, 211, 238, 0.65);
+  transition: width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
+  pointer-events: none;
 }
-
-.icon {
-  width: 24px;
-  height: 24px;
-  color: #888;
-}
-
-.icon.dark {
-  color: #ddd;
+.elastic-slider-thumb.dragging {
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 0 0 5px rgba(139, 111, 245, 0.55), 0 0 20px rgba(34, 211, 238, 0.85);
 }
