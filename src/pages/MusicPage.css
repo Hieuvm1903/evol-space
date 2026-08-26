@@ -66,6 +66,9 @@
 .album-picker-title { display: flex; align-items: center; gap: 7px; font-size: 0.85rem; margin: 0; color: var(--evol-text); }
 .album-picker-actions { display: flex; gap: 6px; }
 
+.album-search-input { margin-bottom: 12px; }
+.album-search-input.ant-input-affix-wrapper { background: var(--evol-bg) !important; border: 1px solid var(--evol-border) !important; }
+
 /* --- Playlist pane (right) --- */
 .music-pane-right { padding: 4px; }
 .playlist-pane-body { padding: 18px 20px 20px; }
@@ -83,7 +86,7 @@
    mostly-empty scroll region; only actually scrolls once a playlist has
    enough tracks to need it. */
 .playlist-track-list {
-  max-height: 420px;
+  max-height: 320px;
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin; scrollbar-color: #8b6ff5 transparent;

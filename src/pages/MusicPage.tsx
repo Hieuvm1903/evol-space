@@ -233,6 +233,13 @@ function AlbumPickerPane({
   userId: string;
   onImported: () => void;
 }) {
+  const [albumSearch, setAlbumSearch] = useState("");
+  const filteredPlaylists = useMemo(() => {
+    const q = albumSearch.trim().toLowerCase();
+    if (!q) return playlists;
+    return playlists.filter((p) => p.name.toLowerCase().includes(q));
+  }, [playlists, albumSearch]);
+
   return (
     <div className="music-pane music-pane-left album-picker-pane">
       <div className="album-picker-header">
@@ -252,6 +259,18 @@ function AlbumPickerPane({
           </Tooltip>
         </div>
       </div>
+
+      {playlists.length > 0 && (
+        <Input
+          className="album-search-input"
+          size="small"
+          value={albumSearch}
+          onChange={(e) => setAlbumSearch(e.target.value)}
+          placeholder="Search albums..."
+          prefix={<Search size={13} color="var(--evol-muted)" />}
+          allowClear
+        />
+      )}
 
       {showNewPlaylist && (
         <SpotlightCard className="evol-glass-card music-inline-form fade-in-up">
@@ -275,9 +294,11 @@ function AlbumPickerPane({
         <Skeleton active paragraph={{ rows: 3 }} className="fade-in" />
       ) : playlists.length === 0 ? (
         <Empty className="fade-in" description="No playlists yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : filteredPlaylists.length === 0 ? (
+        <Empty className="fade-in" description="No albums match your search" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <CardSwap
-          items={playlists.map((p, i) => ({ id: p.id, title: p.name, subtitle: "Playlist", gradient: gradientForIndex(i) }))}
+          items={filteredPlaylists.map((p, i) => ({ id: p.id, title: p.name, subtitle: "Playlist", gradient: gradientForIndex(i) }))}
           activeId={selectedPlaylistId}
           onSelect={onSelect}
         />

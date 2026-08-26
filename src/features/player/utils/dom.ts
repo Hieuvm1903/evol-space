@@ -15,9 +15,9 @@ export function pointFromEvent(e: MouseEvent | TouchEvent): { x: number; y: numb
   if ("touches" in e) {
     const t = e.touches[0] ?? e.changedTouches[0];
     if (!t) return null;
-    return { x: t.screenX, y: t.screenY };
+    return { x: t.clientX, y: t.clientY };
   }
-  return { x: e.screenX, y: e.screenY };
+  return { x: e.clientX, y: e.clientY };
 }
 
 export function clampToViewport(left: number, top: number, w: number, h: number, vw: number, vh: number) {

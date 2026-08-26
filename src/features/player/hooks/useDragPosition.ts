@@ -1,12 +1,33 @@
 import { useEffect, useRef, useState } from "react";
-import { POS_KEY, SNAP_MODE_KEY, DRAG_THRESHOLD, PANEL_WIDTH, EDGE_MARGIN } from "../constants";
+import {
+  POS_KEY,
+  SNAP_MODE_KEY,
+  DRAG_THRESHOLD,
+  PANEL_WIDTH,
+  EDGE_MARGIN,
+} from "../constants";
 import { getContainer, pointFromEvent, clampToViewport } from "../utils/dom";
-import { DEFAULT_SNAP, nearestSnapId, snapPixelPosition, SnapId } from "../utils/snapPoints";
+import {
+  DEFAULT_SNAP,
+  nearestSnapId,
+  snapPixelPosition,
+  SnapId,
+} from "../utils/snapPoints";
 
 type DragMeta = {
-  el: HTMLElement; origLeft: number; origTop: number; w: number; h: number; vw: number; vh: number;
-  startX: number; startY: number;
-  raf: number | null; dx: number; dy: number; moved: boolean;
+  el: HTMLElement;
+  origLeft: number;
+  origTop: number;
+  w: number;
+  h: number;
+  vw: number;
+  vh: number;
+  startX: number;
+  startY: number;
+  raf: number | null;
+  dx: number;
+  dy: number;
+  moved: boolean;
   cleanup: () => void;
 };
 
@@ -40,7 +61,9 @@ export function useDragPosition() {
 
   const [snapEnabled, setSnapEnabled] = useState<boolean>(readSnapModePref);
   const snapEnabledRef = useRef(snapEnabled);
-  useEffect(() => { snapEnabledRef.current = snapEnabled; }, [snapEnabled]);
+  useEffect(() => {
+    snapEnabledRef.current = snapEnabled;
+  }, [snapEnabled]);
 
   function applyPos(left: number, top: number) {
     const el = getContainer();
@@ -60,17 +83,31 @@ export function useDragPosition() {
   }
 
   function saveSnap(id: SnapId) {
-    try { localStorage.setItem(POS_KEY, JSON.stringify({ snap: id })); } catch { }
+    try {
+      localStorage.setItem(POS_KEY, JSON.stringify({ snap: id }));
+    } catch {}
   }
 
   function saveFree(left: number, top: number, vw: number, vh: number) {
-    try { localStorage.setItem(POS_KEY, JSON.stringify({ leftFrac: left / vw, topFrac: top / vh })); } catch { }
+    try {
+      localStorage.setItem(
+        POS_KEY,
+        JSON.stringify({ leftFrac: left / vw, topFrac: top / vh }),
+      );
+    } catch {}
   }
 
   function resetPos() {
     const el = getContainer();
-    if (el) { el.style.transform = ""; el.style.left = ""; el.style.top = ""; el.style.right = ""; }
-    try { localStorage.removeItem(POS_KEY); } catch { }
+    if (el) {
+      el.style.transform = "";
+      el.style.left = "";
+      el.style.top = "";
+      el.style.right = "";
+    }
+    try {
+      localStorage.removeItem(POS_KEY);
+    } catch {}
   }
 
   function applySavedPosition() {
@@ -80,20 +117,38 @@ export function useDragPosition() {
       const parsed = JSON.parse(raw);
       const el = getContainer();
       if (!el) return;
-      const w = el.offsetWidth || PANEL_WIDTH, h = el.offsetHeight || 60;
-      const vw = window.innerWidth, vh = window.innerHeight;
+      const w = el.offsetWidth || PANEL_WIDTH,
+        h = el.offsetHeight || 60;
+      const vw = window.innerWidth,
+        vh = window.innerHeight;
 
       if (parsed && typeof parsed.snap === "string") {
-        const { left, top } = snapPixelPosition(parsed.snap as SnapId, w, h, vw, vh, EDGE_MARGIN);
+        const { left, top } = snapPixelPosition(
+          parsed.snap as SnapId,
+          w,
+          h,
+          vw,
+          vh,
+          EDGE_MARGIN,
+        );
         applyPos(left, top);
       } else if (parsed && typeof parsed.leftFrac === "number") {
-        const { left, top } = clampToViewport(parsed.leftFrac * vw, parsed.topFrac * vh, w, h, vw, vh);
+        const { left, top } = clampToViewport(
+          parsed.leftFrac * vw,
+          parsed.topFrac * vh,
+          w,
+          h,
+          vw,
+          vh,
+        );
         applyPos(left, top);
       }
-    } catch { }
+    } catch {}
   }
 
-  useEffect(() => { applySavedPosition(); }, []);
+  useEffect(() => {
+    applySavedPosition();
+  }, []);
 
   useEffect(() => {
     const onResize = () => applySavedPosition();
@@ -103,16 +158,34 @@ export function useDragPosition() {
 
   function setSnapMode(enabled: boolean) {
     setSnapEnabled(enabled);
-    try { localStorage.setItem(SNAP_MODE_KEY, enabled ? "1" : "0"); } catch { }
+    try {
+      localStorage.setItem(SNAP_MODE_KEY, enabled ? "1" : "0");
+    } catch {}
 
     const el = getContainer();
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
+    const vw = window.innerWidth,
+      vh = window.innerHeight;
 
     if (enabled) {
-      const id = nearestSnapId(rect.left, rect.top, rect.width, rect.height, vw, vh, EDGE_MARGIN);
-      const { left, top } = snapPixelPosition(id, rect.width, rect.height, vw, vh, EDGE_MARGIN);
+      const id = nearestSnapId(
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height,
+        vw,
+        vh,
+        EDGE_MARGIN,
+      );
+      const { left, top } = snapPixelPosition(
+        id,
+        rect.width,
+        rect.height,
+        vw,
+        vh,
+        EDGE_MARGIN,
+      );
       applyPosAnimated(left, top);
       saveSnap(id);
     } else {
@@ -120,8 +193,16 @@ export function useDragPosition() {
     }
   }
 
-  function startDrag(e: React.MouseEvent | React.TouchEvent, onTap: () => void) {
-    if ((e.target as HTMLElement).closest("button, .header-view-toggle, .header-snap-toggle")) return;
+  function startDrag(
+    e: React.MouseEvent | React.TouchEvent,
+    onTap: () => void,
+  ) {
+    if (
+      (e.target as HTMLElement).closest(
+        "button, .header-view-toggle, .header-snap-toggle",
+      )
+    )
+      return;
     const el = getContainer();
     if (!el) return;
 
@@ -129,7 +210,8 @@ export function useDragPosition() {
     if (!start) return;
 
     const rect = el.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
+    const vw = window.innerWidth,
+      vh = window.innerHeight;
 
     const onMove = (ev: MouseEvent | TouchEvent) => {
       const m = dragMeta.current;
@@ -139,16 +221,23 @@ export function useDragPosition() {
       if ("touches" in ev) ev.preventDefault();
       const rawLeft = m.origLeft + (p.x - m.startX);
       const rawTop = m.origTop + (p.y - m.startY);
-      const { left, top } = clampToViewport(rawLeft, rawTop, m.w, m.h, m.vw, m.vh);
+      const { left, top } = clampToViewport(
+        rawLeft,
+        rawTop,
+        m.w,
+        m.h,
+        m.vw,
+        m.vh,
+      );
       m.dx = left - m.origLeft;
       m.dy = top - m.origTop;
-      if (Math.abs(m.dx) > DRAG_THRESHOLD || Math.abs(m.dy) > DRAG_THRESHOLD) m.moved = true;
+      if (Math.abs(m.dx) > DRAG_THRESHOLD || Math.abs(m.dy) > DRAG_THRESHOLD)
+        m.moved = true;
       if (!m.raf) {
         m.raf = requestAnimationFrame(() => {
           if (!dragMeta.current) return;
           dragMeta.current.raf = null;
-          dragMeta.current.el.style.transform =
-            `translate3d(${dragMeta.current.dx}px, ${dragMeta.current.dy}px, 0)`;
+          dragMeta.current.el.style.transform = `translate3d(${dragMeta.current.dx}px, ${dragMeta.current.dy}px, 0)`;
         });
       }
     };
@@ -160,15 +249,32 @@ export function useDragPosition() {
       document.removeEventListener("touchmove", onMove);
       document.removeEventListener("mouseup", finishDrag);
       document.removeEventListener("touchend", finishDrag);
-      if (m.raf) cancelAnimationFrame(m.raf);
-      try { m.el.classList.remove("evol-dragging"); } catch { }
-      try { document.body.style.userSelect = ""; } catch { }
+    if (m.raf) cancelAnimationFrame(m.raf);
+try { m.el.classList.remove("evol-dragging"); } catch { }
+m.el.style.transition = "";             // <-- add this
+try { document.body.style.userSelect = ""; } catch { }
       if (m.moved) {
         m.el.style.transform = "";
-        const rawLeft = m.origLeft + m.dx, rawTop = m.origTop + m.dy;
+        const rawLeft = m.origLeft + m.dx,
+          rawTop = m.origTop + m.dy;
         if (snapEnabledRef.current) {
-          const snapId = nearestSnapId(rawLeft, rawTop, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
-          const { left, top } = snapPixelPosition(snapId, m.w, m.h, m.vw, m.vh, EDGE_MARGIN);
+          const snapId = nearestSnapId(
+            rawLeft,
+            rawTop,
+            m.w,
+            m.h,
+            m.vw,
+            m.vh,
+            EDGE_MARGIN,
+          );
+          const { left, top } = snapPixelPosition(
+            snapId,
+            m.w,
+            m.h,
+            m.vw,
+            m.vh,
+            EDGE_MARGIN,
+          );
           applyPosAnimated(left, top);
           saveSnap(snapId);
         } else {
@@ -182,13 +288,26 @@ export function useDragPosition() {
     };
 
     dragMeta.current = {
-      el, origLeft: rect.left, origTop: rect.top, w: rect.width, h: rect.height, vw, vh,
-      startX: start.x, startY: start.y,
-      raf: null, dx: 0, dy: 0, moved: false,
+      el,
+      origLeft: rect.left,
+      origTop: rect.top,
+      w: rect.width,
+      h: rect.height,
+      vw,
+      vh,
+      startX: start.x,
+      startY: start.y,
+      raf: null,
+      dx: 0,
+      dy: 0,
+      moved: false,
       cleanup: finishDrag,
     };
     el.classList.add("evol-dragging");
-    try { document.body.style.userSelect = "none"; } catch { }
+    el.style.transition = "none"; // <-- add this
+    try {
+      document.body.style.userSelect = "none";
+    } catch {}
 
     document.addEventListener("mousemove", onMove);
     document.addEventListener("touchmove", onMove, { passive: false });
@@ -197,7 +316,9 @@ export function useDragPosition() {
   }
 
   useEffect(() => {
-    return () => { dragMeta.current?.cleanup(); };
+    return () => {
+      dragMeta.current?.cleanup();
+    };
   }, []);
 
   return { startDrag, resetPos, applySavedPosition, snapEnabled, setSnapMode };
