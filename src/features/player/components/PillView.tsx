@@ -3,7 +3,7 @@ import { Button, Typography } from "antd";
 import { PlayCircleFilled, PauseCircleFilled } from "@ant-design/icons";
 import type { Track } from "../types";
 import GlowBorder from "../../../components/reactbits/GlowBorder";
-import GlassSurface from "../../../components/reactbits/GlassSurface";
+import GlassSurface from "../../../components/GlassSurface";
 
 interface Props {
   track: Track;
@@ -18,39 +18,48 @@ interface Props {
 export default function PillView({ track, playing, pillRef, visible, onStartDrag, onExpand, onTogglePlayPause }: Props) {
   return (
     <div id="pill-wrap" style={{ display: visible ? "block" : "none" }}>
-      <GlowBorder borderRadius={999} active={playing} style={{ width: 260 }}>
-        <GlassSurface borderRadius={999} blur={12} backgroundOpacity={0.4}>
-          <div
-            id="pill"
-            ref={pillRef}
-            title="Drag to move · tap to expand"
-            onMouseDown={(e) => onStartDrag(e, onExpand)}
-            onTouchStart={(e) => onStartDrag(e, onExpand)}
-          >
-            <span className={`pill-eq${playing ? " pill-eq-playing" : ""}`} aria-hidden="true">
-              <span className="pill-eq-bar" />
-              <span className="pill-eq-bar" />
-              <span className="pill-eq-bar" />
-              <span className="pill-eq-bar" />
-            </span>
-            <Typography.Text id="pill-title" ellipsis style={{ flex: 1, color: "#e6e6e6", fontSize: 12, fontWeight: 600 }}>
-              {track.title}
-            </Typography.Text>
-            <span className="spin-disk-wrap spin-disk-sm">
-              <span
-                className={`spin-disk${playing ? " spin-disk-playing" : ""}`}
-                style={track.thumbnail_url ? { backgroundImage: `url(${track.thumbnail_url})` } : undefined}
-              />
-              <Button
-                type="text" shape="circle" size="small"
-                style={{ color: "#22d3ee", position: "relative", zIndex: 1 }}
-                icon={playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
-                onClick={(e) => { e.stopPropagation(); onTogglePlayPause(); }}
-              />
-            </span>
-          </div>
-        </GlassSurface>
-      </GlowBorder>
+      {/* <GlowBorder borderRadius={999} active={playing} style={{ width: 260 }}> */}
+      <GlassSurface displace={0.5}
+      height = {50}
+      width = {260}
+        distortionScale={-180}
+        redOffset={0}
+        greenOffset={10}
+        blueOffset={20}
+        brightness={50}
+        opacity={100}
+        mixBlendMode="hue" >
+        <div
+          id="pill"
+          ref={pillRef}
+          title="Drag to move · tap to expand"
+          onMouseDown={(e) => onStartDrag(e, onExpand)}
+          onTouchStart={(e) => onStartDrag(e, onExpand)}
+        >
+          <span className={`pill-eq${playing ? " pill-eq-playing" : ""}`} aria-hidden="true">
+            <span className="pill-eq-bar" />
+            <span className="pill-eq-bar" />
+            <span className="pill-eq-bar" />
+            <span className="pill-eq-bar" />
+          </span>
+          <Typography.Text id="pill-title" ellipsis style={{ flex: 1, color: "#e6e6e6", fontSize: 12, fontWeight: 600 }}>
+            {track.title}
+          </Typography.Text>
+          <span className="spin-disk-wrap spin-disk-sm">
+            <span
+              className={`spin-disk${playing ? " spin-disk-playing" : ""}`}
+              style={track.thumbnail_url ? { backgroundImage: `url(${track.thumbnail_url})` } : undefined}
+            />
+            <Button
+              type="text" shape="circle" size="small"
+              style={{ color: "#22d3ee", position: "relative", zIndex: 1 }}
+              icon={playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
+              onClick={(e) => { e.stopPropagation(); onTogglePlayPause(); }}
+            />
+          </span>
+        </div>
+      </GlassSurface>
+      {/* </GlowBorder> */}
     </div>
   );
 }

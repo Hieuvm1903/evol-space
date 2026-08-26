@@ -34,9 +34,7 @@ const location = useLocation();
           pointerEvents: "none"
         }}
       >
-        <div style={{ pointerEvents: "auto" }}>
-          <GalaxyRing size={400} trigger={location.pathname}/>
-        </div>
+        <GalaxyRing size={400} trigger={location.pathname}/>
       </div>
     </div>
   );

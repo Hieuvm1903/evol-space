@@ -20,7 +20,7 @@ import VolumeRow from "./components/VolumeRow";
 import PillView from "./components/PillView";
 
 import GlowBorder from "../../components/reactbits/GlowBorder";
-import GlassSurface from "../../components/reactbits/GlassSurface";
+import GlassSurface from "../../components/GlassSurface";
 import ElasticSlider from "../../components/reactbits/ElasticSlider";
 
 import "./NowPlaying.css";
@@ -123,8 +123,8 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
         />
 
         <div id="panel" className={expanded ? "panel-visible" : "panel-hidden"}>
-          <GlowBorder borderRadius={16} active={engine.playing} className="panel-glow">
-            <GlassSurface borderRadius={16} blur={16} backgroundOpacity={0.32} className="panel-glass">
+          {/* <GlowBorder borderRadius={16} active={engine.playing} className="panel-glow"> */}
+            {/* <GlassSurface borderRadius={16} blur={16} backgroundOpacity={0.32} > */}
               <div className="panel-inner">
                 <PanelHeader
                   headerRef={headerRef}
@@ -185,8 +185,8 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
                   onPlay={engine.playTrackIdx}
                 />
               </div>
-            </GlassSurface>
-          </GlowBorder>
+            {/* </GlassSurface> */}
+          {/* </GlowBorder> */}
         </div>
 
         <div id="yt-preload" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", opacity: 0, pointerEvents: "none" }} />

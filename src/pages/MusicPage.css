@@ -223,5 +223,30 @@
   border: 2px solid rgba(10, 10, 18, 0.3); border-top-color: #0a0a12;
   animation: evol-spin 0.7s linear infinite;
 }
-
+.transport-row-inline { margin: 0; flex-shrink: 0; }
 .copy-select { flex: 1; }
+.album-list { border-top: 1px solid var(--evol-border); }
+.album-list .ant-list-item {
+  padding: 9px 8px !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  border-bottom: none !important;
+  transition: background 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.album-list .ant-list-item:hover { background: rgba(255, 255, 255, 0.04); transform: translateX(2px); }
+.album-list-item-active {
+  background: rgba(139, 111, 245, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(139, 111, 245, 0.5);
+}
+.album-list-item-icon { color: var(--evol-green-light); flex-shrink: 0; }
+.album-list-item-name {
+  font-size: 0.86rem;
+  color: var(--evol-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.album-list-item-active .album-list-item-name { color: #fff; font-weight: 600; }

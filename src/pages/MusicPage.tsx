@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Select, Input, Button, Popconfirm, Empty, Skeleton, Tooltip, message } from "antd";
+import { Select, Input, Button, Popconfirm, Empty, Skeleton, Tooltip, message, List } from "antd";
 import {
   Music2, ListMusic, Plus, Search, Play, Shuffle, Repeat, Trash2, Pencil,
   Link2, Upload, Download, Copy, FileJson, FileText, Sparkles, Check, RadioTower,
@@ -294,13 +294,21 @@ function AlbumPickerPane({
         <Skeleton active paragraph={{ rows: 3 }} className="fade-in" />
       ) : playlists.length === 0 ? (
         <Empty className="fade-in" description="No playlists yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      ) : filteredPlaylists.length === 0 ? (
-        <Empty className="fade-in" description="No albums match your search" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
-        <CardSwap
-          items={filteredPlaylists.map((p, i) => ({ id: p.id, title: p.name, subtitle: "Playlist", gradient: gradientForIndex(i) }))}
-          activeId={selectedPlaylistId}
-          onSelect={onSelect}
+        <List
+          className="album-list"
+          size="small"
+          dataSource={playlists}
+          renderItem={(p) => (
+            <List.Item
+              key={p.id}
+              className={`album-list-item${selectedPlaylistId === p.id ? " album-list-item-active" : ""}`}
+              onClick={() => onSelect(p.id)}
+            >
+              <ListMusic size={14} className="album-list-item-icon" />
+              <span className="album-list-item-name">{p.name}</span>
+            </List.Item>
+          )}
         />
       )}
     </div>
@@ -381,6 +389,33 @@ function PlaylistPane({
   return (
     <div className="playlist-pane-body fade-in-up">
       <div className="playlist-header-row">
+        <div className="transport-row transport-row-inline">
+          <Tooltip title="Play">
+            <button
+              className={`transport-glow-btn${isPlaying && currentMode === "normal" ? " transport-glow-btn-active" : ""}`}
+              onClick={() => onPlayMode("Normal")}
+            >
+              <Play size={16} />
+            </button>
+          </Tooltip>
+          <Tooltip title="Shuffle">
+            <button
+              className={`transport-glow-btn${isPlaying && currentMode === "shuffle" ? " transport-glow-btn-active" : ""}`}
+              onClick={() => onPlayMode("Shuffle")}
+            >
+              <Shuffle size={16} />
+            </button>
+          </Tooltip>
+          <Tooltip title="Repeat all">
+            <button
+              className={`transport-glow-btn${isPlaying && currentMode === "repeatAll" ? " transport-glow-btn-active" : ""}`}
+              onClick={() => onPlayMode("Repeat All")}
+            >
+              <Repeat size={16} />
+            </button>
+          </Tooltip>
+        </div>
+        {/* {isPlaying && <span className="transport-live-badge"><RadioTower size={11} /> Live</span>} */}
         <Input className="playlist-name-input" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onPressEnter={saveRename} />
         <Tooltip title="Save name">
           <Button className="btn-glow" icon={<Check size={14} />} onClick={saveRename} />
@@ -388,35 +423,10 @@ function PlaylistPane({
         <Popconfirm title="Delete this playlist?" description="This can't be undone." okText="Delete" cancelText="Cancel" okButtonProps={{ danger: true }} onConfirm={onDeleted}>
           <Button danger icon={<Trash2 size={14} />} />
         </Popconfirm>
+
       </div>
 
-      <div className="transport-row">
-        <Tooltip title="Play">
-          <button
-            className={`transport-glow-btn${isPlaying && currentMode === "normal" ? " transport-glow-btn-active" : ""}`}
-            onClick={() => onPlayMode("Normal")}
-          >
-            <Play size={16} />
-          </button>
-        </Tooltip>
-        <Tooltip title="Shuffle">
-          <button
-            className={`transport-glow-btn${isPlaying && currentMode === "shuffle" ? " transport-glow-btn-active" : ""}`}
-            onClick={() => onPlayMode("Shuffle")}
-          >
-            <Shuffle size={16} />
-          </button>
-        </Tooltip>
-        <Tooltip title="Repeat all">
-          <button
-            className={`transport-glow-btn${isPlaying && currentMode === "repeatAll" ? " transport-glow-btn-active" : ""}`}
-            onClick={() => onPlayMode("Repeat All")}
-          >
-            <Repeat size={16} />
-          </button>
-        </Tooltip>
-        {isPlaying && <span className="transport-live-badge"><RadioTower size={11} /> Live</span>}
-      </div>
+
 
       <div className="playlist-toolbar-row">
         <Input
