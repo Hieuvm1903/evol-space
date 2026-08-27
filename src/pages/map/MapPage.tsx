@@ -3,20 +3,20 @@ import { Tabs, Typography } from "antd";
 import { MapPin } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useAuth } from "../contexts/AuthContext";
-import * as placesService from "../lib/placesService";
-import { Place } from "../lib/placesService";
-import { splitIcon } from "../content/placeIcons";
+import { useAuth } from "../../contexts/AuthContext";
+import * as placesService from "../../lib/placesService";
+import { Place } from "../../lib/placesService";
+import { splitIcon } from "../../content/placeIcons";
 import "./MapPage.css";
-import TargetCursor from "../components/TargetCursor";
+import TargetCursor from "../../components/TargetCursor";
 
-import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./map/constants";
-import type { MapMode, MapTool, FormState } from "./map/types";
-import { emptyForm, formFromPlace } from "./map/formHelpers";
-import BrowseTab from "./map/BrowseTab";
-import PlaceFormTab from "./map/PlaceFormTab";
-import MapSettingsTab from "./map/MapSettingsTab";
-import MapCanvas from "./map/MapCanvas";
+import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./constants";
+import type { MapMode, MapTool, FormState } from "./types";
+import { emptyForm, formFromPlace } from "./formHelpers";
+import BrowseTab from "./BrowseTab";
+import PlaceFormTab from "./PlaceFormTab";
+import MapSettingsTab from "./MapSettingsTab";
+import MapCanvas from "./MapCanvas";
 
 const { Title } = Typography;
 

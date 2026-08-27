@@ -7,11 +7,11 @@ const NAV_ITEMS: { label: string; path: string; icon: React.ElementType }[] = [
   { label: "Home", path: "/", icon: Sparkles },
   { label: "Login", path: "/login", icon: LogIn },
   { label: "Music", path: "/music", icon: Music2 },
-  { label: "His-tory", path: "/history", icon: Clock },
-  { label: "Relax", path: "/relax", icon: Wind },
+  // { label: "His-tory", path: "/history", icon: Clock },
+  // { label: "Relax", path: "/relax", icon: Wind },
   { label: "Map", path: "/map", icon: MapIcon },
   { label: "Photobooth", path: "/photobooth", icon: Camera },
-  { label: "???", path: "/secret", icon: KeyRound },
+  // { label: "???", path: "/secret", icon: KeyRound },
   { label: "Blank", path: "/blank", icon: KeyRound },
 ];
 

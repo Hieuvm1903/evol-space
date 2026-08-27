@@ -4,7 +4,7 @@ import { Crosshair } from "lucide-react";
 import { PLACE_ICON_CHOICES, iconForName, labelForName } from "../../content/placeIcons";
 import { tagSuggestions, applyTagSuggestion, splitLatLonPair } from "./formHelpers";
 import type { FormState } from "./types";
-import "./PlaceFormTab.css";
+import "./MapPage.css";
 interface Props {
   form: FormState;
   onFormChange: (form: FormState) => void;

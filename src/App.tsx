@@ -13,7 +13,7 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { BlankPage } from "./pages/BlankPage";
 import "./App.css";
 import GalaxyBackground from "./components/GalaxyBackground";
-import { MapPage } from "./pages/MapPage";
+import { MapPage } from "./pages/map/MapPage";
 import { PhotoboothPage } from "./pages/PhotoboothPage";
 
 // One dark theme for every antd component in the app (buttons, inputs,
