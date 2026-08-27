@@ -2,7 +2,7 @@ import React from "react";
 import { Button, Input, ColorPicker, Popover, Tooltip, Space, AutoComplete, Typography } from "antd";
 import { Crosshair } from "lucide-react";
 import { PLACE_ICON_CHOICES, iconForName, labelForName } from "../../content/placeIcons";
-import { tagSuggestions, applyTagSuggestion } from "./formHelpers";
+import { tagSuggestions, applyTagSuggestion, splitLatLonPair } from "./formHelpers";
 import type { FormState } from "./types";
 
 const { Text } = Typography;
@@ -77,8 +77,13 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
       </div>
 
       <Space.Compact style={{ width: "100%", marginBottom: 12 }}>
-        <Input addonBefore="Lat" value={form.lat} onChange={(e) => onFormChange({ ...form, lat: e.target.value })} />
-        <Input addonBefore="Lon" value={form.lon} onChange={(e) => onFormChange({ ...form, lon: e.target.value })} />
+        <Input addonBefore="Lat" value={form.lat} onChange={(e) => {
+          const pair = splitLatLonPair(e.target.value);
+          onFormChange(pair ? { ...form, lat: pair.lat, lon: pair.lon } : { ...form, lat: e.target.value })
+      }} />
+        <Input addonBefore="Lon" value={form.lon} onChange={(e) => {
+          const pair = splitLatLonPair(e.target.value);
+          onFormChange(pair ? { ...form, lat: pair.lat, lon: pair.lon } : { ...form, lon: e.target.value })}} />
         <Tooltip title="Use my current location">
           <Button icon={<Crosshair size={15} />} onClick={onUseMyLocation} />
         </Tooltip>

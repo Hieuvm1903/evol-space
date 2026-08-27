@@ -37,3 +37,12 @@ export function applyTagSuggestion(value: string, picked: string): string {
   parts[parts.length - 1] = picked;
   return parts.filter(Boolean).join(", ") + ", ";
 }
+
+export function splitLatLonPair(value: string): { lat: string; lon: string } | null {
+  if (!value.includes(",")) return null;
+  const parts = value.split(",").map((s) => s.trim());
+  if (parts.length !== 2) return null;
+  const [a, b] = parts;
+  if (!a || !b || Number.isNaN(parseFloat(a)) || Number.isNaN(parseFloat(b))) return null;
+  return { lat: a, lon: b };
+}
