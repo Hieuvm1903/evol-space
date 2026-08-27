@@ -5,6 +5,7 @@ import {
   DRAG_THRESHOLD,
   PANEL_WIDTH,
   EDGE_MARGIN,
+  TOP_EDGE_MARGIN,
 } from "../constants";
 import { getContainer, pointFromEvent, clampToViewport } from "../utils/dom";
 import {
@@ -130,7 +131,9 @@ export function useDragPosition() {
           vw,
           vh,
           EDGE_MARGIN,
+          TOP_EDGE_MARGIN,
         );
+
         applyPos(left, top);
       } else if (parsed && typeof parsed.leftFrac === "number") {
         const { left, top } = clampToViewport(
@@ -140,6 +143,7 @@ export function useDragPosition() {
           h,
           vw,
           vh,
+          TOP_EDGE_MARGIN,
         );
         applyPos(left, top);
       }
@@ -169,6 +173,7 @@ export function useDragPosition() {
       vh = window.innerHeight;
 
     if (enabled) {
+      // setSnapMode()
       const id = nearestSnapId(
         rect.left,
         rect.top,
@@ -177,6 +182,7 @@ export function useDragPosition() {
         vw,
         vh,
         EDGE_MARGIN,
+        TOP_EDGE_MARGIN,
       );
       const { left, top } = snapPixelPosition(
         id,
@@ -185,6 +191,7 @@ export function useDragPosition() {
         vw,
         vh,
         EDGE_MARGIN,
+        TOP_EDGE_MARGIN,
       );
       applyPosAnimated(left, top);
       saveSnap(id);
@@ -221,6 +228,7 @@ export function useDragPosition() {
       if ("touches" in ev) ev.preventDefault();
       const rawLeft = m.origLeft + (p.x - m.startX);
       const rawTop = m.origTop + (p.y - m.startY);
+      // onMove() — live dragging
       const { left, top } = clampToViewport(
         rawLeft,
         rawTop,
@@ -228,6 +236,7 @@ export function useDragPosition() {
         m.h,
         m.vw,
         m.vh,
+        TOP_EDGE_MARGIN,
       );
       m.dx = left - m.origLeft;
       m.dy = top - m.origTop;
@@ -249,14 +258,19 @@ export function useDragPosition() {
       document.removeEventListener("touchmove", onMove);
       document.removeEventListener("mouseup", finishDrag);
       document.removeEventListener("touchend", finishDrag);
-    if (m.raf) cancelAnimationFrame(m.raf);
-try { m.el.classList.remove("evol-dragging"); } catch { }
-m.el.style.transition = "";             // <-- add this
-try { document.body.style.userSelect = ""; } catch { }
+      if (m.raf) cancelAnimationFrame(m.raf);
+      try {
+        m.el.classList.remove("evol-dragging");
+      } catch {}
+      m.el.style.transition = ""; // <-- add this
+      try {
+        document.body.style.userSelect = "";
+      } catch {}
       if (m.moved) {
         m.el.style.transform = "";
         const rawLeft = m.origLeft + m.dx,
           rawTop = m.origTop + m.dy;
+        // finishDrag()
         if (snapEnabledRef.current) {
           const snapId = nearestSnapId(
             rawLeft,
@@ -266,6 +280,7 @@ try { document.body.style.userSelect = ""; } catch { }
             m.vw,
             m.vh,
             EDGE_MARGIN,
+            TOP_EDGE_MARGIN,
           );
           const { left, top } = snapPixelPosition(
             snapId,
@@ -274,12 +289,22 @@ try { document.body.style.userSelect = ""; } catch { }
             m.vw,
             m.vh,
             EDGE_MARGIN,
+            TOP_EDGE_MARGIN,
           );
           applyPosAnimated(left, top);
           saveSnap(snapId);
         } else {
-          applyPos(rawLeft, rawTop);
-          saveFree(rawLeft, rawTop, m.vw, m.vh);
+          const { left, top } = clampToViewport(
+            rawLeft,
+            rawTop,
+            m.w,
+            m.h,
+            m.vw,
+            m.vh,
+            TOP_EDGE_MARGIN,
+          );
+          applyPos(left, top);
+          saveFree(left, top, m.vw, m.vh);
         }
       }
       lastDragMoved.current = m.moved;

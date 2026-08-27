@@ -20,9 +20,11 @@ export function pointFromEvent(e: MouseEvent | TouchEvent): { x: number; y: numb
   return { x: e.clientX, y: e.clientY };
 }
 
-export function clampToViewport(left: number, top: number, w: number, h: number, vw: number, vh: number) {
+export function clampToViewport(
+  left: number, top: number, w: number, h: number, vw: number, vh: number, topMargin: number = EDGE_MARGIN
+) {
   return {
     left: Math.min(Math.max(left, EDGE_MARGIN), Math.max(EDGE_MARGIN, vw - w - EDGE_MARGIN)),
-    top: Math.min(Math.max(top, EDGE_MARGIN), Math.max(EDGE_MARGIN, vh - h - EDGE_MARGIN)),
+    top: Math.min(Math.max(top, topMargin), Math.max(topMargin, vh - h - EDGE_MARGIN)),
   };
 }

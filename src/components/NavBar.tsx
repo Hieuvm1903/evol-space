@@ -1,17 +1,17 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound } from "lucide-react";
+import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound, type LucideIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
-const NAV_ITEMS: { label: string; path: string; icon: React.ElementType }[] = [
+const NAV_ITEMS: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Home", path: "/", icon: Sparkles },
   { label: "Login", path: "/login", icon: LogIn },
   { label: "Music", path: "/music", icon: Music2 },
-  // { label: "His-tory", path: "/history", icon: Clock },
-  // { label: "Relax", path: "/relax", icon: Wind },
+  { label: "His-tory", path: "/history", icon: Clock },
+  { label: "Relax", path: "/relax", icon: Wind },
   { label: "Map", path: "/map", icon: MapIcon },
   { label: "Photobooth", path: "/photobooth", icon: Camera },
-  // { label: "???", path: "/secret", icon: KeyRound },
+  { label: "???", path: "/secret", icon: KeyRound },
   { label: "Blank", path: "/blank", icon: KeyRound },
 ];
 

@@ -18,21 +18,21 @@ export const SNAP_IDS: SnapId[] = [
 export const DEFAULT_SNAP: SnapId = "top-right";
 
 export function snapPixelPosition(
-  id: SnapId, w: number, h: number, vw: number, vh: number, margin: number
+  id: SnapId, w: number, h: number, vw: number, vh: number, margin: number, topMargin: number = margin
 ): { left: number; top: number } {
   const [vSide, hSide] = id.split("-") as ["top" | "middle" | "bottom", "left" | "center" | "right"];
   const left = hSide === "left" ? margin : hSide === "center" ? (vw - w) / 2 : vw - w - margin;
-  const top = vSide === "top" ? margin : vSide === "middle" ? (vh - h) / 2 : vh - h - margin;
-  return { left: Math.max(margin, left), top: Math.max(margin, top) };
+  const top = vSide === "top" ? topMargin : vSide === "middle" ? (vh - h) / 2 : vh - h - margin;
+  return { left: Math.max(margin, left), top: Math.max(topMargin, top) };
 }
 
 export function nearestSnapId(
-  left: number, top: number, w: number, h: number, vw: number, vh: number, margin: number
+  left: number, top: number, w: number, h: number, vw: number, vh: number, margin: number, topMargin: number = margin
 ): SnapId {
   let best: SnapId = DEFAULT_SNAP;
   let bestDist = Infinity;
   for (const id of SNAP_IDS) {
-    const p = snapPixelPosition(id, w, h, vw, vh, margin);
+    const p = snapPixelPosition(id, w, h, vw, vh, margin, topMargin);
     const d = Math.hypot(p.left - left, p.top - top);
     if (d < bestDist) { bestDist = d; best = id; }
   }

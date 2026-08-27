@@ -10,7 +10,6 @@ import * as musicService from "../lib/musicService";
 import { searchSongs, searchPlaylists, SearchSongResult, SearchPlaylistResult } from "../lib/youtube";
 import SpotlightCard from "../components/SpotlightCard";
 import "./MusicPage.css";
-import CardSwap from "../components/reactbits/CardSwap";
 
 // Small galaxy palette so each album card in the CardSwap stack gets a
 // distinct, on-theme cover gradient instead of every card looking the same.

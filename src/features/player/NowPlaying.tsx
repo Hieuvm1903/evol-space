@@ -18,10 +18,7 @@ import TransportControls from "./components/TransportControls";
 import ModeRow from "./components/ModeRow";
 import VolumeRow from "./components/VolumeRow";
 import PillView from "./components/PillView";
-
-import GlowBorder from "../../components/reactbits/GlowBorder";
-import GlassSurface from "../../components/GlassSurface";
-import ElasticSlider from "../../components/reactbits/ElasticSlider";
+import ElasticSlider from "../../components/ElasticSlider";
 
 import "./NowPlaying.css";
 
@@ -38,7 +35,7 @@ interface Props {
   ) => void;
 }
 
-export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics,onEngineUpdate }: Props) {
+export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics, onEngineUpdate }: Props) {
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(EXPANDED_KEY) === "1"; } catch { return false; }
   });
@@ -122,70 +119,74 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
           onTogglePlayPause={engine.togglePlayPause}
         />
 
-        <div id="panel" className={expanded ? "panel-visible" : "panel-hidden"}>
+        <div
+          id="panel"
+          className={expanded ? "panel-visible" : "panel-hidden"}
+          style={{ display: expanded ? "block" : "none" }}
+        >
           {/* <GlowBorder borderRadius={16} active={engine.playing} className="panel-glow"> */}
-            {/* <GlassSurface borderRadius={16} blur={16} backgroundOpacity={0.32} > */}
-              <div className="panel-inner">
-                <PanelHeader
-                  headerRef={headerRef}
-                  view={view}
-                  onViewChange={setView}
-                  onStartDrag={startDrag}
-                  onCollapse={() => toggleExpand(false)}
-                  onResetPos={resetPos}
-                  onClose={closeWidget}
-                  snapEnabled={snapEnabled}
-                  onToggleSnap={setSnapMode}
-                />
+          {/* <GlassSurface borderRadius={16} blur={16} backgroundOpacity={0.32} > */}
+          <div className="panel-inner">
+            <PanelHeader
+              headerRef={headerRef}
+              view={view}
+              onViewChange={setView}
+              onStartDrag={startDrag}
+              onCollapse={() => toggleExpand(false)}
+              onResetPos={resetPos}
+              onClose={closeWidget}
+              snapEnabled={snapEnabled}
+              onToggleSnap={setSnapMode}
+            />
 
-                {engine.showUnmute && (
-                  <div id="unmute-banner" onClick={engine.unmuteNow}>Sound off — tap to unmute</div>
-                )}
+            {engine.showUnmute && (
+              <div id="unmute-banner" onClick={engine.unmuteNow}>Sound off — tap to unmute</div>
+            )}
 
-                <VideoView visible={view === "video"} />
-                <LyricsView visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={handleSeekFromLyrics} />
+            <VideoView visible={view === "video"} />
+            <LyricsView visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={handleSeekFromLyrics} />
 
-                <Typography.Text ellipsis style={{ display: "block", marginTop: 8, fontWeight: 600, fontSize: 13.5, color: "#e6e6e6" }}>
-                  {track.title}
-                </Typography.Text>
+            <Typography.Text ellipsis style={{ display: "block", marginTop: 8, fontWeight: 600, fontSize: 13.5, color: "#e6e6e6" }}>
+              {track.title}
+            </Typography.Text>
 
-                <div id="progress-row">
-                  <span>{formatTime(engine.curTime)}</span>
-                  <ElasticSlider
-                    className="progress-elastic-slider"
-                    value={progressPercent}
-                    onChange={handleProgressChange}
-                    onChangeComplete={handleProgressCommit}
-                    trackHeight={5}
-                  />
-                  <span>{formatTime(engine.duration)}</span>
-                </div>
+            <div id="progress-row">
+              <span>{formatTime(engine.curTime)}</span>
+              <ElasticSlider
+                className="progress-elastic-slider"
+                value={progressPercent}
+                onChange={handleProgressChange}
+                onChangeComplete={handleProgressCommit}
+                trackHeight={5}
+              />
+              <span>{formatTime(engine.duration)}</span>
+            </div>
 
-                <TransportControls
-                  track={track}
-                  playing={engine.playing}
-                  onPrev={() => engine.advance(-1)}
-                  onNext={() => engine.advance(1)}
-                  onTogglePlayPause={engine.togglePlayPause}
-                />
+            <TransportControls
+              track={track}
+              playing={engine.playing}
+              onPrev={() => engine.advance(-1)}
+              onNext={() => engine.advance(1)}
+              onTogglePlayPause={engine.togglePlayPause}
+            />
 
-                <ModeRow
-                  mode={engine.mode}
-                  onModeChange={engine.setMode}
-                  onReshuffle={() => engine.setOrder(shuffleQueue(engine.queueRef.current.length))}
-                />
+            <ModeRow
+              mode={engine.mode}
+              onModeChange={engine.setMode}
+              onReshuffle={() => engine.setOrder(shuffleQueue(engine.queueRef.current.length))}
+            />
 
-                <VolumeRow volume={engine.volume} onChange={engine.setVolume} />
+            <VolumeRow volume={engine.volume} onChange={engine.setVolume} />
 
-                <QueueList
-                  order={engine.order}
-                  queue={queue}
-                  currentTrackIdx={engine.currentTrackIdx}
-                  onReorder={engine.setOrder}
-                  onPlay={engine.playTrackIdx}
-                />
-              </div>
-            {/* </GlassSurface> */}
+            <QueueList
+              order={engine.order}
+              queue={queue}
+              currentTrackIdx={engine.currentTrackIdx}
+              onReorder={engine.setOrder}
+              onPlay={engine.playTrackIdx}
+            />
+          </div>
+          {/* </GlassSurface> */}
           {/* </GlowBorder> */}
         </div>
 
