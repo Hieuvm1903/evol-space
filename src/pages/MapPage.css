@@ -39,6 +39,21 @@
   scrollbar-width: thin;
   scrollbar-color: #8b6ff5 transparent;
 }
+/* Browse tab: header controls (search/tags/selected card) stay fixed,
+   only the results list underneath scrolls — so scrolling the list
+   doesn't drag the search box or tag cloud along with it. */
+.map-browse-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.map-sidebar-fixed { flex-shrink: 0; padding: 4px 14px 0; }
+.map-place-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 14px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: #8b6ff5 transparent;
+}
+.map-place-list::-webkit-scrollbar { width: 6px; }
+.map-place-list::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #8b6ff5, #22d3ee); border-radius: 4px; }
 .map-sidebar-body::-webkit-scrollbar { width: 6px; }
 .map-sidebar-body::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #8b6ff5, #22d3ee); border-radius: 4px; }
 
@@ -47,7 +62,7 @@
 
 .map-search-row { margin: 10px 0; }
 .map-filter-row { display: flex; gap: 8px; margin-bottom: 10px; }
-
+.map-filter-row:last-of-type { margin-bottom: 4px; }
 .map-tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .map-tag-cloud .ant-tag-checkable {
   border-radius: 999px; border: 1px solid var(--evol-border); background: transparent; color: var(--evol-muted);
@@ -55,7 +70,18 @@
 .map-tag-cloud .ant-tag-checkable-checked {
   background: linear-gradient(135deg, #8b6ff5, #22d3ee); border-color: transparent; color: #0a0a12; font-weight: 600;
 }
-
+.map-icon-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+.map-icon-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .map-place-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px;
   border: 1px solid var(--evol-border); background: rgba(255,255,255,0.02); margin-bottom: 7px; cursor: pointer;
@@ -129,3 +155,70 @@
 .leaflet-popup-tip { background: #14121f; }
 .leaflet-popup a { color: #22d3ee; }
 .map-place-row-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 6px; }
+.map-mode-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 6px 0 4px; }
+.map-mode-btn {
+  display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px;
+  border: 1px solid var(--evol-border); background: rgba(255,255,255,0.02); color: var(--evol-muted);
+  cursor: pointer; transition: all 0.15s var(--ease); font-size: 0.82rem;
+}
+.map-mode-btn:hover { color: #fff; border-color: rgba(139,111,245,0.5); }
+.map-mode-btn.active {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, #8b6ff5, #22d3ee);
+  box-shadow: 0 0 14px -2px rgba(139,111,245,0.7);
+}
+
+.map-tool-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.map-tool-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--evol-border);
+  background: rgba(255,255,255,0.02);
+}
+.map-tool-row-label { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--evol-text); }
+
+.map-canvas-fullscreen {
+  position: fixed !important;
+  inset: 16px;
+  z-index: 2000;
+  border-radius: 18px;
+}
+
+.map-coord-badge, .map-measure-badge {
+  position: absolute; left: 14px; bottom: 14px; z-index: 500;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(20,18,33,0.85); backdrop-filter: blur(8px);
+  border: 1px solid rgba(139,111,245,0.3); border-radius: 999px;
+  padding: 6px 12px; font-size: 0.78rem; color: #e8e6f5;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.map-measure-badge { bottom: 50px; }
+.map-measure-clear, .map-sketch-clear {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; color: #22d3ee; cursor: pointer; font-size: 0.76rem; padding: 0; margin-left: 4px;
+ 
+}
+.map-sketch-badge {
+  position: absolute; left: 14px; bottom: 86px; z-index: 500;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(20,18,33,0.85); backdrop-filter: blur(8px);
+  border: 1px solid rgba(232,121,249,0.4); border-radius: 999px;
+  padding: 6px 12px; font-size: 0.78rem; color: #e8e6f5;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.map-sketch-badge .map-sketch-clear { color: #e879f9; }
+.map-fullscreen-exit {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 1000;
+  width: 34px;
+  height: 34px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,111,245,0.25) !important;
+  background: rgba(20,18,33,0.85) !important;
+  backdrop-filter: blur(8px);
+  border: none !important;
+  color: #e8e6f5 !important;
+}
+.map-fullscreen-exit:hover {
+  background: rgba(139,111,245,0.35) !important;
+}
