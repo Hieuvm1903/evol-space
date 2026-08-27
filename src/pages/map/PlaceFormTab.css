@@ -1,3 +1,4 @@
+
 /* Map page: left control rail + large map on the right, no page-level scroll */
 .map-page-shell {
   max-width: none !important;
@@ -238,5 +239,3 @@
   flex: 1;
   min-width: 0;
 }
-/* Textareas need the label to line up with the top, not center — flex-start
-   above already does that; just keep the label from stretching full height. */
