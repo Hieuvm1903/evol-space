@@ -7,7 +7,7 @@ import { NavBar } from "./components/NavBar";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RelaxPage } from "./pages/RelaxPage";
-import { MusicPage } from "./pages/MusicPage";
+import { MusicPage } from "./pages/music/MusicPage";
 import { SecretPage } from "./pages/SecretPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { BlankPage } from "./pages/BlankPage";
