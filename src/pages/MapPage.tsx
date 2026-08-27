@@ -303,30 +303,7 @@ export function MapPage() {
                   </div>
                 )}
 
-                {selectedPlace && (
-                  <div className="map-selected-card">
-                    <Space align="start" style={{ width: "100%", justifyContent: "space-between" }}>
-                      <div>
-                        <Text strong style={{ color: "#fff" }}>{selectedPlace.name}</Text>
-                        {selectedPlace.description && (
-                          <div style={{ fontSize: 12.5, color: "#c9c4e8", marginTop: 4 }}>{selectedPlace.description}</div>
-                        )}
-                      </div>
-                      <Button type="text" size="small" icon={<X size={14} />} onClick={() => setSelectedId(null)} />
-                    </Space>
-                    <Space style={{ marginTop: 10 }}>
-                      <Tooltip title="Edit"><Button size="small" icon={<Pencil size={13} />} onClick={() => openEdit(selectedPlace)} /></Tooltip>
-                      <Tooltip title="Delete"><Button size="small" danger icon={<Trash2 size={13} />} onClick={() => handleDelete(selectedPlace.id)} /></Tooltip>
-                      <Tooltip title="Directions">
-                        <Button
-                          size="small" icon={<Navigation2 size={13} />}
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPlace.lat},${selectedPlace.lon}`}
-                          target="_blank"
-                        />
-                      </Tooltip>
-                    </Space>
-                  </div>
-                )}
+
 
                 {loading ? (
                   <Text style={{ color: "#9c97b8", fontSize: 13 }}>Loading…</Text>
@@ -336,19 +313,37 @@ export function MapPage() {
                   filtered.result.map((p) => {
                     const { name: iconName, color } = splitIcon(p.icon);
                     const Icon = iconForName(iconName);
+                    const isSelected = selectedId === p.id;
                     return (
                       <div
                         key={p.id}
-                        className={`map-place-row${selectedId === p.id ? " active" : ""}`}
+                        className={`map-place-row${isSelected ? " active" : ""}`}
                         onClick={() => selectAndFly(p)}
                       >
                         <div className="map-place-swatch" style={{ ["--sw-color" as any]: color }}>
                           <Icon size={15} color="#fff" />
                         </div>
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <div className="map-place-name">{p.name}</div>
                           {p.description && <div className="map-place-desc">{p.description}</div>}
                         </div>
+                        {isSelected && (
+                          <div className="map-place-row-actions" onClick={(e) => e.stopPropagation()}>
+                            <Tooltip title="Edit">
+                              <Button size="small" icon={<Pencil size={13} />} onClick={() => openEdit(p)} />
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <Button size="small" danger icon={<Trash2 size={13} />} onClick={() => handleDelete(p.id)} />
+                            </Tooltip>
+                            <Tooltip title="Directions">
+                              <Button
+                                size="small" icon={<Navigation2 size={13} />}
+                                href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`}
+                                target="_blank"
+                              />
+                            </Tooltip>
+                          </div>
+                        )}
                       </div>
                     );
                   })

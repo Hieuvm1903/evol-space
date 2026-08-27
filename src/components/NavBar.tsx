@@ -12,6 +12,7 @@ const NAV_ITEMS: { label: string; path: string; icon: React.ElementType }[] = [
   { label: "Map", path: "/map", icon: MapIcon },
   { label: "Photobooth", path: "/photobooth", icon: Camera },
   { label: "???", path: "/secret", icon: KeyRound },
+  { label: "Blank", path: "/blank", icon: KeyRound },
 ];
 
 export function NavBar() {

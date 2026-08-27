@@ -128,3 +128,4 @@
 }
 .leaflet-popup-tip { background: #14121f; }
 .leaflet-popup a { color: #22d3ee; }
+.map-place-row-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 6px; }
