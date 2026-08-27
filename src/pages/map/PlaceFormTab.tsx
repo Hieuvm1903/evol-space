@@ -80,10 +80,15 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
         <Input addonBefore="Lat" value={form.lat} onChange={(e) => {
           const pair = splitLatLonPair(e.target.value);
           onFormChange(pair ? { ...form, lat: pair.lat, lon: pair.lon } : { ...form, lat: e.target.value })
-      }} />
+        }}
+          allowClear
+        />
         <Input addonBefore="Lon" value={form.lon} onChange={(e) => {
           const pair = splitLatLonPair(e.target.value);
-          onFormChange(pair ? { ...form, lat: pair.lat, lon: pair.lon } : { ...form, lon: e.target.value })}} />
+          onFormChange(pair ? { ...form, lat: pair.lat, lon: pair.lon } : { ...form, lon: e.target.value })
+        }}
+          allowClear
+        />
         <Tooltip title="Use my current location">
           <Button icon={<Crosshair size={15} />} onClick={onUseMyLocation} />
         </Tooltip>
