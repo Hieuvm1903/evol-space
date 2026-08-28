@@ -4,6 +4,8 @@ import NowPlaying, { Track } from "./NowPlaying";
 import { MODE_MAP } from "./constants";
 import type { Mode } from "./types";
 import { shuffleArray } from "./utils/queueOrder";
+import { useDragPosition } from "./hooks/useDragPosition";
+import { motion } from "framer-motion";
 
 interface EngineState {
   mode: Mode;
@@ -65,14 +67,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     playing: false,
     currentTrackIdx: 0,
   });
-
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const drag = useDragPosition(widgetRef);
   // NowPlaying reports its live `setMode` setter up through this ref every
   // time it (re)mounts or updates, so playPlaylistMode can reach straight
   // into the running engine without lifting the whole engine up.
   const setEngineModeRef = useRef<((m: Mode) => void) | null>(null);
 
   function loadQueue(tracks: Track[], newMode: string, playlistId?: number) {
-    if(newMode.toLowerCase() == "shuffle"){
+    if (newMode.toLowerCase() == "shuffle") {
       tracks = shuffleArray(tracks)
     }
     setQueue(tracks);
@@ -115,19 +118,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
       {queue && queue.length > 0 && (
-        // This id is what utils/dom.ts's getContainer() looks for, and
-        // what the #now-playing-widget CSS rule (App.css) positions as a
-        // fixed floating box — same visual spot as the old
-        // .st-key-now_playing_drawer container did.
-        <div id="now-playing-widget">
+        <motion.div
+          id="now-playing-widget"
+          ref={widgetRef}
+          drag
+          dragControls={drag.dragControls}
+          dragListener={false}
+          dragMomentum={false}
+          dragElastic={0}
+          style={{ x: drag.x, y: drag.y }}
+          onDragStart={drag.handleDragStart}
+          onDragEnd={drag.handleDragEnd}
+          className="cursor-target"
+        >
           <NowPlaying
             queue={queue}
             initialMode={mode}
             onClose={handleClose}
             onPersistLyrics={persistLyricsSelection}
             onEngineUpdate={handleEngineUpdate}
+            drag={drag}
           />
-        </div>
+        </motion.div>
       )}
     </PlayerContext.Provider>
   );

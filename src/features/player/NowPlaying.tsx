@@ -29,13 +29,11 @@ interface Props {
   initialMode: string;
   onClose: () => void;
   onPersistLyrics: PersistLyricsSelection;
-  onEngineUpdate?: (
-    state: { mode: Mode; playing: boolean; currentTrackIdx: number },
-    controls: { setMode: (m: Mode) => void },
-  ) => void;
+  onEngineUpdate?: any;
+  drag: ReturnType<typeof useDragPosition>;
 }
 
-export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics, onEngineUpdate }: Props) {
+export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics, onEngineUpdate, drag }: Props) {
   const [expanded, setExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem(EXPANDED_KEY) === "1"; } catch { return false; }
   });
@@ -51,7 +49,6 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
   const [dragProgress, setDragProgress] = useState<number | null>(null);
 
   const engine = usePlayerEngine(queue, initialMode);
-  const { startDrag, resetPos, applySavedPosition, snapEnabled, setSnapMode } = useDragPosition();
   const lyrics = useLyrics(queue, engine.currentTrackIdx, engine.curTime, onPersistLyrics);
 
   // Bubble the engine's live state (and a way to control it) up to
@@ -67,7 +64,7 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
   }, [engine.mode, engine.playing, engine.currentTrackIdx]);
 
   useEffect(() => {
-    const id = requestAnimationFrame(() => applySavedPosition());
+    const id = requestAnimationFrame(() => drag.applySavedPosition(true));
     return () => cancelAnimationFrame(id);
   }, [expanded]);
 
@@ -112,10 +109,9 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
         <PillView
           track={track}
           playing={engine.playing}
-          pillRef={pillRef}
           visible={!expanded}
-          onStartDrag={startDrag}
-          onExpand={() => toggleExpand(true)}
+          onPointerDownDrag={drag.startDrag}
+          onTap={() => { if (!drag.wasJustDragged()) toggleExpand(true); }}
           onTogglePlayPause={engine.togglePlayPause}
         />
 
@@ -128,15 +124,14 @@ export default function NowPlaying({ queue, initialMode, onClose, onPersistLyric
           {/* <GlassSurface borderRadius={16} blur={16} backgroundOpacity={0.32} > */}
           <div className="panel-inner">
             <PanelHeader
-              headerRef={headerRef}
               view={view}
               onViewChange={setView}
-              onStartDrag={startDrag}
-              onCollapse={() => toggleExpand(false)}
-              onResetPos={resetPos}
+              onPointerDownDrag={drag.startDrag}
+              onTap={() => { if (!drag.wasJustDragged()) toggleExpand(false); }}
+              onResetPos={drag.resetPos}
               onClose={closeWidget}
-              snapEnabled={snapEnabled}
-              onToggleSnap={setSnapMode}
+              snapEnabled={drag.snapEnabled}
+              onToggleSnap={drag.setSnapMode}
             />
 
             {engine.showUnmute && (

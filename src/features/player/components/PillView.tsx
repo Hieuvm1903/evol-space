@@ -2,25 +2,22 @@ import React from "react";
 import { Button, Typography } from "antd";
 import { PlayCircleFilled, PauseCircleFilled } from "@ant-design/icons";
 import type { Track } from "../types";
-import GlowBorder from "../../../components/reactbits/GlowBorder";
 import GlassSurface from "../../../components/GlassSurface";
 
 interface Props {
   track: Track;
   playing: boolean;
-  pillRef: React.RefObject<HTMLDivElement>;
   visible: boolean;
-  onStartDrag: (e: React.MouseEvent | React.TouchEvent, onTap: () => void) => void;
-  onExpand: () => void;
+  onPointerDownDrag: (e: React.PointerEvent) => void;
+  onTap: () => void;
   onTogglePlayPause: () => void;
 }
 
-export default function PillView({ track, playing, pillRef, visible, onStartDrag, onExpand, onTogglePlayPause }: Props) {
+export default function PillView({ track, playing, visible, onPointerDownDrag, onTap, onTogglePlayPause }: Props) {
   return (
     <div id="pill-wrap" style={{ display: visible ? "block" : "none" }}>
-      {/* <GlowBorder borderRadius={999} active={playing} style={{ width: 260 }}> */}
       <GlassSurface
-        borderRadius = {999}
+        borderRadius={999}
         height={50}
         width={260}
         blur={10}
@@ -36,10 +33,9 @@ export default function PillView({ track, playing, pillRef, visible, onStartDrag
       >
         <div
           id="pill"
-          ref={pillRef}
           title="Drag to move · tap to expand"
-          onMouseDown={(e) => onStartDrag(e, onExpand)}
-          onTouchStart={(e) => onStartDrag(e, onExpand)}
+          onPointerDown={onPointerDownDrag}
+          onClick={onTap}
         >
           <span className={`pill-eq${playing ? " pill-eq-playing" : ""}`} aria-hidden="true">
             <span className="pill-eq-bar" />
@@ -64,7 +60,6 @@ export default function PillView({ track, playing, pillRef, visible, onStartDrag
           </span>
         </div>
       </GlassSurface>
-      {/* </GlowBorder> */}
     </div>
   );
 }
