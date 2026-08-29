@@ -568,16 +568,21 @@ form button:disabled { opacity: 0.6; cursor: default; }
    .st-key-now_playing_drawer rule. useDragPosition.ts positions this via
    inline left/top styles once the user drags it; this just sets the
    initial fixed-corner spot and stacking order. */
+/* src/App.css */
+/* src/App.css */
 #now-playing-widget {
   position: fixed;
-  top: 4.5rem;
-  right: 1.25rem;
   z-index: 9999;
-  animation: evol-scale-in 0.3s var(--ease-spring) both;
-  pointer-events: none;   /* ← add: let clicks pass through empty areas */
+  animation: evol-fade-in-widget 0.3s var(--ease-spring) both;
+  pointer-events: none;
+}
+
+@keyframes evol-fade-in-widget {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 #now-playing-widget.evol-dragging {
-  transition: left 0.2s ease, top 0.2s ease, box-shadow 0.15s ease;
+  transition: left 0.05s ease, top 0.05s ease, box-shadow 0.15s ease;
   filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
 }
 #now-playing-widget.evol-snapping {
