@@ -1,6 +1,5 @@
 import React from "react";
-import { Button, Segmented, Tooltip } from "antd";
-import { UnorderedListOutlined, SwapOutlined, RedoOutlined, RetweetOutlined } from "@ant-design/icons";
+import { List, Repeat1, Repeat, Shuffle } from "lucide-react";
 import type { Mode } from "../types";
 
 interface Props {
@@ -9,29 +8,34 @@ interface Props {
   onReshuffle: () => void;
 }
 
+const OPTIONS: { value: Mode; label: string; icon: typeof List }[] = [
+  { value: "normal", label: "Normal", icon: List },
+  { value: "repeatTrack", label: "Repeat one", icon: Repeat1 },
+  { value: "repeatAll", label: "Repeat all", icon: Repeat },
+];
+
 export default function ModeRow({ mode, onModeChange, onReshuffle }: Props) {
   return (
     <div id="mode-row">
-      <Segmented
-        size="small"
-        value={mode}
-        onChange={(v) => onModeChange(v as Mode)}
-        options={[
-          { value: "normal", label: <Tooltip title="Normal"><UnorderedListOutlined /></Tooltip> },
-          //{ value: "shuffle", label: <Tooltip title="Shuffle"><SwapOutlined /></Tooltip> },
-          { value: "repeatTrack", label: <Tooltip title="Repeat one"><RedoOutlined /></Tooltip> },
-          { value: "repeatAll", label: <Tooltip title="Repeat all"><RetweetOutlined /></Tooltip> },
-        ]}
-      />
-      { (
-        <Tooltip title="Shuffle">
-          <Button
-            type="text" size="small" icon={<SwapOutlined />}
-            onClick={onReshuffle}
-            style={{ marginLeft: 6, color: "#02ab21" }}
-          />
-        </Tooltip>
-      )}
+      <div className="np-segmented">
+        {OPTIONS.map((opt) => {
+          const Icon = opt.icon;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              className={`np-segmented-btn${mode === opt.value ? " active" : ""}`}
+              title={opt.label}
+              onClick={() => onModeChange(opt.value)}
+            >
+              <Icon size={14} />
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" className="np-icon-btn np-shuffle-btn" title="Shuffle queue" onClick={onReshuffle}>
+        <Shuffle size={14} />
+      </button>
     </div>
   );
 }

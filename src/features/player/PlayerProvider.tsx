@@ -1,54 +1,27 @@
-import React, { createContext, useContext, useRef, useState } from "react";
+import React, { createContext, useContext, useRef } from "react";
+import { motion } from "framer-motion";
 import { supabase } from "../../lib/supabaseClient";
 import NowPlaying, { Track } from "./NowPlaying";
-import { MODE_MAP } from "./constants";
-import type { Mode } from "./types";
-import { shuffleArray } from "./utils/queueOrder";
+import { usePlayerStore } from "./store";
 import { useDragPosition } from "./hooks/useDragPosition";
-import { motion } from "framer-motion";
-
-interface EngineState {
-  mode: Mode;
-  playing: boolean;
-  currentTrackIdx: number;
-}
+import type { Mode } from "./types";
 
 interface PlayerContextValue {
-  /** Equivalent of ui/now_playing_widget.py's load_queue(). Always
-   * (re)starts playback from the top of `tracks`. Pass `playlistId` so
-   * the widget can be recognised as "this playlist is playing" later. */
+  /** Always (re)starts playback from the top of `tracks`. Pass `playlistId`
+   * so the widget can be recognised as "this playlist is playing" later. */
   loadQueue: (tracks: Track[], mode: string, playlistId?: number) => void;
-  /** Smart play/shuffle/repeat: if `playlistId` is the playlist already
-   * loaded into the widget, this just flips the live player's mode
-   * in place — it does NOT restart the track. Otherwise it behaves like
-   * loadQueue(). This is what makes clicking Shuffle/Repeat/Play while
-   * something is already playing "follow the click" instead of yanking
-   * playback back to track #1. */
+  /** If `playlistId` is the playlist already loaded, this just flips the
+   * live player's mode in place instead of restarting the track. */
   playPlaylistMode: (playlistId: number, tracks: Track[], mode: string) => void;
-  /** id of the playlist currently loaded into the Now Playing widget, or null. */
   playingPlaylistId: number | null;
-  /** id of the track currently playing, or null. */
   nowPlayingTrackId: number | null;
   isPlaying: boolean;
-  /** Raw engine mode ("normal" | "shuffle" | "repeatTrack" | "repeatAll"),
-   * only meaningful while playingPlaylistId is set. */
   currentMode: Mode | null;
 }
 
 const PlayerContext = createContext<PlayerContextValue | undefined>(undefined);
 
-// Was: services/music_service.py's update_track_details(track_id, artist, lyrics_url),
-// called from ui/now_playing_widget.py after Streamlit handed back the
-// component's return value. Now it's a direct Supabase call — no
-// round-trip through a backend needed since supabase-js + RLS handles
-// this safely straight from the browser (the tracks table's RLS policy
-// allows any authenticated user to update, matching the old behavior of
-// music.py's per-track popover).
-async function persistLyricsSelection(
-  trackId: number,
-  artistName: string | null,
-  lyricsUrl: string,
-) {
+async function persistLyricsSelection(trackId: number, artistName: string | null, lyricsUrl: string) {
   const changes: Record<string, string> = {};
   if (artistName) changes.artist = artistName;
   if (lyricsUrl) changes.lyrics_url = lyricsUrl;
@@ -59,51 +32,30 @@ async function persistLyricsSelection(
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const [queue, setQueue] = useState<Track[] | null>(null);
-  const [mode, setMode] = useState<string>("Normal");
-  const [playingPlaylistId, setPlayingPlaylistId] = useState<number | null>(null);
-  const [engineState, setEngineState] = useState<EngineState>({
-    mode: "normal",
-    playing: false,
-    currentTrackIdx: 0,
-  });
   const widgetRef = useRef<HTMLDivElement>(null);
   const drag = useDragPosition(widgetRef);
-  // NowPlaying reports its live `setMode` setter up through this ref every
-  // time it (re)mounts or updates, so playPlaylistMode can reach straight
-  // into the running engine without lifting the whole engine up.
-  const setEngineModeRef = useRef<((m: Mode) => void) | null>(null);
 
-  function loadQueue(tracks: Track[], newMode: string, playlistId?: number) {
-    if (newMode.toLowerCase() == "shuffle") {
-      tracks = shuffleArray(tracks)
-    }
-    setQueue(tracks);
-    setMode(newMode);
-    setPlayingPlaylistId(playlistId ?? null);
+  const queue = usePlayerStore((s) => s.queue);
+  const currentIdx = usePlayerStore((s) => s.currentIdx);
+  const playing = usePlayerStore((s) => s.playing);
+  const mode = usePlayerStore((s) => s.mode);
+  const playingPlaylistId = usePlayerStore((s) => s.playingPlaylistId);
+  const loadQueueAction = usePlayerStore((s) => s.loadQueue);
+  const setPlaylistMode = usePlayerStore((s) => s.setPlaylistMode);
+
+  function loadQueue(tracks: Track[], modeLabel: string, playlistId?: number) {
+    loadQueueAction(tracks, modeLabel, playlistId);
   }
 
   function playPlaylistMode(playlistId: number, tracks: Track[], modeLabel: string) {
-    if (playingPlaylistId === playlistId && setEngineModeRef.current) {
-      // Same playlist is already playing — just switch its mode live.
-      setEngineModeRef.current(MODE_MAP[modeLabel] || "normal");
+    if (playingPlaylistId === playlistId && queue.length) {
+      setPlaylistMode(modeLabel);
       return;
     }
-    // Different (or no) playlist playing — start it fresh.
     loadQueue(tracks, modeLabel, playlistId);
   }
 
-  function handleClose() {
-    setQueue(null);
-    setPlayingPlaylistId(null);
-  }
-
-  function handleEngineUpdate(state: EngineState, controls: { setMode: (m: Mode) => void }) {
-    setEngineState(state);
-    setEngineModeRef.current = controls.setMode;
-  }
-
-  const nowPlayingTrackId = queue ? queue[engineState.currentTrackIdx]?.id ?? null : null;
+  const nowPlayingTrackId = queue[currentIdx]?.id ?? null;
 
   return (
     <PlayerContext.Provider
@@ -112,12 +64,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         playPlaylistMode,
         playingPlaylistId,
         nowPlayingTrackId,
-        isPlaying: engineState.playing,
-        currentMode: playingPlaylistId !== null ? engineState.mode : null,
+        isPlaying: playing,
+        currentMode: playingPlaylistId !== null ? mode : null,
       }}
     >
       {children}
-      {queue && queue.length > 0 && (
+      {queue.length > 0 && (
         <motion.div
           id="now-playing-widget"
           ref={widgetRef}
@@ -126,19 +78,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           dragListener={false}
           dragMomentum={false}
           dragElastic={0}
-          style={{ x: drag.x, y: drag.y }}
+          dragTransition={{ power: 0, timeConstant: 0 }}
+          // `x`/`y` render as `transform: translate()`, which stacks on TOP of
+          // whatever position the element's CSS gives it — App.css's
+          // `#now-playing-widget` rule sets `top: 4.5rem; right: 1.25rem`,
+          // which would otherwise double up with the snap/drag math (which
+          // assumes x/y ARE the absolute viewport position). Pinning the box
+          // to a (0,0) fixed anchor inline — inline styles beat the external
+          // stylesheet rule regardless of CSS load order — makes x/y the
+          // single source of truth for position, so the widget can never
+          // drift off-screen after expanding, resizing, or a reload.
+          style={{ position: "fixed", top: 0, left: 0, x: drag.x, y: drag.y, touchAction: "none", willChange: "transform" }}
           onDragStart={drag.handleDragStart}
           onDragEnd={drag.handleDragEnd}
           className="cursor-target"
         >
-          <NowPlaying
-            queue={queue}
-            initialMode={mode}
-            onClose={handleClose}
-            onPersistLyrics={persistLyricsSelection}
-            onEngineUpdate={handleEngineUpdate}
-            drag={drag}
-          />
+          <NowPlaying drag={drag} onPersistLyrics={persistLyricsSelection} />
         </motion.div>
       )}
     </PlayerContext.Provider>

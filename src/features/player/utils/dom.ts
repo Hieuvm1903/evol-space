@@ -1,12 +1,5 @@
 import { EDGE_MARGIN } from "../constants";
 
-// Was: window.parent.document.querySelector(".st-key-now_playing_drawer")
-// That selector matched a class Streamlit's iframe machinery applied to
-// the HOST page's container (this component used to render inside an
-// iframe, with "parent" meaning the real page). There's no iframe now —
-// this component renders directly in the page — so it's just a normal
-// element lookup. PlayerProvider.tsx renders the widget inside
-// <div id="now-playing-widget">, which is what this looks for.
 export function getContainer(): HTMLElement | null {
   return document.getElementById("now-playing-widget");
 }

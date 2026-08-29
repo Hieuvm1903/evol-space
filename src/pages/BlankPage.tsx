@@ -5,7 +5,7 @@ export function BlankPage() {
 
 
   return (
-    <div style={{ height: '600px', position: 'relative' }}>
+    <div style={{  position: 'relative' }}>
       
       <GlassSurface
         displace={0.5}

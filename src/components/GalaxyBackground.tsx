@@ -25,16 +25,16 @@ const location = useLocation();
       {/* Centered ring overlay */}
       <div
         style={{
-          position: "absolute",   // or "fixed" if you prefer
+          position: "fixed",   // or "fixed" if you prefer
           inset: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          zIndex: 10,
-          pointerEvents: "none"
+          zIndex: 0,
+          pointerEvents: "none"          
         }}
       >
-        <GalaxyRing size={400} trigger={location.pathname}/>
+        <GalaxyRing  size={400} trigger={location.pathname}/>
       </div>
     </div>
   );

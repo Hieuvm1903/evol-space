@@ -15,17 +15,15 @@ import {
   SnapId,
 } from "../utils/snapPoints";
 
-// Replaces the old manual pointer-tracking implementation with
-// framer-motion's drag system. The widget itself becomes a <motion.div>
-// (see PlayerProvider.tsx) driven by the `x`/`y` motion values returned
-// here; dragging is only ever *started* from a handle (the pill or the
-// panel header) via `startDrag`, using useDragControls + dragListener={false}
-// on the motion.div — so the whole body of the panel isn't draggable,
-// only the handle is, same UX as before.
+// The widget itself is a <motion.div> (see PlayerProvider.tsx) driven by
+// the `x`/`y` motion values returned here. Dragging is only ever
+// *started* from a handle (the pill or the panel header) via `startDrag`,
+// using useDragControls + dragListener={false} on the motion.div — so the
+// whole body of the panel isn't draggable, only the handle is.
 //
-// Snap-on-drop / free positioning / localStorage persistence all work
-// exactly as before (same POS_KEY shape, same snapPoints.ts math) — only
-// the "how do we track the pointer and move the DOM node" part changed.
+// Snap-on-drop / free positioning / localStorage persistence all work as
+// before: drop the widget and it eases into the nearest of 8 dock points
+// (or, with snap off, wherever you released it, clamped to the viewport).
 
 function readSnapModePref(): boolean {
   try {
@@ -76,6 +74,14 @@ export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
 
   function applySavedPosition(animated = false) {
     const { w, h } = currentSize();
+    // If the container hasn't actually been laid out yet (0×0 — e.g. this
+    // fires the instant the panel swaps in from display:none, before the
+    // browser has committed a layout pass), bail and retry next frame
+    // instead of computing a position from bogus dimensions.
+    if (w === 0 || h === 0) {
+      requestAnimationFrame(() => applySavedPosition(animated));
+      return;
+    }
     const vw = window.innerWidth, vh = window.innerHeight;
     const { left, top } = readSavedPosition(w, h, vw, vh);
     if (animated) {

@@ -16,10 +16,7 @@ export function shuffleQueue(queueLen: number): number[] {
 // `order` already holds the play sequence — in shuffle mode that sequence
 // is a random permutation (built once, when shuffle mode is entered, or
 // again via "shuffle again"), but advancing through it is now always
-// sequential, same as normal mode. Re-randomizing on every single
-// "next" call (the old behavior) meant the Queue list's visible order —
-// which IS `order` — never actually matched what played next, which
-// looked like a bug: the list said one thing, playback did another.
+// sequential, same as normal mode.
 export function pickNextTrackIdx(order: number[], mode: Mode, currentTrackIdx: number): number | null {
   const len = order.length;
   if (len <= 1) return mode === "repeatAll" ? currentTrackIdx : null;

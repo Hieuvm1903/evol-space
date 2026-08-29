@@ -1,192 +1,202 @@
-import React, { useEffect, useRef, useState } from "react";
-import { ConfigProvider, theme as antdTheme, Typography } from "antd";
+import React, { useEffect, useMemo, useRef } from "react";
+import type { YouTubePlayer } from "react-youtube";
 
-import type { Mode, Track, View } from "./types";
-import { EXPANDED_KEY } from "./constants";
-import { formatTime } from "./utils/time";
-import { shuffleQueue } from "./utils/queueOrder";
+import { usePlayerStore } from "./store";
+import { useLyrics, type PersistLyricsSelection } from "./hooks/useLyrics";
+import type { useDragPosition } from "./hooks/useDragPosition";
+import { pickNextTrackIdx } from "./utils/queueOrder";
 
-import { useDragPosition } from "./hooks/useDragPosition";
-import { usePlayerEngine } from "./hooks/usePlayerEngine";
-import { useLyrics, PersistLyricsSelection } from "./hooks/useLyrics";
-
-import QueueList from "./QueueList";
+import PillView from "./components/PillView";
 import PanelHeader from "./components/PanelHeader";
 import VideoView from "./components/VideoView";
-import LyricsView from "./components/LyricsView";
+import LyricsPanel from "./components/LyricsPanel";
 import TransportControls from "./components/TransportControls";
 import ModeRow from "./components/ModeRow";
-import VolumeRow from "./components/VolumeRow";
-import PillView from "./components/PillView";
-import ElasticSlider from "../../components/ElasticSlider";
+import VolumeSlider from "./components/VolumeSlider";
+import ProgressBar from "./components/ProgressBar";
+import QueueList from "./QueueList";
 
 import "./NowPlaying.css";
 
-export type { Track };
+export type { Track } from "./types";
 
 interface Props {
-  queue: Track[];
-  initialMode: string;
-  onClose: () => void;
-  onPersistLyrics: PersistLyricsSelection;
-  onEngineUpdate?: any;
   drag: ReturnType<typeof useDragPosition>;
+  onPersistLyrics: PersistLyricsSelection;
 }
 
-export default function NowPlaying({ queue, initialMode, onClose, onPersistLyrics, onEngineUpdate, drag }: Props) {
-  const [expanded, setExpanded] = useState<boolean>(() => {
-    try { return localStorage.getItem(EXPANDED_KEY) === "1"; } catch { return false; }
-  });
-  const [view, setView] = useState<View>("video");
-  const rootRef = useRef<HTMLDivElement>(null);
-  const pillRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
+export default function NowPlaying({ drag, onPersistLyrics }: Props) {
+  const queue = usePlayerStore((s) => s.queue);
+  const order = usePlayerStore((s) => s.order);
+  const currentIdx = usePlayerStore((s) => s.currentIdx);
+  const mode = usePlayerStore((s) => s.mode);
+  const playing = usePlayerStore((s) => s.playing);
+  const curTime = usePlayerStore((s) => s.curTime);
+  const duration = usePlayerStore((s) => s.duration);
+  const volume = usePlayerStore((s) => s.volume);
+  const view = usePlayerStore((s) => s.view);
+  const expanded = usePlayerStore((s) => s.expanded);
+  const showUnmute = usePlayerStore((s) => s.showUnmute);
 
-  // Local seek preview: while the user is dragging the progress slider we
-  // show their drag position instead of the live curTime (which is still
-  // updating every 500ms from the actual player), so the thumb doesn't
-  // fight the drag. Cleared shortly after the real seek lands.
-  const [dragProgress, setDragProgress] = useState<number | null>(null);
+  const setOrder = usePlayerStore((s) => s.setOrder);
+  const setMode = usePlayerStore((s) => s.setMode);
+  const setView = usePlayerStore((s) => s.setView);
+  const setExpanded = usePlayerStore((s) => s.setExpanded);
+  const setShowUnmute = usePlayerStore((s) => s.setShowUnmute);
+  const setVolumeValue = usePlayerStore((s) => s.setVolume);
+  const setProgress = usePlayerStore((s) => s.setProgress);
+  const setPlaying = usePlayerStore((s) => s.setPlaying);
+  const advance = usePlayerStore((s) => s.advance);
+  const playIdx = usePlayerStore((s) => s.playIdx);
+  const reshuffle = usePlayerStore((s) => s.reshuffle);
+  const close = usePlayerStore((s) => s.close);
 
-  const engine = usePlayerEngine(queue, initialMode);
-  const lyrics = useLyrics(queue, engine.currentTrackIdx, engine.curTime, onPersistLyrics);
+  const playerRef = useRef<YouTubePlayer | null>(null);
+  const track = queue[currentIdx];
+  const lyrics = useLyrics(track, curTime, onPersistLyrics);
 
-  // Bubble the engine's live state (and a way to control it) up to
-  // whoever owns this widget — PlayerProvider uses this so external UI
-  // (the Music page's Play/Shuffle/Repeat buttons) can steer whatever is
-  // already playing instead of only being able to restart it.
+  // Keep the next track cued in a hidden player for a snappier transition
+  // when it comes up — same intent as the old preload player.
+  const nextIdx = useMemo(() => pickNextTrackIdx(order, mode, currentIdx), [order, mode, currentIdx]);
+  const nextTrack = nextIdx !== null ? queue[nextIdx] : undefined;
+
+  function handleReady(e: { target: YouTubePlayer }) {
+    playerRef.current = e.target;
+    try { e.target.setVolume(volume); } catch {}
+    setTimeout(() => {
+      try { if (e.target.isMuted()) setShowUnmute(true); } catch {}
+    }, 500);
+  }
+
+  function handleStateChange(e: { data: number }) {
+    // YT.PlayerState: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
+    if (e.data === 1) setPlaying(true);
+    else if (e.data === 2) setPlaying(false);
+    else if (e.data === 0) handleEnded();
+  }
+
+  function handleEnded() {
+    if (mode === "repeatTrack") {
+      try { playerRef.current?.seekTo(0, true); playerRef.current?.playVideo(); } catch {}
+    } else {
+      advance(1);
+    }
+  }
+
+  // Poll playback progress every 500ms — same cadence as before.
   useEffect(() => {
-    onEngineUpdate?.(
-      { mode: engine.mode, playing: engine.playing, currentTrackIdx: engine.currentTrackIdx },
-      { setMode: engine.setMode },
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.mode, engine.playing, engine.currentTrackIdx]);
+    const id = setInterval(() => {
+      const p = playerRef.current;
+      if (!p?.getCurrentTime) return;
+      try {
+        const cur = p.getCurrentTime();
+        const dur = p.getDuration();
+        if (dur > 0) setProgress(cur, dur);
+      } catch {}
+    }, 500);
+    return () => clearInterval(id);
+  }, [setProgress]);
 
+  // Re-center the widget's saved position whenever it resizes between
+  // pill <-> panel, so it doesn't drift off-screen or overlap content.
   useEffect(() => {
     const id = requestAnimationFrame(() => drag.applySavedPosition(true));
     return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
 
-  function toggleExpand(v: boolean) {
-    setExpanded(v);
-    try { localStorage.setItem(EXPANDED_KEY, v ? "1" : "0"); } catch { }
+  function togglePlayPause() {
+    const p = playerRef.current;
+    if (!p) return;
+    try {
+      const state = p.getPlayerState();
+      if (state === 1) p.pauseVideo(); else p.playVideo();
+    } catch {}
+  }
+
+  function seekToFraction(frac: number) {
+    const p = playerRef.current;
+    if (!p) return;
+    try { p.seekTo(frac * p.getDuration(), true); } catch {}
+  }
+
+  function seekToTime(seconds: number) {
+    try { playerRef.current?.seekTo(seconds, true); } catch {}
+  }
+
+  function handleVolumeChange(v: number) {
+    setVolumeValue(v);
+    try { playerRef.current?.setVolume(v); } catch {}
+  }
+
+  function unmuteNow() {
+    try { playerRef.current?.unMute(); } catch {}
+    setShowUnmute(false);
   }
 
   function closeWidget() {
-    engine.stopVideo();
-    onClose();
+    try { playerRef.current?.stopVideo?.(); } catch {}
+    close();
   }
 
-  function handleSeekFromLyrics(time: number) {
-    engine.seekToTime(time);
-  }
-
-  if (!queue.length) return null;
-  const track = queue[engine.currentTrackIdx];
-
-  const livePercent = engine.duration ? (engine.curTime / engine.duration) * 100 : 0;
-  const progressPercent = dragProgress ?? livePercent;
-
-  function handleProgressChange(v: number) {
-    setDragProgress(v);
-  }
-  function handleProgressCommit(v: number) {
-    engine.seekToFraction(v / 100);
-    // Give the player a moment to report the new curTime before handing
-    // display back to the live value, avoiding a visible snap-back.
-    setTimeout(() => setDragProgress(null), 300);
-  }
+  if (!track) return null;
 
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: antdTheme.darkAlgorithm,
-        token: { colorPrimary: "#8b6ff5", colorBgContainer: "#14121f", borderRadius: 10 },
-      }}
-    >
-      <div ref={rootRef}>
-        <PillView
-          track={track}
-          playing={engine.playing}
-          visible={!expanded}
-          onPointerDownDrag={drag.startDrag}
-          onTap={() => { if (!drag.wasJustDragged()) toggleExpand(true); }}
-          onTogglePlayPause={engine.togglePlayPause}
-        />
+    <div>
+      <PillView
+        track={track}
+        playing={playing}
+        visible={!expanded}
+        onPointerDownDrag={drag.startDrag}
+        onTap={() => { if (!drag.wasJustDragged()) setExpanded(true); }}
+        onTogglePlayPause={togglePlayPause}
+      />
 
-        <div
-          id="panel"
-          className={expanded ? "panel-visible" : "panel-hidden"}
-          style={{ display: expanded ? "block" : "none" }}
-        >
-          {/* <GlowBorder borderRadius={16} active={engine.playing} className="panel-glow"> */}
-          {/* <GlassSurface borderRadius={16} blur={16} backgroundOpacity={0.32} > */}
-          <div className="panel-inner">
-            <PanelHeader
-              view={view}
-              onViewChange={setView}
-              onPointerDownDrag={drag.startDrag}
-              onTap={() => { if (!drag.wasJustDragged()) toggleExpand(false); }}
-              onResetPos={drag.resetPos}
-              onClose={closeWidget}
-              snapEnabled={drag.snapEnabled}
-              onToggleSnap={drag.setSnapMode}
-            />
+      <div id="panel" className={expanded ? "panel-visible" : "panel-hidden"} style={{ display: expanded ? "block" : "none" }}>
+        <div className="panel-inner">
+          <PanelHeader
+            view={view}
+            onViewChange={setView}
+            onPointerDownDrag={drag.startDrag}
+            onTap={() => { if (!drag.wasJustDragged()) setExpanded(false); }}
+            onResetPos={drag.resetPos}
+            onClose={closeWidget}
+            snapEnabled={drag.snapEnabled}
+            onToggleSnap={drag.setSnapMode}
+          />
 
-            {engine.showUnmute && (
-              <div id="unmute-banner" onClick={engine.unmuteNow}>Sound off — tap to unmute</div>
-            )}
+          {showUnmute && (
+            <div id="unmute-banner" onClick={unmuteNow}>Sound off — tap to unmute</div>
+          )}
 
-            <VideoView visible={view === "video"} />
-            <LyricsView visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={handleSeekFromLyrics} />
+          <VideoView
+            visible={view === "video"}
+            track={track}
+            nextVideoId={nextTrack?.video_id}
+            onReady={handleReady}
+            onStateChange={handleStateChange}
+          />
+          <LyricsPanel visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={seekToTime} />
 
-            <Typography.Text ellipsis style={{ display: "block", marginTop: 8, fontWeight: 600, fontSize: 13.5, color: "#e6e6e6" }}>
-              {track.title}
-            </Typography.Text>
+          <p className="np-track-title" title={track.title}>{track.title}</p>
 
-            <div id="progress-row">
-              <span>{formatTime(engine.curTime)}</span>
-              <ElasticSlider
-                className="progress-elastic-slider"
-                value={progressPercent}
-                onChange={handleProgressChange}
-                onChangeComplete={handleProgressCommit}
-                trackHeight={5}
-              />
-              <span>{formatTime(engine.duration)}</span>
-            </div>
+          <ProgressBar curTime={curTime} duration={duration} onSeekFraction={seekToFraction} />
 
-            <TransportControls
-              track={track}
-              playing={engine.playing}
-              onPrev={() => engine.advance(-1)}
-              onNext={() => engine.advance(1)}
-              onTogglePlayPause={engine.togglePlayPause}
-            />
+          <TransportControls
+            track={track}
+            playing={playing}
+            onPrev={() => advance(-1)}
+            onNext={() => advance(1)}
+            onTogglePlayPause={togglePlayPause}
+          />
 
-            <ModeRow
-              mode={engine.mode}
-              onModeChange={engine.setMode}
-              onReshuffle={() => engine.setOrder(shuffleQueue(engine.queueRef.current.length))}
-            />
+          <ModeRow mode={mode} onModeChange={setMode} onReshuffle={reshuffle} />
 
-            <VolumeRow volume={engine.volume} onChange={engine.setVolume} />
+          <VolumeSlider volume={volume} onChange={handleVolumeChange} />
 
-            <QueueList
-              order={engine.order}
-              queue={queue}
-              currentTrackIdx={engine.currentTrackIdx}
-              onReorder={engine.setOrder}
-              onPlay={engine.playTrackIdx}
-            />
-          </div>
-          {/* </GlassSurface> */}
-          {/* </GlowBorder> */}
+          <QueueList order={order} queue={queue} currentTrackIdx={currentIdx} onReorder={setOrder} onPlay={playIdx} />
         </div>
-
-        <div id="yt-preload" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", opacity: 0, pointerEvents: "none" }} />
       </div>
-    </ConfigProvider>
+    </div>
   );
 }

@@ -1,6 +1,5 @@
 import React from "react";
-import { Button, Segmented, Switch, Tooltip } from "antd";
-import { CloseOutlined, VideoCameraOutlined, FileTextOutlined } from "@ant-design/icons";
+import { X, Video, FileText } from "lucide-react";
 import type { View } from "../types";
 
 interface Props {
@@ -28,41 +27,47 @@ export default function PanelHeader({
       <span className="drag-grip" onDoubleClick={(e) => { e.stopPropagation(); onResetPos(); }}>⠿</span>
       <span className="panel-title">Now Playing</span>
 
-      <div
-        className="header-snap-toggle"
+      <button
+        type="button"
+        className={`np-snap-toggle${snapEnabled ? " active" : ""}`}
+        title={snapEnabled ? "Snap to edges: on" : "Snap to edges: off"}
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); onToggleSnap(!snapEnabled); }}
       >
-        <Tooltip title={snapEnabled ? "Snap to edges: on" : "Snap to edges: off"}>
-          <Switch
-            size="small"
-            checked={snapEnabled}
-            onChange={onToggleSnap}
-          />
-        </Tooltip>
-      </div>
+        <span className="np-snap-toggle-dot" />
+      </button>
 
       <div
-        className="header-view-toggle"
+        className="header-view-toggle np-segmented"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        <Segmented
-          size="small"
-          value={view}
-          onChange={(v) => onViewChange(v as View)}
-          options={[
-            { value: "video", label: <Tooltip title="Video"><VideoCameraOutlined /></Tooltip> },
-            { value: "lyrics", label: <Tooltip title="Lyrics"><FileTextOutlined /></Tooltip> },
-          ]}
-        />
+        <button
+          type="button"
+          className={`np-segmented-btn${view === "video" ? " active" : ""}`}
+          title="Video"
+          onClick={() => onViewChange("video")}
+        >
+          <Video size={13} />
+        </button>
+        <button
+          type="button"
+          className={`np-segmented-btn${view === "lyrics" ? " active" : ""}`}
+          title="Lyrics"
+          onClick={() => onViewChange("lyrics")}
+        >
+          <FileText size={13} />
+        </button>
       </div>
-      <Button
-        type="text" shape="circle" size="small" style={{ color: "#9a9a9a" }}
-        icon={<CloseOutlined />}
+
+      <button
+        type="button"
+        className="np-icon-btn np-close-btn"
         onClick={(e) => { e.stopPropagation(); onClose(); }}
         title="Close"
-      />
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }

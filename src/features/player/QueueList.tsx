@@ -6,8 +6,9 @@ import {
   arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { HolderOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
-import type { Track } from "./types"; // was: import type { Track } from "./NowPlaying";
+import { GripVertical, ChevronDown, ChevronRight } from "lucide-react";
+import type { Track } from "./types";
+
 function QueueRow({ id, track, isCurrent, onPlay }: {
   id: string; track: Track; isCurrent: boolean; onPlay: () => void;
 }) {
@@ -20,7 +21,7 @@ function QueueRow({ id, track, isCurrent, onPlay }: {
   return (
     <div ref={setNodeRef} style={style} className={`queue-row${isCurrent ? " queue-row-active" : ""}`}>
       <span className="queue-drag-handle" {...attributes} {...listeners}>
-        <HolderOutlined />
+        <GripVertical size={14} />
       </span>
       {track.thumbnail_url
         ? <img className="queue-thumb" src={track.thumbnail_url} alt="" />
@@ -40,6 +41,8 @@ export default function QueueList({ order, queue, currentTrackIdx, onReorder, on
 }) {
   const [collapsed, setCollapsed] = useState(true);
 
+  // distance:5 keeps a plain tap-to-play from being swallowed as a drag —
+  // the pointer has to actually move 5px before dnd-kit takes over.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -58,7 +61,7 @@ export default function QueueList({ order, queue, currentTrackIdx, onReorder, on
     <div className="queue-section">
       <div className="queue-section-header" onClick={() => setCollapsed((c) => !c)}>
         <span>Queue · {queue.length} tracks</span>
-        {collapsed ? <RightOutlined /> : <DownOutlined />}
+        {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
       </div>
       <div className={`queue-list-wrapper${collapsed ? " collapsed" : ""}`}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

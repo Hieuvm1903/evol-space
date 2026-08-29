@@ -22,7 +22,6 @@ export async function fetchLyrics(track: {
   youtube_url?: string;
 }): Promise<LyricsCandidate[]> {
   try {
-    // Clean title (remove common YouTube noise)
     const cleanTitle = track.title
       .replace(/\(.*?\)|\[.*?\]/g, "")
       .replace(/\s+/g, " ")
@@ -43,58 +42,41 @@ export async function fetchLyrics(track: {
       plainLyrics: string | null;
     }> = [];
 
-    // 1. Prefer structured search when we have an artist
     if (cleanArtist) {
       const url = new URL("https://lrclib.net/api/search");
       url.searchParams.set("track_name", cleanTitle);
       url.searchParams.set("artist_name", cleanArtist);
 
       const res = await fetch(url.toString(), {
-        headers: {
-          "User-Agent": "YourAppName/1.0[](https://github.com/your/repo)",
-        },
+        headers: { "User-Agent": "YourAppName/1.0[](https://github.com/your/repo)" },
       });
 
-      if (res.ok) {
-        results = await res.json();
-      }
+      if (res.ok) results = await res.json();
     }
 
-    // 2. Fallback to free-text search
     if (results.length === 0) {
       const q = cleanArtist ? `${cleanArtist} ${cleanTitle}` : cleanTitle;
       const url = new URL("https://lrclib.net/api/search");
       url.searchParams.set("q", q);
 
       const res = await fetch(url.toString(), {
-        headers: {
-          "User-Agent": "YourAppName/1.0[](https://github.com/your/repo)",
-        },
+        headers: { "User-Agent": "YourAppName/1.0[](https://github.com/your/repo)" },
       });
 
       if (!res.ok) return [];
       results = await res.json();
     }
 
-    // Keep only results that actually have synced lyrics
     const candidates: LyricsCandidate[] = [];
-
     for (const r of results) {
       if (!r.syncedLyrics || r.instrumental) continue;
-
       const lines = parseLRC(r.syncedLyrics);
       if (lines.length === 0) continue;
-
       candidates.push({
-        id: r.id,
-        trackName: r.trackName,
-        artistName: r.artistName,
-        albumName: r.albumName,
-        duration: r.duration,
-        lines,
+        id: r.id, trackName: r.trackName, artistName: r.artistName,
+        albumName: r.albumName, duration: r.duration, lines,
       });
     }
-
     return candidates;
   } catch (err) {
     console.warn("fetchLyrics failed:", err);
@@ -102,9 +84,6 @@ export async function fetchLyrics(track: {
   }
 }
 
-/**
- * Parse a standard LRC string into sorted LyricLine[].
- */
 function parseLRC(lrc: string): LyricLine[] {
   const lines: LyricLine[] = [];
   const lineRegex = /(?:\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\])+(.*)/g;
@@ -119,18 +98,13 @@ function parseLRC(lrc: string): LyricLine[] {
     while ((match = lineRegex.exec(line)) !== null) {
       const minutes = parseInt(match[1], 10);
       const seconds = parseInt(match[2], 10);
-      const fraction = match[3]
-        ? parseInt(match[3].padEnd(3, "0").slice(0, 3), 10)
-        : 0;
+      const fraction = match[3] ? parseInt(match[3].padEnd(3, "0").slice(0, 3), 10) : 0;
       const text = (match[4] ?? "").trim();
-
       if (!text) continue;
-
       const time = minutes * 60 + seconds + fraction / 1000;
       lines.push({ time, text });
     }
   }
-
   return lines.sort((a, b) => a.time - b.time);
 }
 
@@ -140,14 +114,8 @@ function parseLRC(lrc: string): LyricLine[] {
 
 const _cache = new Map<string, Promise<LyricsCandidate[]>>();
 
-/** Cached wrapper, keyed by video_id — avoids re-fetching when a track
- * is revisited (e.g. navigating back to it, or a Streamlit rerun handing
- * back the same queue). */
 export function fetchLyricsCached(track: {
-  title: string;
-  artist?: string;
-  video_id: string;
-  youtube_url?: string;
+  title: string; artist?: string; video_id: string; youtube_url?: string;
 }): Promise<LyricsCandidate[]> {
   const key = track.video_id;
   const cached = _cache.get(key);
@@ -157,8 +125,6 @@ export function fetchLyricsCached(track: {
   return promise;
 }
 
-/** Given a candidate's lines and the current playback time, returns the
- * index of the line that should be highlighted (-1 if before the first line). */
 export function currentLineIndex(lines: LyricLine[], curTime: number): number {
   let idx = -1;
   for (let i = 0; i < lines.length; i++) {
@@ -167,41 +133,26 @@ export function currentLineIndex(lines: LyricLine[], curTime: number): number {
   }
   return idx;
 }
-export async function fetchLyricsById(
-  id: string | number
-): Promise<LyricsCandidate | null> {
+
+export async function fetchLyricsById(id: string | number): Promise<LyricsCandidate | null> {
   try {
     const res = await fetch(`https://lrclib.net/api/get/${id}`, {
-      headers: {
-        "User-Agent": "YourAppName/1.0[](https://github.com/your/repo)",
-      },
+      headers: { "User-Agent": "YourAppName/1.0[](https://github.com/your/repo)" },
     });
-
     if (!res.ok) return null;
 
     const data: {
-      id: number;
-      trackName: string;
-      artistName: string;
-      albumName: string;
-      duration: number;
-      instrumental: boolean;
-      syncedLyrics: string | null;
-      plainLyrics: string | null;
+      id: number; trackName: string; artistName: string; albumName: string;
+      duration: number; instrumental: boolean; syncedLyrics: string | null; plainLyrics: string | null;
     } = await res.json();
 
     if (!data.syncedLyrics || data.instrumental) return null;
-
     const lines = parseLRC(data.syncedLyrics);
     if (lines.length === 0) return null;
 
     return {
-      id: data.id,
-      trackName: data.trackName,
-      artistName: data.artistName,
-      albumName: data.albumName,
-      duration: data.duration,
-      lines,
+      id: data.id, trackName: data.trackName, artistName: data.artistName,
+      albumName: data.albumName, duration: data.duration, lines,
     };
   } catch (err) {
     console.warn("fetchLyricsById failed:", err);
@@ -211,7 +162,6 @@ export async function fetchLyricsById(
 
 const _byIdCache = new Map<string, Promise<LyricsCandidate | null>>();
 
-/** Cached wrapper, keyed by id. */
 export function fetchLyricsByIdCached(id: string | number): Promise<LyricsCandidate | null> {
   const key = String(id);
   const cached = _byIdCache.get(key);
