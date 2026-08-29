@@ -30,6 +30,7 @@ export default function ProgressBar({ curTime, duration, onSeekFraction }: Props
         max={100}
         step={0.1}
         value={percent}
+        style={{ ["--fill" as any]: `${percent}%` }}
         onChange={(e) => setDragValue(parseFloat(e.target.value))}
         onMouseUp={commit}
         onTouchEnd={commit}

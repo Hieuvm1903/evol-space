@@ -17,6 +17,7 @@ export default function VolumeSlider({ volume, onChange }: Props) {
         min={0}
         max={100}
         value={volume}
+        style={{ ["--fill" as any]: `${volume}%` }}
         onChange={(e) => onChange(parseInt(e.target.value, 10))}
         aria-label="Volume"
       />
