@@ -25,10 +25,7 @@
 .np-icon-btn:hover:not(:disabled) { border-color: #8b6ff5; transform: translateY(-1px); }
 .np-icon-btn:active:not(:disabled) { transform: translateY(0) scale(0.94); }
 .np-icon-btn:disabled { opacity: 0.5; cursor: default; }
-.np-icon-btn-primary {
-  width: 40px; height: 40px; background: #fff; color: #14121f; border: none;
-}
-.np-icon-btn-primary:hover { box-shadow: 0 0 0 4px rgba(139, 111, 245, 0.25); }
+
 .np-icon-btn-ghost { background: transparent; border: none; color: #22d3ee; width: 26px; height: 26px; }
 .np-close-btn { color: #9a9a9a; width: 26px; height: 26px; }
 
@@ -199,22 +196,76 @@
 #mode-row { display: flex; align-items: center; justify-content: center; margin-top: 10px; }
 
 /* --- Spinning disk (play/pause backdrop) --- */
-.spin-disk-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.spin-disk-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;      /* NEW — stop the flex row from squeezing this into an oval */
+  flex-grow: 0;        /* NEW — don't let it stretch either */
+}
 .spin-disk-sm { width: 30px; height: 30px; }
 .spin-disk-lg { width: 48px; height: 48px; }
+
 .spin-disk {
   position: absolute; inset: 0; border-radius: 50%;
+  aspect-ratio: 1 / 1;   /* NEW — guarantees a perfect circle regardless of parent squeeze */
   background-color: #1a1830; background-size: cover; background-position: center;
-  border: 1px solid #8b6ff5; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5);
+  border: 2px solid #8b6ff5;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5);
   animation: spin-disk-rotate 2.8s linear infinite; animation-play-state: paused;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
+
+/* Small orbiting light — shows rotation without making the ring uneven */
+.spin-disk::after {
+  content: "";
+  position: absolute;
+  top: -1px; left: 50%;
+  width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 5px 1px rgba(255,255,255,0.8);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
 .spin-disk-playing {
   animation-play-state: running;
-  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5), 0 0 12px rgba(139,111,245,0.5), 0 0 20px rgba(34,211,238,0.25);
+  border-color: #22d3ee;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5), 0 0 12px rgba(139,111,245,0.55), 0 0 20px rgba(34,211,238,0.3);
 }
-@keyframes spin-disk-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spin-disk-playing::after { opacity: 1; }
 
+/* Uniform breathing glow instead of a rotating gradient */
+.spin-disk-wrap-playing::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139,111,245,0.55), rgba(34,211,238,0.25) 60%, transparent 75%);
+  filter: blur(6px);
+  z-index: -1;
+  animation: spin-disk-breathe 2.2s ease-in-out infinite;
+}
+
+@keyframes spin-disk-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes spin-disk-breathe { 0%, 100% { opacity: 0.5; transform: scale(0.94); } 50% { opacity: 0.9; transform: scale(1.06); } }
+/* Play/pause button itself */
+.np-icon-btn-primary {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, #ffffff, #e6e3fb);
+  color: #14121f;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15);
+}
+.np-icon-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 18px rgba(0,0,0,0.4), 0 0 0 5px rgba(139,111,245,0.28);
+  transform: translateY(-1px) scale(1.04);
+}
+.np-icon-btn-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.92);
+}
 /* --- Collapsed-pill equalizer bars --- */
 .pill-eq { display: flex; align-items: flex-end; justify-content: center; gap: 2px; width: 32px; height: 32px; border-radius: 6px; background: #0c0b16; flex-shrink: 0; padding: 6px 5px; box-sizing: border-box; }
 .pill-eq-bar { width: 3px; background: linear-gradient(180deg, #8b6ff5, #22d3ee); border-radius: 2px; height: 30%; animation-play-state: paused; animation-fill-mode: both; transform-origin: bottom; }
