@@ -2,16 +2,14 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound, type LucideIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import GalaxyRing from "./ImperfectCircle";
 
 const NAV_ITEMS: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Home", path: "/", icon: Sparkles },
   { label: "Login", path: "/login", icon: LogIn },
   { label: "Music", path: "/music", icon: Music2 },
-  // { label: "His-tory", path: "/history", icon: Clock },
-  // { label: "Relax", path: "/relax", icon: Wind },
   { label: "Map", path: "/map", icon: MapIcon },
   { label: "Photobooth", path: "/photobooth", icon: Camera },
-  // { label: "???", path: "/secret", icon: KeyRound },
   { label: "Blank", path: "/blank", icon: KeyRound },
 ];
 
@@ -23,17 +21,32 @@ export function NavBar() {
     <nav className="navbar">
       <span className="navbar-brand">
         <Sparkles size={16} style={{ verticalAlign: -2, marginRight: 6, color: "#22d3ee" }} />
-        EVOL Space
+        <span aria-label="EVOL Space">
+          <span aria-hidden="true">
+            EV
+            <span className="navbar-logo-o" >
+                  <GalaxyRing
+                trigger={location.pathname}
+                size={16}
+                strokeWidth={2}
+                minRadius={4.4}
+                duration={2.2}
+                glowBlur={1}
+                lineColor="#432aff"
+                finalColor="#fff"
+                className="navbar-o-ring"
+              />
+             
+            </span>
+            L Space
+          </span>
+        </span>
       </span>
       <div className="navbar-links">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={location.pathname === item.path ? "active" : ""}
-            >
+            <Link key={item.path} to={item.path} className={location.pathname === item.path ? "active" : ""}>
               <Icon size={14} style={{ verticalAlign: -2, marginRight: 5 }} />
               {item.label}
             </Link>

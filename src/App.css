@@ -94,7 +94,18 @@ html, body {
   flex-direction: column;
 }
 ::selection { background: rgba(139, 111, 245, 0.4); color: #fff; }
-
+.navbar-logo-o {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  vertical-align: -3px;
+  overflow: visible;
+}
+.navbar-o-ring {
+  display: inline-block !important;
+  cursor: default;
+}
 /* ---------------------------------------------------------------------
    Keyframes
 --------------------------------------------------------------------- */

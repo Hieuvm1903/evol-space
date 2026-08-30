@@ -223,8 +223,40 @@
   cursor: pointer; text-align: center; border-radius: 8px; word-break: break-word;
   transition: color 0.2s ease, font-size 0.2s ease, opacity 0.2s ease, background 0.15s ease, transform 0.15s ease;
 }
+.lyrics-lines { position: relative; z-index: 1; }
+
+/* Always-centered highlight box behind whatever line the translateY math
+   has pinned to the middle — frames the current line without needing to
+   track any single line's DOM rect. */
+.lyrics-active-frame {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+  border-radius: 10px;
+  border: 1px solid rgba(139, 111, 245, 0.45);
+  background: linear-gradient(90deg, rgba(139,111,245,0.10), rgba(34,211,238,0.10));
+  box-shadow: 0 0 18px -4px rgba(139,111,245,0.55), inset 0 0 0 1px rgba(255,255,255,0.04);
+  pointer-events: none;
+  z-index: 0;
+  animation: lyrics-frame-pulse 2.4s ease-in-out infinite;
+}
+@keyframes lyrics-frame-pulse {
+  0%, 100% { box-shadow: 0 0 18px -4px rgba(139,111,245,0.55), inset 0 0 0 1px rgba(255,255,255,0.04); }
+  50%      { box-shadow: 0 0 26px -2px rgba(34,211,238,0.65), inset 0 0 0 1px rgba(255,255,255,0.08); }
+}
+
+.lyrics-gradient-text { display: inline-block; }
+
+.lyrics-line-active {
+  font-weight: 700;
+  font-size: 1rem;
+  background: rgba(139, 111, 245, 0.14);
+  /* color removed — GradientText/BlurText+.lyrics-gradient-text now own the text color */
+}
 .lyrics-line:hover { color: #d8d5f0; background: #1a1830; transform: translateX(-20px); }
-.lyrics-line-active { color: #22d3ee; font-weight: 700; font-size: 1rem; background: rgba(139, 111, 245, 0.14); }
 .lyrics-line-active:hover { color: #22d3ee; background: rgba(139, 111, 245, 0.14); transform: translateX(-20px); }
 .lyrics-line::before {
   content: attr(data-time); position: absolute; right: -6px; top: 50%;
@@ -232,7 +264,22 @@
   font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 0.15s ease, transform 0.15s ease; pointer-events: none;
 }
 .lyrics-line:hover::before { opacity: 1; transform: translateY(-50%) translateX(0); }
+/* NowPlaying.css */
+.lyrics-gradient-text {
+  background: linear-gradient(90deg, #8b6ff5, #22d3ee, #8b6ff5);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: lyrics-gradient-shift 3s linear infinite;
+  display: inline-block; /* background-clip:text needs a box, and BlurText's
+                             word spans need to inherit through this wrapper */
+}
 
+@keyframes lyrics-gradient-shift {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
 .lyrics-empty {
   flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   border-radius: 10px; background: #0c0b16; border: 1px solid #2a2740; color: #9c97b8; font-size: 0.8rem;
@@ -258,18 +305,16 @@
 #mode-row { display: flex; align-items: center; justify-content: center; margin-top: 10px; }
 
 /* --- Spinning disk (play/pause backdrop) --- */
-.spin-disk-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;      /* NEW — stop the flex row from squeezing this into an oval */
-  flex-grow: 0;        /* NEW — don't let it stretch either */
-}
+
 .spin-disk-sm { width: 30px; height: 30px; }
 .spin-disk-lg { width: 48px; height: 48px; }
 
-.spin-disk {
+.spin-disk {  
+  grid-area: 1 / 1;
+  position: static;      /* was absolute; inset:0 */
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
   position: absolute; inset: 0; border-radius: 50%;
   aspect-ratio: 1 / 1;   /* NEW — guarantees a perfect circle regardless of parent squeeze */
   background-color: #1a1830; background-size: cover; background-position: center;
@@ -298,7 +343,13 @@
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5), 0 0 12px rgba(139,111,245,0.55), 0 0 20px rgba(34,211,238,0.3);
 }
 .spin-disk-playing::after { opacity: 1; }
-
+.spin-disk-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
 /* Uniform breathing glow instead of a rotating gradient */
 .spin-disk-wrap-playing::before {
   content: "";
@@ -319,7 +370,8 @@
   background: linear-gradient(135deg, #ffffff, #e6e3fb);
   color: #14121f;
   border: none;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15);
+grid-area: 1 / 1;      /* stacks in the same cell as .spin-disk */
+  box-shadow: 0 0 14px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.15); /* symmetric now */
 }
 .np-icon-btn-primary:hover:not(:disabled) {
   box-shadow: 0 4px 18px rgba(0,0,0,0.4), 0 0 0 5px rgba(139,111,245,0.28);

@@ -8,12 +8,15 @@ import React, { useEffect, useMemo, useState } from "react";
  * drop it into whatever backdrop you already have.
  */
 const GalaxyRing = ({
-   trigger="0",
+  trigger = "0",
   size = 400,
   strokeWidth = 18,
   duration = 2.8,
   minRadius = 152,
   className = "",
+  glowBlur = 8,
+  lineColor = "#111",      // NEW — color while drawing
+  finalColor = "#fff",     // NEW — color once finished
 }) => {
   const [animKey, setAnimKey] = useState(0);
 useEffect(() => {
@@ -74,8 +77,8 @@ useEffect(() => {
             <stop offset="85%" stopColor="#db2777" />
             <stop offset="100%" stopColor="#22d3ee" />
           </linearGradient>
-          <filter id={glowFilterId} x="-100%" y="-100%" width="300%" height="300%">
-            <feGaussianBlur stdDeviation="8" result="blur" />
+           <filter id={glowFilterId} x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation={glowBlur} result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="blur" />
@@ -117,11 +120,11 @@ useEffect(() => {
         />
 
         {/* crisp line — black while drawing, turns white once finished */}
-        <path
+       <path
           key={`line-${animKey}`}
           d={pathD}
           fill="none"
-          stroke="#111"
+          stroke={lineColor}
           strokeWidth={strokeWidth}
           strokeLinecap="butt"
           strokeLinejoin="miter"
@@ -134,7 +137,7 @@ useEffect(() => {
           }}
         />
 
-        <style>{`
+                <style>{`
           @keyframes gr-draw {
             to { stroke-dashoffset: 0; }
           }
@@ -150,8 +153,8 @@ useEffect(() => {
             100% { opacity: 0; transform: scale(2.4); }
           }
           @keyframes gr-line-color {
-            from { stroke: #111; }
-            to { stroke: #fff; }
+            from { stroke: ${lineColor}; }
+            to { stroke: ${finalColor}; }
           }
         `}</style>
       </svg>

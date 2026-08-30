@@ -1,8 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Search, FileText, Loader2 } from "lucide-react";
 import type { Track } from "../types";
 import type { useLyrics } from "../hooks/useLyrics";
 import { formatTime } from "../utils/time";
+import BlurText from "../../../components/BlurText";
+import GradientText from "../../../components/GradientText";
 
 interface Props {
   visible: boolean;
@@ -21,18 +23,44 @@ export default function LyricsPanel({ visible, track, lyrics, onSeek }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const linesRef = useRef<HTMLDivElement>(null);
 
+  // Which line index has finished its BlurText entrance and should now
+  // render as the sustained GradientText shimmer instead.
+  const [revealedIdx, setRevealedIdx] = useState<number | null>(null);
+
+  // Reset the reveal state whenever the active line (or the whole
+  // candidate) changes, so the new active line replays the BlurText
+  // entrance rather than snapping straight to the gradient.
+  useEffect(() => {
+    setRevealedIdx(null);
+  }, [activeLineIdx, selectedCandidate]);
+
   // Karaoke-style centering: keep the active line pinned at the
   // viewport's vertical center by translating the whole line list.
   useEffect(() => {
-    const viewport = viewportRef.current;
-    const linesEl = linesRef.current;
-    if (!viewport || !linesEl) return;
-    const idx = activeLineIdx >= 0 ? activeLineIdx : 0;
-    const activeEl = linesEl.querySelector(`[data-line-idx="${idx}"]`) as HTMLElement | null;
-    if (!activeEl) { linesEl.style.transform = "translateY(0px)"; return; }
-    const offsetY = viewport.offsetHeight / 2 - (activeEl.offsetTop + activeEl.offsetHeight / 2);
-    linesEl.style.transform = `translateY(${offsetY}px)`;
-  }, [activeLineIdx, selectedCandidate]);
+    if (!visible) return;
+
+    function recenter() {
+      const viewport = viewportRef.current;
+      const linesEl = linesRef.current;
+      if (!viewport || !linesEl) return;
+
+      // Panel was `display:none` until just now (or hasn't laid out
+      // yet) — offsetHeight would be 0 and produce a bogus transform.
+      // Retry next frame instead of baking in a wrong jump.
+      if (viewport.offsetHeight === 0) {
+        requestAnimationFrame(recenter);
+        return;
+      }
+
+      const idx = activeLineIdx >= 0 ? activeLineIdx : 0;
+      const activeEl = linesEl.querySelector(`[data-line-idx="${idx}"]`) as HTMLElement | null;
+      if (!activeEl) { linesEl.style.transform = "translateY(0px)"; return; }
+      const offsetY = viewport.offsetHeight / 2 - (activeEl.offsetTop + activeEl.offsetHeight / 2);
+      linesEl.style.transform = `translateY(${offsetY}px)`;
+    }
+
+    recenter();
+  }, [visible, activeLineIdx, selectedCandidate]);
 
   return (
     <div className="lyrics-panel" style={{ display: visible ? "flex" : "none" }}>
@@ -101,19 +129,47 @@ export default function LyricsPanel({ visible, track, lyrics, onSeek }: Props) {
 
       {selectedCandidate && selectedCandidate.lines.length > 0 && (
         <div className="lyrics-viewport" ref={viewportRef}>
+          {/* Static highlight box, always centered — frames whichever
+              line the translateY math above has pinned to the middle. */}
+          <div className="lyrics-active-frame" aria-hidden="true" />
+
           <div className="lyrics-lines" ref={linesRef}>
             {selectedCandidate.lines.map((line, i) => {
               const distance = activeLineIdx < 0 ? 0 : Math.abs(i - activeLineIdx);
+              const isActive = i === activeLineIdx;
               return (
                 <div
                   key={i}
                   data-line-idx={i}
                   data-time={formatTime(line.time)}
-                  className={`lyrics-line${i === activeLineIdx ? " lyrics-line-active" : ""}`}
+                  className={`lyrics-line${isActive ? " lyrics-line-active" : ""}`}
                   style={{ opacity: Math.max(1 - distance * 0.18, 0.28) }}
                   onClick={() => onSeek(line.time)}
                 >
-                  {line.text}
+                  {isActive ? (
+                    revealedIdx === i ? (
+                      <GradientText
+                        colors={["#8b6ff5", "#22d3ee", "#8b6ff5"]}
+                        animationSpeed={3}
+                        className="lyrics-gradient-text"
+                      >
+                        {line.text}
+                      </GradientText>
+                    ) : (
+                      <BlurText
+                        key={i}
+                        text={line.text}
+                        animateBy="words"
+                        direction="top"
+                        delay={40}
+                        stepDuration={0.35}
+                        className="lyrics-gradient-text"
+                        onAnimationComplete={() => setRevealedIdx(i)}
+                      />
+                    )
+                  ) : (
+                    line.text
+                  )}
                 </div>
               );
             })}
