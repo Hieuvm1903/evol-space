@@ -11,7 +11,7 @@ import "./MapPage.css";
 import TargetCursor from "../../components/TargetCursor";
 
 import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./constants";
-import type { MapMode, MapTool, FormState } from "./types";
+import type { MapMode, MapTool, FormState, SortOption } from "./types";
 import { emptyForm, formFromPlace } from "./formHelpers";
 import BrowseTab from "./BrowseTab";
 import PlaceFormTab from "./PlaceFormTab";
@@ -61,7 +61,7 @@ export function MapPage() {
     setLoading(false);
   }
   useEffect(() => { load(); }, [user]);
-
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
   if (!user) {
     return (
       <div className="page">
@@ -233,16 +233,44 @@ export function MapPage() {
       });
     }
     let radiusCircle: { center: [number, number]; radiusKm: number } | null = null;
-    if (distCenter.trim() && radiusKm > 0) {
+    let distOrigin: [number, number] | null = null;
+    if (distCenter.trim()) {
       const parts = distCenter.split(",").map((s) => parseFloat(s.trim()));
       if (parts.length === 2 && !parts.some(Number.isNaN)) {
-        const [clat, clon] = parts;
-        radiusCircle = { center: [clat, clon], radiusKm };
-        result = result.filter((p) => placesService.haversineKm(clat, clon, p.lat, p.lon) <= radiusKm);
+        distOrigin = [parts[0], parts[1]];
+        if (radiusKm > 0) {
+          radiusCircle = { center: distOrigin, radiusKm };
+          result = result.filter((p) => placesService.haversineKm(distOrigin![0], distOrigin![1], p.lat, p.lon) <= radiusKm);
+        }
       }
     }
-    return { result, radiusCircle };
-  }, [places, nameFilter, iconFilter, tagFilter, distCenter, radiusKm]);
+
+    const sorted = [...result];
+    switch (sortBy) {
+      case "newest":
+        sorted.sort((a, b) => b.id - a.id);
+        break;
+      case "oldest":
+        sorted.sort((a, b) => a.id - b.id);
+        break;
+      case "name-asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+        break;
+      case "name-desc":
+        sorted.sort((a, b) => b.name.localeCompare(a.name, undefined, { sensitivity: "base" }));
+        break;
+      case "distance":
+        if (distOrigin) {
+          sorted.sort((a, b) =>
+            placesService.haversineKm(distOrigin![0], distOrigin![1], a.lat, a.lon) -
+            placesService.haversineKm(distOrigin![0], distOrigin![1], b.lat, b.lon)
+          );
+        }
+        break;
+    }
+
+    return { result: sorted, radiusCircle };
+  }, [places, nameFilter, iconFilter, tagFilter, distCenter, radiusKm, sortBy]);
 
   const previewLat = parseFloat(form.lat);
   const previewLon = parseFloat(form.lon);
@@ -298,6 +326,8 @@ export function MapPage() {
               onNameFilterChange={setNameFilter}
               iconFilter={iconFilter}
               onIconFilterChange={setIconFilter}
+              sortBy={sortBy}
+              onSortByChange={setSortBy}
               distCenter={distCenter}
               onDistCenterChange={setDistCenter}
               onUseMyLocationForDistance={useMyLocationForDistanceFilter}

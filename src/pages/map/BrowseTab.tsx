@@ -1,8 +1,9 @@
 import React from "react";
 import { Button, Input, Select, Tag, Empty, Tooltip, InputNumber, Typography } from "antd";
-import { Search, LocateFixed, Pencil, Trash2, Navigation2 } from "lucide-react";
+import { Search, LocateFixed, Pencil, Trash2, Navigation2, ArrowDownAZ } from "lucide-react";
 import { PLACE_ICON_CHOICES, iconForName, splitIcon } from "../../content/placeIcons";
 import type { Place } from "../../lib/placesService";
+import type { SortOption } from "./types";
 
 const { Text } = Typography;
 
@@ -13,6 +14,8 @@ interface Props {
   onNameFilterChange: (v: string) => void;
   iconFilter: string[];
   onIconFilterChange: (v: string[]) => void;
+  sortBy: SortOption;
+  onSortByChange: (v: SortOption) => void;
   distCenter: string;
   onDistCenterChange: (v: string) => void;
   onUseMyLocationForDistance: () => void;
@@ -27,8 +30,17 @@ interface Props {
   onDelete: (id: number) => void;
 }
 
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "name-asc", label: "Name (A–Z)" },
+  { value: "name-desc", label: "Name (Z–A)" },
+  { value: "distance", label: "Nearest" },
+];
+
 export default function BrowseTab({
   loading, places, nameFilter, onNameFilterChange, iconFilter, onIconFilterChange,
+  sortBy, onSortByChange,
   distCenter, onDistCenterChange, onUseMyLocationForDistance, radiusKm, onRadiusKmChange,
   allTags, tagFilter, onTagFilterChange, selectedId, onSelectAndFly, onEdit, onDelete,
 }: Props) {
@@ -45,11 +57,12 @@ export default function BrowseTab({
           />
         </div>
 
+        {/* Icon filter + sort share a row */}
         <div className="map-filter-row">
           <Select
             mode="multiple"
             allowClear
-            style={{ width: "100%" }}
+            style={{ flex: 1, minWidth: 0 }}
             placeholder="Filter by icon"
             value={iconFilter}
             onChange={onIconFilterChange}
@@ -63,6 +76,13 @@ export default function BrowseTab({
                 </span>
               ),
             }))}
+          />
+          <Select
+            style={{ width: 132, flexShrink: 0 }}
+            value={sortBy}
+            onChange={onSortByChange}
+            suffixIcon={<ArrowDownAZ size={13} />}
+            options={SORT_OPTIONS}
           />
         </div>
 

@@ -212,48 +212,68 @@ async function fetchPlaylistVideos(url: string, limit = 200) {
 }
 
 // ---------------------------------------------------------------------------
-// action=search / action=search-playlists — replaces ytmusicapi (Python-only)
-// by scraping regular YouTube search results, same technique as the
-// playlist scraper above rather than reverse-engineering YouTube Music's
-// internal API. Slightly less tailored than ytmusicapi's "songs" filter,
-// but consistent with the rest of this file's no-API-key approach.
+// action=search / action=search-playlists — via YouTube's InnerTube JSON
+// API instead of scraping the HTML search page. The old approach pulled
+// `ytInitialData` out of raw HTML with a hand-rolled brace-matcher, which
+// broke whenever YouTube changed markup or served a consent/bot-check page
+// instead of real results (this is why playlist search stopped working).
+// InnerTube is the same JSON API youtube.com's own frontend calls, so it
+// returns the renderer tree directly — no HTML/regex involved.
 // ---------------------------------------------------------------------------
 
-async function fetchSearchPage(query: string, sp?: string): Promise<any | null> {
-  const params = new URLSearchParams({ search_query: query });
-  if (sp) params.set("sp", sp);
-  const targetUrl = `https://www.youtube.com/results?${params.toString()}`;
-  try {
-    const resp = await fetch(targetUrl, {
-      headers: {
-        "User-Agent": UA,
-        "Accept-Language": "en-US,en;q=0.9",
-        Cookie: "CONSENT=YES+1",
+// Public, unauthenticated "WEB" client key baked into youtube.com's own
+// frontend bundle (the same one yt-dlp ships with). No Google Cloud
+// project or API key of your own needed.
+const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+const INNERTUBE_CLIENT_VERSION = "2.20240701.01.00";
+
+async function innertubeSearch(query: string, params?: string): Promise<any | null> {
+  const body: Record<string, unknown> = {
+    context: {
+      client: {
+        clientName: "WEB",
+        clientVersion: INNERTUBE_CLIENT_VERSION,
+        hl: "en",
+        gl: "US",
       },
-      signal: AbortSignal.timeout(10000),
-    });
-    const html = await resp.text();
-    console.log(`fetchSearchPage: status=${resp.status} html_length=${html.length} url=${targetUrl}`);
-    const data = parseYtInitialData(html);
-    console.log(`fetchSearchPage: ytInitialData ${data ? "FOUND" : "NOT FOUND"}`);
-    if (!data) {
-      // Log a small sample so we can see what YouTube actually sent back
-      // (e.g. a consent/captcha page instead of real results).
-      console.log(`fetchSearchPage: html sample: ${html.slice(0, 300)}`);
-    }
-    return data;
+    },
+    query,
+  };
+  if (params) body.params = params;
+
+  try {
+    const resp = await fetch(
+      `https://www.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": UA,
+          "Accept-Language": "en-US,en;q=0.9",
+          "X-Youtube-Client-Name": "1",
+          "X-Youtube-Client-Version": INNERTUBE_CLIENT_VERSION,
+          Origin: "https://www.youtube.com",
+          Cookie: "CONSENT=YES+1",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    console.log(`innertubeSearch: status=${resp.status} query=${query} params=${params ?? ""}`);
+    if (!resp.ok) return null;
+    return await resp.json();
   } catch (e) {
-    console.log(`fetchSearchPage: FETCH ERROR: ${e}`);
+    console.log(`innertubeSearch: FETCH ERROR: ${e}`);
     return null;
   }
 }
 
 async function searchSongs(query: string, limit = 8) {
-  const data = await fetchSearchPage(query.trim());
+  const data = await innertubeSearch(query.trim());
   if (!data) return [];
 
   const renderers: any[] = [];
-  walkForRenderers(data, ["videoRenderer"], renderers, limit * 3); // over-fetch, filter below
+  walkForRenderers(data, ["videoRenderer"], renderers, limit * 3);
   console.log(`searchSongs: found ${renderers.length} videoRenderer nodes`);
 
   const results = [];
@@ -269,34 +289,63 @@ async function searchSongs(query: string, limit = 8) {
       duration: r.lengthText?.simpleText ?? "",
     });
   }
-  console.log(`searchSongs: returning ${results.length} results`);
   return results;
 }
 
+function lockupThumbnail(lockup: any): string {
+  const sources =
+    lockup?.contentImage?.collectionThumbnailViewModel?.primaryThumbnail
+      ?.thumbnailViewModel?.image?.sources ?? [];
+  return sources.length ? sources[sources.length - 1].url : "";
+}
+
+function lockupMetadataRows(lockup: any): string[] {
+  const rows =
+    lockup?.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel
+      ?.metadataRows ?? [];
+  return rows.map((row: any) =>
+    (row.metadataParts ?? []).map((p: any) => p?.text?.content ?? "").filter(Boolean).join(" "),
+  );
+}
+
 async function searchPlaylists(query: string, limit = 8) {
-  // sp=EgIQAw%3D%3D is YouTube's "Filter: Playlist" search param.
-  const data = await fetchSearchPage(query.trim(), "EgIQAw%3D%3D");
+  const data = await innertubeSearch(query.trim(), "EgIQAw==");
   if (!data) return [];
 
-  const renderers: any[] = [];
-  walkForRenderers(data, ["playlistRenderer"], renderers, limit * 2);
+  const lockups: any[] = [];
+  walkForRenderers(data, ["lockupViewModel"], lockups, limit * 4);
+  console.log(`searchPlaylists: found ${lockups.length} lockupViewModel nodes`);
 
   const results = [];
-  for (const r of renderers) {
+  for (const lockup of lockups) {
     if (results.length >= limit) break;
-    const playlistId = r.playlistId;
+    if (lockup.contentType && lockup.contentType !== "LOCKUP_CONTENT_TYPE_PLAYLIST") continue;
+
+    const playlistId = lockup.contentId;
     if (!playlistId) continue;
+
+    const title = lockup?.metadata?.lockupMetadataViewModel?.title?.content;
+    if (!title) {
+      // Shape drifted again — log a sample instead of silently skipping.
+      console.log(`searchPlaylists: lockup missing title, sample: ${JSON.stringify(lockup).slice(0, 400)}`);
+      continue;
+    }
+
+    const rows = lockupMetadataRows(lockup);
+    // Row 0 is typically the channel/author, row 1 is typically "N videos".
+    const author = rows[0] ?? "";
+    const itemCountRow = rows.find((r) => /video/i.test(r)) ?? rows[1] ?? "";
+
     results.push({
       playlist_id: playlistId,
-      title: runText(r.title) || "Untitled playlist",
-      author: runText(r.shortBylineText) || "",
-      item_count: r.videoCount ?? "",
-      thumbnail_url: firstThumbnail(r.thumbnail),
+      title,
+      author,
+      item_count: itemCountRow,
+      thumbnail_url: lockupThumbnail(lockup),
     });
   }
   return results;
 }
-
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------

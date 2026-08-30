@@ -29,8 +29,8 @@ export default function AddTrackPanel({ playlistId, addedBy, otherPlaylists, onA
       </div>
       <div className="fade-in" key={tab}>
         {tab === "search" && <AddBySearch playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
-        {tab === "link" && <AddByLink playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
         {tab === "playlist" && <AddByPlaylistImport playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
+        {tab === "link" && <AddByLink playlistId={playlistId} addedBy={addedBy} onAdded={onAdded} />}
         {tab === "copy" && <AddByCopyPlaylist targetPlaylistId={playlistId} otherPlaylists={otherPlaylists} onAdded={onAdded} />}
       </div>
     </div>

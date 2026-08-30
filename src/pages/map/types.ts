@@ -11,3 +11,4 @@ export interface FormState {
   color: string;
   tags: string;
 }
+export type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "distance";

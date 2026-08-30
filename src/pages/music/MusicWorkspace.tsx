@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Empty, message } from "antd";
 import { Sparkles } from "lucide-react";
 import { usePlayer } from "../../features/player/PlayerProvider";
@@ -33,13 +33,7 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
   }
   useEffect(() => { loadPlaylists(); /* eslint-disable-next-line */ }, [userId]);
 
-  async function loadTracks() {
-    if (selectedPlaylistId === null) { setTracks([]); return; }
-    setLoadingTracks(true);
-    const rows = await musicService.getPlaylistTracks(selectedPlaylistId);
-    setTracks(rows);
-    setLoadingTracks(false);
-  }
+  
   useEffect(() => {
     loadTracks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,14 +77,30 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
     player.loadQueue(tracks.slice(idx), "Normal", selectedPlaylistId);
   }
 
-  async function handleRemoveTrack(trackId: number) {
-    if (!selectedPlaylistId) return;
+async function handleRemoveTrack(trackId: number) {
+  if (!selectedPlaylistId) return;
+  const prevTracks = tracks;
+  setTracks((cur) => cur.filter((t) => t.id !== trackId)); // optimistic — no loading flicker
+  try {
     await musicService.removeTrackFromPlaylist(selectedPlaylistId, trackId);
-    loadTracks();
+  } catch {
+    setTracks(prevTracks); // revert on failure
+    message.warning("Couldn't remove that track — try again.");
   }
+}
 
   const isThisPlaylistPlaying = selectedPlaylistId !== null && player.playingPlaylistId === selectedPlaylistId;
+const tracksFetchIdRef = useRef(0);
 
+async function loadTracks() {
+  if (selectedPlaylistId === null) { setTracks([]); return; }
+  const fetchId = ++tracksFetchIdRef.current;
+  setLoadingTracks(true);
+  const rows = await musicService.getPlaylistTracks(selectedPlaylistId);
+  if (fetchId !== tracksFetchIdRef.current) return; // a newer call already superseded this one
+  setTracks(rows);
+  setLoadingTracks(false);
+}
   return (
     <div className="page music-page-shell">
       <div className="music-shell-header fade-in-up">

@@ -1,13 +1,23 @@
-import React, { useMemo, useState } from "react";
-import { Input, Button, Popconfirm, Empty, Skeleton, Tooltip, message } from "antd";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Input, Button, Popconfirm, Empty, Skeleton, Tooltip, Dropdown, message } from "antd";
 import {
   Plus, Search, Play, Shuffle, Repeat, Trash2, Check,
-  Download, FileJson, FileText, ArrowDownAZ,
+  Download, FileJson, FileText, ArrowUpDown,
 } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import SpotlightCard from "../../components/SpotlightCard";
 import TrackRow from "./TrackRow";
 import AddTrackPanel from "./AddTrackPanel";
+
+type SortMode = "default" | "name-asc" | "name-desc" | "artist-asc" | "artist-desc";
+
+const SORT_OPTIONS: { key: SortMode; label: string }[] = [
+  { key: "default", label: "Playlist order" },
+  { key: "name-asc", label: "Name A–Z" },
+  { key: "name-desc", label: "Name Z–A" },
+  { key: "artist-asc", label: "Artist A–Z" },
+  { key: "artist-desc", label: "Artist Z–A" },
+];
 
 export default function PlaylistPane({
   userId, playlist, playlists, tracks, loadingTracks,
@@ -31,7 +41,7 @@ export default function PlaylistPane({
 }) {
   const [renameValue, setRenameValue] = useState(playlist.name);
   const [trackSearch, setTrackSearch] = useState("");
-  const [sortByName, setSortByName] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>("default");
   const [expandedTrackId, setExpandedTrackId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -64,10 +74,33 @@ export default function PlaylistPane({
     const base = q
       ? tracks.filter((t) => t.title.toLowerCase().includes(q) || (t.artist ?? "").toLowerCase().includes(q))
       : tracks;
-    if (!sortByName) return base;
-    return [...base].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
-  }, [tracks, trackSearch, sortByName]);
+    switch (sortMode) {
+      case "name-asc":
+        return [...base].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+      case "name-desc":
+        return [...base].sort((a, b) => b.title.localeCompare(a.title, undefined, { sensitivity: "base" }));
+      case "artist-asc":
+        return [...base].sort((a, b) => (a.artist ?? "").localeCompare(b.artist ?? "", undefined, { sensitivity: "base" }));
+      case "artist-desc":
+        return [...base].sort((a, b) => (b.artist ?? "").localeCompare(a.artist ?? "", undefined, { sensitivity: "base" }));
+      default:
+        return base;
+    }
+  }, [tracks, trackSearch, sortMode]);
+  const addPanelWrapRef = useRef<HTMLDivElement>(null);
+  const addToggleRef = useRef<HTMLButtonElement>(null);
 
+  useEffect(() => {
+    if (!showAdd) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      if (addPanelWrapRef.current?.contains(target)) return;
+      if (addToggleRef.current?.contains(target)) return;
+      setShowAdd(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAdd]);
   return (
     <div className="playlist-pane-body fade-in-up">
       <div className="playlist-header-row">
@@ -97,7 +130,6 @@ export default function PlaylistPane({
             </button>
           </Tooltip>
         </div>
-        {/* {isPlaying && <span className="transport-live-badge"><RadioTower size={11} /> Live</span>} */}
         <Input className="playlist-name-input" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onPressEnter={saveRename} />
         <Tooltip title="Save name">
           <Button className="btn-glow" icon={<Check size={14} />} onClick={saveRename} />
@@ -105,10 +137,7 @@ export default function PlaylistPane({
         <Popconfirm title="Delete this playlist?" description="This can't be undone." okText="Delete" cancelText="Cancel" okButtonProps={{ danger: true }} onConfirm={onDeleted}>
           <Button danger icon={<Trash2 size={14} />} />
         </Popconfirm>
-
       </div>
-
-
 
       <div className="playlist-toolbar-row">
         <Input
@@ -119,15 +148,28 @@ export default function PlaylistPane({
           prefix={<Search size={14} color="var(--evol-muted)" />}
           allowClear
         />
-        <Tooltip title={sortByName ? "Sorted A–Z (tap for playlist order)" : "Sort by name"}>
-          <Button
-            className={`glow-icon-btn${sortByName ? " glow-icon-btn-active" : ""}`}
-            icon={<ArrowDownAZ size={15} />}
-            onClick={() => setSortByName((v) => !v)}
-          />
-        </Tooltip>
+        <Dropdown
+          trigger={["click"]}
+          menu={{
+            items: SORT_OPTIONS.map((opt) => ({
+              key: opt.key,
+              label: opt.label,
+              icon: sortMode === opt.key ? <Check size={13} /> : undefined,
+            })),
+            selectedKeys: [sortMode],
+            onClick: ({ key }) => setSortMode(key as SortMode),
+          }}
+        >
+          <Tooltip title="Sort">
+            <Button
+              className={`glow-icon-btn${sortMode !== "default" ? " glow-icon-btn-active" : ""}`}
+              icon={<ArrowUpDown size={15} />}
+            />
+          </Tooltip>
+        </Dropdown>
         <Tooltip title="Add tracks">
           <Button
+            ref={addToggleRef}
             className={`glow-icon-btn${showAdd ? " glow-icon-btn-active" : ""}`}
             icon={<Plus size={15} />}
             onClick={() => { setShowAdd((v) => !v); setShowExport(false); }}
@@ -143,9 +185,11 @@ export default function PlaylistPane({
       </div>
 
       {showAdd && (
-        <SpotlightCard className="evol-glass-card music-inline-panel fade-in-up">
-          <AddTrackPanel playlistId={playlist.id} addedBy={userId} otherPlaylists={otherPlaylists} onAdded={onTracksChanged} />
-        </SpotlightCard>
+        <div ref={addPanelWrapRef}>
+          <SpotlightCard className="evol-glass-card music-inline-panel fade-in-up">
+            <AddTrackPanel playlistId={playlist.id} addedBy={userId} otherPlaylists={otherPlaylists} onAdded={onTracksChanged} />
+          </SpotlightCard>
+        </div>
       )}
 
       {showExport && (

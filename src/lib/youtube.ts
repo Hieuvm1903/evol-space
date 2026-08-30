@@ -77,12 +77,12 @@ export async function fetchPlaylistVideos(url: string): Promise<PlaylistVideo[]>
   return callProxy<PlaylistVideo[]>({ action: "playlist", url });
 }
 
-export async function searchSongs(query: string): Promise<SearchSongResult[]> {
+export async function searchSongs(query: string, limit = 8): Promise<SearchSongResult[]> {
   if (!query.trim()) return [];
-  return callProxy<SearchSongResult[]>({ action: "search", query });
+  return callProxy<SearchSongResult[]>({ action: "search", query, limit });
 }
 
-export async function searchPlaylists(query: string): Promise<SearchPlaylistResult[]> {
+export async function searchPlaylists(query: string, limit = 8): Promise<SearchPlaylistResult[]> {
   if (!query.trim()) return [];
-  return callProxy<SearchPlaylistResult[]>({ action: "search-playlists", query });
+  return callProxy<SearchPlaylistResult[]>({ action: "search-playlists", query, limit });
 }

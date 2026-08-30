@@ -15,7 +15,10 @@
 .map-page-sub { color: var(--evol-muted); font-size: 0.82rem; margin: 2px 0 14px; }
 
 .map-layout { display: flex; gap: 18px; flex: 1; min-height: 0; }
-
+@media (max-width: 400px) {
+  .map-search-row { flex-wrap: wrap; }
+  .map-search-row .ant-select { width: 100% !important; }
+}
 /* ---- Left rail ---- */
 .map-sidebar {
   width: 360px;

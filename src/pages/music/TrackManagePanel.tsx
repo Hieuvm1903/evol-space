@@ -8,7 +8,7 @@ export default function TrackManagePanel({ playlistId, track, onChanged }: {
   track: musicService.PlaylistTrack;
   onChanged: () => void;
 }) {
-  const [customTitle, setCustomTitle] = useState(track.title !== track.original_title ? track.title : "");
+  const [customTitle, setCustomTitle] = useState(track.title !== track.original_title ? track.title : track.original_title);
   const [artist, setArtist] = useState(track.artist ?? "");
   const [lyricsUrl, setLyricsUrl] = useState(track.lyrics_url ?? "");
   const isRenamed = track.title !== track.original_title;
@@ -34,14 +34,14 @@ export default function TrackManagePanel({ playlistId, track, onChanged }: {
       <div className="track-manage-field">
         <label><Pencil size={11} /> Rename in this playlist</label>
         <div className="track-manage-row">
-          <Input size="small" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} placeholder={track.original_title} />
+          <Input allowClear = {true} size="small" value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} placeholder={track.original_title} />
           <Button size="small" className="btn-glow" onClick={saveRename}>Save</Button>
           {isRenamed && <Button size="small" onClick={resetRename}>Reset</Button>}
         </div>
       </div>
       <div className="track-manage-field">
         <label><Music2 size={11} /> Artist</label>
-        <Input size="small" value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" />
+        <Input allowClear = {true} size="small" value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" />
       </div>
       <div className="track-manage-field">
         <label><Link2 size={11} /> Lyrics URL</label>

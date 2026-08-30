@@ -67,17 +67,18 @@ async function nextPosition(playlistId: number): Promise<number> {
   return data && data.length ? data[0].position + 1 : 0;
 }
 
-export async function addTrackToPlaylist(playlistId: number, trackId: number): Promise<void> {
+export async function addTrackToPlaylist(playlistId: number, trackId: number): Promise<boolean> {
   const { data: existing } = await supabase
     .from("playlist_tracks").select("id")
     .eq("playlist_id", playlistId).eq("track_id", trackId);
-  if (existing && existing.length) return;
+  if (existing && existing.length) return false;
 
   const position = await nextPosition(playlistId);
   const { error } = await supabase.from("playlist_tracks").insert({
     playlist_id: playlistId, track_id: trackId, position,
   });
   if (error) throw error;
+  return true;
 }
 
 export async function removeTrackFromPlaylist(playlistId: number, trackId: number): Promise<void> {
@@ -117,7 +118,7 @@ export async function addTrackAndAttach(
   url: string,
   addedBy: string,
   known?: { title?: string; thumbnail_url?: string; artist?: string },
-): Promise<{ ok: boolean; message: string; trackId?: number }> {
+): Promise<{ ok: boolean; message: string; trackId?: number; wasAdded?: boolean }> {
   const normalized = normalizeUrl(url);
   if (!normalized) return { ok: false, message: "That doesn't look like a valid YouTube link." };
   const videoId = extractVideoId(normalized)!;
@@ -150,16 +151,24 @@ export async function addTrackAndAttach(
     trackId = inserted.id;
   }
 
-  await addTrackToPlaylist(playlistId, trackId);
-  return { ok: true, message: `Added "${title}" to the playlist.`, trackId };
+  const wasAdded = await addTrackToPlaylist(playlistId, trackId);
+  return { ok: true, message: `Added "${title}" to the playlist.`, trackId, wasAdded };
 }
 
 // ---------------------------------------------------------------------------
 // Bulk import from a public YouTube playlist link
 // ---------------------------------------------------------------------------
 
+export interface ImportProgressItem {
+  title: string;
+  thumbnail_url?: string;
+  ok: boolean;
+  wasAdded: boolean;
+}
+
 export async function addPlaylistFromYoutube(
   playlistId: number, url: string, addedBy: string,
+  onProgress?: (done: number, total: number, item: ImportProgressItem) => void,
 ): Promise<{ ok: boolean; message: string; added: number }> {
   const videos = await fetchPlaylistVideos(url);
   if (!videos.length) {
@@ -176,51 +185,33 @@ export async function addPlaylistFromYoutube(
     return true;
   });
 
-  const { data: existingTracks } = await supabase
-    .from("tracks").select("id, video_id").in("video_id", unique.map((v) => v.video_id));
-  const existingByVideoId = new Map<string, number>((existingTracks ?? []).map((t: any) => [t.video_id, t.id]));
-
-  const newRows = [];
-  for (const v of unique) {
-    if (existingByVideoId.has(v.video_id)) continue;
-    let title = v.title;
-    let thumbnail = v.thumbnail_url;
-    if (!title) {
-      const meta = await fetchMetadata(`https://www.youtube.com/watch?v=${v.video_id}`);
-      title = meta.title || "Untitled track";
-      thumbnail = thumbnail || meta.thumbnail_url || "";
-    }
-    newRows.push({
-      title, artist: "", video_id: v.video_id,
-      youtube_url: `https://www.youtube.com/watch?v=${v.video_id}`,
-      thumbnail_url: thumbnail, added_by: addedBy,
-    });
-  }
-
-  if (newRows.length) {
-    const { data: inserted, error } = await supabase.from("tracks").insert(newRows).select("id, video_id");
-    if (error) throw error;
-    for (const r of inserted) existingByVideoId.set(r.video_id, r.id);
-  }
-
-  const { data: already } = await supabase
-    .from("playlist_tracks").select("track_id").eq("playlist_id", playlistId);
-  const alreadyAttached = new Set<number>((already ?? []).map((r: any) => r.track_id));
-  let nextPos = await nextPosition(playlistId);
-
-  const linkRows = [];
   let added = 0;
-  for (const v of unique) {
-    const trackId = existingByVideoId.get(v.video_id);
-    if (trackId === undefined || alreadyAttached.has(trackId)) continue;
-    alreadyAttached.add(trackId);
-    linkRows.push({ playlist_id: playlistId, track_id: trackId, position: nextPos });
-    nextPos++;
-    added++;
-  }
-  if (linkRows.length) {
-    const { error } = await supabase.from("playlist_tracks").insert(linkRows);
-    if (error) throw error;
+  // Sequential, not batched — slower for huge playlists, but each track
+  // lands in the playlist (and can be reported to the UI) one at a time,
+  // instead of the old all-or-nothing batch insert that only surfaced a
+  // single count at the very end with no incremental feedback.
+  for (let i = 0; i < unique.length; i++) {
+    const v = unique[i];
+    const videoUrl = `https://www.youtube.com/watch?v=${v.video_id}`;
+    let ok = false;
+    let wasAdded = false;
+    try {
+      const result = await addTrackAndAttach(
+        playlistId, videoUrl, addedBy,
+        v.title ? { title: v.title, thumbnail_url: v.thumbnail_url } : undefined,
+      );
+      ok = result.ok;
+      wasAdded = result.wasAdded ?? false;
+      if (wasAdded) added++;
+    } catch {
+      ok = false;
+    }
+    onProgress?.(i + 1, unique.length, {
+      title: v.title || "Untitled track",
+      thumbnail_url: v.thumbnail_url,
+      ok,
+      wasAdded,
+    });
   }
 
   if (added === 0) {

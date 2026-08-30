@@ -1,11 +1,14 @@
 import React, { useState } from "react";
-import { Button, Input, Skeleton, message } from "antd";
+import { Button, Input, InputNumber, Skeleton, Tooltip, message } from "antd";
 import { Search, Music2, Plus } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import { searchSongs, SearchSongResult } from "../../lib/youtube";
 
+const MAX_RESULTS_CAP = 30;
+
 export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlistId: number; addedBy: string; onAdded: () => void }) {
   const [query, setQuery] = useState("");
+  const [maxResults, setMaxResults] = useState(8);
   const [results, setResults] = useState<SearchSongResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
@@ -13,7 +16,7 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
   async function handleSearch() {
     if (!query.trim()) return;
     setSearching(true);
-    setResults(await searchSongs(query.trim()));
+    setResults(await searchSongs(query.trim(), maxResults));
     setSearching(false);
   }
 
@@ -38,6 +41,9 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
           onPressEnter={handleSearch}
           prefix={<Search size={13} color="var(--evol-muted)" />}
         />
+        <Tooltip title="Max results">
+          <InputNumber size="middle" min={1} max={MAX_RESULTS_CAP} value={maxResults} onChange={(v) => setMaxResults(v ?? 8)} style={{ width: 64 }} />
+        </Tooltip>
         <Button className="btn-glow" loading={searching} disabled={!query.trim()} onClick={handleSearch}>Search</Button>
       </div>
       <div className="search-result-list">

@@ -1,21 +1,28 @@
-import React, { useState } from "react";
-import { Button, Input, Skeleton, Empty, message } from "antd";
+import React, { useEffect, useRef, useState } from "react";
+import { Button, Input, InputNumber, Skeleton, Empty, message, Tooltip } from "antd";
 import { Search, ListMusic, Plus } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import { searchPlaylists, SearchPlaylistResult } from "../../lib/youtube";
+import { openImportNotification } from "./useImportNotification";
+
+const MAX_RESULTS_CAP = 30;
 
 export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { playlistId: number; addedBy: string; onAdded: () => void }) {
   const [query, setQuery] = useState("");
+  const [maxResults, setMaxResults] = useState(8);
   const [results, setResults] = useState<SearchPlaylistResult[]>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [searchMsg, setSearchMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
   async function handleSearch() {
     if (!query.trim()) return;
     setSearching(true);
-    const r = await searchPlaylists(query.trim());
+    const r = await searchPlaylists(query.trim(), maxResults);
     setResults(r);
     setSearched(true);
     setSearching(false);
@@ -24,17 +31,21 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
   async function handleAddFromSearch(pr: SearchPlaylistResult) {
     setAddingId(pr.playlist_id);
     setSearchMsg(null);
-    const result = await musicService.addPlaylistFromYoutube(playlistId, `https://www.youtube.com/playlist?list=${pr.playlist_id}`, addedBy);
-    setAddingId(null);
-    setSearchMsg({ text: result.message, ok: result.ok });
-    if (result.ok) { message.success(result.message); onAdded(); }
+    const notice = openImportNotification(`"${pr.title}"`);
+    const result = await musicService.addPlaylistFromYoutube(
+      playlistId, `https://www.youtube.com/playlist?list=${pr.playlist_id}`, addedBy,
+      (done, total, item) => {
+        notice.tick(done, total, item);
+        if (item.wasAdded) onAdded(); // each added track appears in the list right away
+      },
+    );
+    notice.finish(result.message);
+    if (mountedRef.current) { setAddingId(null); setSearchMsg({ text: result.message, ok: result.ok }); }
+    if (result.ok) message.success(result.message);
   }
 
   return (
     <div>
-      {/* Pasting a playlist link directly now lives in the "Paste link" tab,
-          which auto-detects whether the link is a single video or a
-          playlist — no need for a separate link box here. */}
       <p className="evol-card-meta">Search for a playlist to add every track at once.</p>
 
       <div className="detail-row">
@@ -45,6 +56,9 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
           onPressEnter={handleSearch}
           prefix={<Search size={13} color="var(--evol-muted)" />}
         />
+        <Tooltip title="Max results">
+          <InputNumber size="middle" min={1} max={MAX_RESULTS_CAP} value={maxResults} onChange={(v) => setMaxResults(v ?? 8)} style={{ width: 64 }} />
+        </Tooltip>
         <Button className="btn-glow" loading={searching} disabled={!query.trim()} onClick={handleSearch}>Search</Button>
       </div>
 
