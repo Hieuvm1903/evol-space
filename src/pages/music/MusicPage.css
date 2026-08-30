@@ -2,9 +2,15 @@
    Music page — galaxy-themed workspace: album picker (left) + playlist (right)
 --------------------------------------------------------------------- */
 
-.music-page-shell { max-width: 1180px !important; }
+.music-page-shell {
+  max-width: 1180px !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
 
-.music-shell-header { margin-bottom: 4px; }
+.music-shell-header { margin-bottom: 4px; flex-shrink: 0; }
 .music-title {
   display: flex; align-items: center; gap: 10px; margin: 0 0 2px;
   background: linear-gradient(90deg, var(--evol-green), var(--evol-green-light) 45%, var(--evol-accent-pink));
@@ -45,7 +51,9 @@
   display: grid;
   grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 @media (max-width: 780px) {
   .music-workspace { grid-template-columns: 1fr; }
@@ -61,7 +69,17 @@
 }
 
 /* --- Album picker (left) --- */
-.album-picker-pane { padding: 16px 14px 18px; }
+.album-picker-pane {
+  padding: 16px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.album-picker-fixed { flex-shrink: 0; }
+
 .album-picker-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .album-picker-title { display: flex; align-items: center; gap: 7px; font-size: 0.85rem; margin: 0; color: var(--evol-text); }
 .album-picker-actions { display: flex; gap: 6px; }
@@ -69,8 +87,48 @@
 .album-search-input { margin-bottom: 12px; }
 .album-search-input.ant-input-affix-wrapper { background: var(--evol-bg) !important; border: 1px solid var(--evol-border) !important; }
 
+.album-list {
+  border-top: 1px solid var(--evol-border);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: #8b6ff5 transparent;
+}
+.album-list::-webkit-scrollbar { width: 6px; }
+.album-list::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #8b6ff5, #22d3ee); border-radius: 4px; }
+
+.album-list .ant-list-item {
+  padding: 9px 8px !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 10px;
+  border-bottom: none !important;
+  transition: background 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.album-list .ant-list-item:hover { background: rgba(255, 255, 255, 0.04); transform: translateX(2px); }
+.album-list-item-active {
+  background: rgba(139, 111, 245, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(139, 111, 245, 0.5);
+}
+.album-list-item-icon { color: var(--evol-green-light); flex-shrink: 0; }
+.album-list-item-name {
+  font-size: 0.86rem;
+  color: var(--evol-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+.album-list-item-active .album-list-item-name { color: #fff; font-weight: 600; }
+
 /* --- Playlist pane (right) --- */
-.music-pane-right { padding: 4px; }
+.music-pane-right { padding: 4px; min-height: 0; min-width: 0; overflow-y: auto; }
 .playlist-pane-body { padding: 18px 20px 20px; }
 
 .playlist-header-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
@@ -225,28 +283,3 @@
 }
 .transport-row-inline { margin: 0; flex-shrink: 0; }
 .copy-select { flex: 1; }
-.album-list { border-top: 1px solid var(--evol-border); }
-.album-list .ant-list-item {
-  padding: 9px 8px !important;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 10px;
-  border-bottom: none !important;
-  transition: background 0.15s var(--ease), transform 0.15s var(--ease);
-}
-.album-list .ant-list-item:hover { background: rgba(255, 255, 255, 0.04); transform: translateX(2px); }
-.album-list-item-active {
-  background: rgba(139, 111, 245, 0.16) !important;
-  box-shadow: inset 0 0 0 1px rgba(139, 111, 245, 0.5);
-}
-.album-list-item-icon { color: var(--evol-green-light); flex-shrink: 0; }
-.album-list-item-name {
-  font-size: 0.86rem;
-  color: var(--evol-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.album-list-item-active .album-list-item-name { color: #fff; font-weight: 600; }

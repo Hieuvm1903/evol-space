@@ -34,63 +34,65 @@ export default function AlbumPickerPane({
 
   return (
     <div className="music-pane music-pane-left album-picker-pane">
-      <div className="album-picker-header">
-        <h3 className="album-picker-title"><ListMusic size={15} /> Albums</h3>
-        <div className="album-picker-actions">
-          <Tooltip title="New playlist">
-            <Button
-              className="glow-icon-btn" size="small" icon={<Plus size={14} />}
-              onClick={() => { setShowNewPlaylist((v) => !v); setShowImport(false); }}
-            />
-          </Tooltip>
-          <Tooltip title="Import playlist">
-            <Button
-              className="glow-icon-btn" size="small" icon={<Upload size={14} />}
-              onClick={() => { setShowImport((v) => !v); setShowNewPlaylist(false); }}
-            />
-          </Tooltip>
+      <div className="album-picker-fixed">
+        <div className="album-picker-header">
+          <h3 className="album-picker-title"><ListMusic size={15} /> Albums</h3>
+          <div className="album-picker-actions">
+            <Tooltip title="New playlist">
+              <Button
+                className="glow-icon-btn" size="small" icon={<Plus size={14} />}
+                onClick={() => { setShowNewPlaylist((v) => !v); setShowImport(false); }}
+              />
+            </Tooltip>
+            <Tooltip title="Import playlist">
+              <Button
+                className="glow-icon-btn" size="small" icon={<Upload size={14} />}
+                onClick={() => { setShowImport((v) => !v); setShowNewPlaylist(false); }}
+              />
+            </Tooltip>
+          </div>
         </div>
+
+        {playlists.length > 0 && (
+          <Input
+            className="album-search-input"
+            size="small"
+            value={albumSearch}
+            onChange={(e) => setAlbumSearch(e.target.value)}
+            placeholder="Search albums..."
+            prefix={<Search size={13} color="var(--evol-muted)" />}
+            allowClear
+          />
+        )}
+
+        {showNewPlaylist && (
+          <SpotlightCard className="evol-glass-card music-inline-form fade-in-up">
+            <Input
+              size="small"
+              value={newPlaylistName}
+              onChange={(e) => setNewPlaylistName(e.target.value)}
+              placeholder="New playlist name"
+              onPressEnter={onCreate}
+              autoFocus
+            />
+            <Button size="small" type="primary" className="btn-glow" loading={creating} disabled={!newPlaylistName.trim()} onClick={onCreate}>
+              Create
+            </Button>
+          </SpotlightCard>
+        )}
+
+        {showImport && <ImportPanel userId={userId} onImported={onImported} />}
       </div>
 
-      {playlists.length > 0 && (
-        <Input
-          className="album-search-input"
-          size="small"
-          value={albumSearch}
-          onChange={(e) => setAlbumSearch(e.target.value)}
-          placeholder="Search albums..."
-          prefix={<Search size={13} color="var(--evol-muted)" />}
-          allowClear
-        />
-      )}
-
-      {showNewPlaylist && (
-        <SpotlightCard className="evol-glass-card music-inline-form fade-in-up">
-          <Input
-            size="small"
-            value={newPlaylistName}
-            onChange={(e) => setNewPlaylistName(e.target.value)}
-            placeholder="New playlist name"
-            onPressEnter={onCreate}
-            autoFocus
-          />
-          <Button size="small" type="primary" className="btn-glow" loading={creating} disabled={!newPlaylistName.trim()} onClick={onCreate}>
-            Create
-          </Button>
-        </SpotlightCard>
-      )}
-
-      {showImport && <ImportPanel userId={userId} onImported={onImported} />}
-
       {loadingPlaylists ? (
-        <Skeleton active paragraph={{ rows: 3 }} className="fade-in" />
+        <Skeleton active paragraph={{ rows: 3 }} className="fade-in" style={{ padding: "0 4px" }} />
       ) : playlists.length === 0 ? (
         <Empty className="fade-in" description="No playlists yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <List
           className="album-list"
           size="small"
-          dataSource={playlists}
+          dataSource={filteredPlaylists}
           renderItem={(p) => (
             <List.Item
               key={p.id}

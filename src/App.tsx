@@ -47,6 +47,8 @@ export default function App() {
          
             <GalaxyBackground />
             <NavBar />
+            <main className="app-content">
+
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
@@ -57,8 +59,9 @@ export default function App() {
                <Route path="/map" element={<MapPage />} />
                <Route path="/blank" element={<BlankPage />} />
             <Route path="/photobooth" element={<PhotoboothPage />} />
-
             </Routes>
+                        </main>
+
           </BrowserRouter>
         </PlayerProvider>
       </AuthProvider>

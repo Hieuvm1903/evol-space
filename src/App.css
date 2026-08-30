@@ -75,7 +75,24 @@ body {
   color: var(--evol-text);
   font-family: "Be Vietnam Pro", sans-serif;
 }
+html, body {
+  height: 100%;
+}
 
+#root {
+  height: 100vh;       /* was min-height — must be a hard cap, not a floor */
+  overflow: hidden;     /* stop growth from ever reaching <body> */
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;     /* normal pages (History, Music, etc.) scroll HERE now, not <body> */
+  display: flex;
+  flex-direction: column;
+}
 ::selection { background: rgba(139, 111, 245, 0.4); color: #fff; }
 
 /* ---------------------------------------------------------------------
@@ -196,8 +213,19 @@ body {
   animation: evol-fade-in 0.4s var(--ease) both;
 }
 
-.page { max-width: 720px; margin: 0 auto; padding: 32px 20px; animation: evol-fade-in-up 0.45s var(--ease) both; }
-
+/* src/App.css */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;         /* keep — required for Map's internal shrink chain */
+  box-sizing: border-box;
+  animation: evol-fade-in-up 0.45s var(--ease) both;
+  /* no overflow:hidden here — tall pages (History) still need to overflow
+     upward into .app-content's scrollbar, not get clipped */
+}
 .hero-title {
   text-align: center;
   font-size: clamp(2.2rem, 5vw, 3.2rem);
@@ -577,13 +605,13 @@ form button:disabled { opacity: 0.6; cursor: default; }
 }
 
 
-/* #now-playing-widget.evol-dragging {
+ #now-playing-widget.evol-dragging {
   transition: left 0.05s ease, top 0.05s ease, box-shadow 0.15s ease;
   filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
 }
 #now-playing-widget.evol-snapping {
   transition: left 0.2s ease, top 0.2s ease;
-} */
+} 
 
 @theme inline {
   --font-heading: var(--font-sans);

@@ -1,13 +1,15 @@
 /* Map page: left control rail + large map on the right, no page-level scroll */
+/* MapPage.css */
 .map-page-shell {
   max-width: none !important;
   padding: 20px 24px !important;
-  height: calc(100vh - 64px); /* navbar height */
   display: flex;
   flex-direction: column;
+  overflow: hidden;   /* keep — this is what actually clips Map's own box */
   animation: evol-fade-in-up 0.4s var(--ease) both;
+  /* no height rule needed — it inherits flex:1 + min-height:0 from .page,
+     and .page is now clamped by a truly-fixed #root, so it can't overflow */
 }
-
 .map-page-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .map-page-heading h2 { margin: 0; display: flex; align-items: center; gap: 10px; }
 .map-page-sub { color: var(--evol-muted); font-size: 0.82rem; margin: 2px 0 14px; }
