@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Input, InputNumber, Skeleton, Empty, message, Tooltip } from "antd";
-import { Search, ListMusic, Plus } from "lucide-react";
+import { Search, ListMusic, Plus, ExternalLink } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import { searchPlaylists, SearchPlaylistResult } from "../../lib/youtube";
 import { openImportNotification } from "./useImportNotification";
+import PlaylistDetailModal from "./PlaylistDetailModal";
 
 const MAX_RESULTS_CAP = 30;
 
@@ -15,6 +16,7 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
   const [searching, setSearching] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [searchMsg, setSearchMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [activeDetail, setActiveDetail] = useState<SearchPlaylistResult | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -36,7 +38,7 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
       playlistId, `https://www.youtube.com/playlist?list=${pr.playlist_id}`, addedBy,
       (done, total, item) => {
         notice.tick(done, total, item);
-        if (item.wasAdded) onAdded(); // each added track appears in the list right away
+        if (item.wasAdded) onAdded();
       },
     );
     notice.finish(result.message);
@@ -75,6 +77,17 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
                 <div className="search-result-title">{pr.title}</div>
                 <div className="evol-card-meta">{pr.author}{pr.item_count ? ` · ${pr.item_count} tracks` : ""}</div>
               </div>
+              <Tooltip title="View details">
+                <button className="search-result-icon-btn" onClick={() => setActiveDetail(pr)}>
+                  <ListMusic size={13} />
+                </button>
+              </Tooltip>
+              
+               <a href={`https://www.youtube.com/playlist?list=${pr.playlist_id}`} target="_blank" rel="noreferrer"
+                className="search-result-icon-btn" title="Open in new tab"
+              >
+                <ExternalLink size={13} />
+              </a>
               <button
                 className="search-result-add"
                 onClick={() => handleAddFromSearch(pr)}
@@ -91,6 +104,15 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
         )}
       </div>
       {searchMsg && <p className={searchMsg.ok ? "success" : "error"}>{searchMsg.text}</p>}
+
+      {activeDetail && (
+        <PlaylistDetailModal
+          open={!!activeDetail}
+          onClose={() => setActiveDetail(null)}
+          playlistUrl={`https://www.youtube.com/playlist?list=${activeDetail.playlist_id}`}
+          title={activeDetail.title}
+        />
+      )}
     </div>
   );
 }

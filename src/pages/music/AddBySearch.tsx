@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Button, Input, InputNumber, Skeleton, Tooltip, message } from "antd";
-import { Search, Music2, Plus } from "lucide-react";
+import { Search, Music2, Plus, Play, ExternalLink } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import { searchSongs, SearchSongResult } from "../../lib/youtube";
+import VideoPreviewModal from "../../components/VideoPreviewModal";
 
 const MAX_RESULTS_CAP = 30;
 
@@ -12,6 +13,7 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
   const [results, setResults] = useState<SearchSongResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [activePreview, setActivePreview] = useState<SearchSongResult | null>(null);
 
   async function handleSearch() {
     if (!query.trim()) return;
@@ -59,6 +61,17 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
                 <div className="search-result-title">{r.title}</div>
                 <div className="evol-card-meta">{r.artist}{r.duration ? ` · ${r.duration}` : ""}</div>
               </div>
+              <Tooltip title="Preview">
+                <button className="search-result-icon-btn" onClick={() => setActivePreview(r)}>
+                  <Play size={13} />
+                </button>
+              </Tooltip>
+              <a
+                href={`https://www.youtube.com/watch?v=${r.video_id}`} target="_blank" rel="noreferrer"
+                className="search-result-icon-btn" title="Open in new tab">
+              
+                <ExternalLink size={13} />
+              </a>
               <button className="search-result-add" onClick={() => handleAdd(r)} disabled={addingId === r.video_id}>
                 {addingId === r.video_id ? <span className="mini-spinner" /> : <Plus size={14} />}
               </button>
@@ -66,6 +79,15 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
           ))
         )}
       </div>
+
+      {activePreview && (
+        <VideoPreviewModal
+          open={!!activePreview}
+          onClose={() => setActivePreview(null)}
+          videoId={activePreview.video_id}
+          title={activePreview.title}
+        />
+      )}
     </div>
   );
 }
