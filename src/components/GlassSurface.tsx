@@ -40,6 +40,8 @@ export interface GlassSurfaceProps {
     | 'plus-lighter';
   className?: string;
   style?: React.CSSProperties;
+    forceFallback?: boolean;
+
 }
 
 const GlassSurface: React.FC<GlassSurfaceProps> = ({
@@ -62,7 +64,9 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   yChannel = 'G',
   mixBlendMode = 'difference',
   className = '',
-  style = {}
+  style = {},
+    forceFallback = false,
+
 }) => {
   const id = useId();
   const filterId = `glass-filter-${id}`;
@@ -109,7 +113,10 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   const updateDisplacementMap = () => {
     feImageRef.current?.setAttribute('href', generateDisplacementMap());
   };
-
+ useEffect(() => {
+    setSvgSupported(forceFallback ? false : supportsSVGFilters());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceFallback]);
   useEffect(() => {
     updateDisplacementMap();
     [
@@ -166,6 +173,9 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   }, []);
 
   const supportsSVGFilters = () => {
+    // Original detection, unchanged — restored so BlankPage (and any
+    // other consumer that doesn't pass forceFallback) behaves exactly as
+    // it did before.
     if (typeof window === 'undefined' || typeof document === 'undefined') {
       return false;
     }
@@ -182,7 +192,6 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
 
     return div.style.backdropFilter !== '';
   };
-
   const containerStyle: React.CSSProperties = {
     ...style,
     width: typeof width === 'number' ? `${width}px` : width,

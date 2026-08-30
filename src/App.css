@@ -569,25 +569,21 @@ form button:disabled { opacity: 0.6; cursor: default; }
    inline left/top styles once the user drags it; this just sets the
    initial fixed-corner spot and stacking order. */
 /* src/App.css */
-/* src/App.css */
 #now-playing-widget {
   position: fixed;
   z-index: 9999;
-  animation: evol-fade-in-widget 0.3s var(--ease-spring) both;
   pointer-events: none;
+ 
 }
 
-@keyframes evol-fade-in-widget {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-#now-playing-widget.evol-dragging {
+
+/* #now-playing-widget.evol-dragging {
   transition: left 0.05s ease, top 0.05s ease, box-shadow 0.15s ease;
   filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
 }
 #now-playing-widget.evol-snapping {
   transition: left 0.2s ease, top 0.2s ease;
-}
+} */
 
 @theme inline {
   --font-heading: var(--font-sans);
