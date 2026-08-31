@@ -120,8 +120,11 @@ export default function MapCanvas({
       )}
 
       <MapContainer ref={mapRef} center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} style={{ height: "100%" }}>
-        <TileLayer url={MAP_TILE_CONFIG[mapMode].url} attribution={MAP_TILE_CONFIG[mapMode].attribution} />
-        <MapEvents onRightClick={onRightClickAdd} onLeftClick={onLeftClickDeselect} />
+        <TileLayer
+          url={MAP_TILE_CONFIG[mapMode].url}
+          attribution={MAP_TILE_CONFIG[mapMode].attribution}
+          className={MAP_TILE_CONFIG[mapMode].className}
+        />        <MapEvents onRightClick={onRightClickAdd} onLeftClick={onLeftClickDeselect} />
         <MapDragLock locked={activeTools.includes("draw")} />
 
         {activeTools.includes("coordinates") && (

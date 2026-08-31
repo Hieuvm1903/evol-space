@@ -19,7 +19,7 @@ const GalaxyRing = ({
   finalColor = "#fff",     // NEW — color once finished
 }) => {
   const [animKey, setAnimKey] = useState(0);
-useEffect(() => {
+  useEffect(() => {
     setAnimKey((k) => k + 1);
   }, [trigger]);
   const maxRadius = minRadius + strokeWidth;
@@ -66,8 +66,7 @@ useEffect(() => {
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
-        style={{ display: "block" }}
-        onClick={restart}
+        style={{ display: "block", background: "transparent" }} onClick={restart}
       >
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -77,8 +76,7 @@ useEffect(() => {
             <stop offset="85%" stopColor="#db2777" />
             <stop offset="100%" stopColor="#22d3ee" />
           </linearGradient>
-           <filter id={glowFilterId} x="-100%" y="-100%" width="300%" height="300%">
-            <feGaussianBlur stdDeviation={glowBlur} result="blur" />
+          <filter id={glowFilterId} x="-100%" y="-100%" width="300%" height="300%" colorInterpolationFilters="sRGB">            <feGaussianBlur stdDeviation={glowBlur} result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="blur" />
@@ -120,7 +118,7 @@ useEffect(() => {
         />
 
         {/* crisp line — black while drawing, turns white once finished */}
-       <path
+        <path
           key={`line-${animKey}`}
           d={pathD}
           fill="none"
@@ -137,7 +135,7 @@ useEffect(() => {
           }}
         />
 
-                <style>{`
+        <style>{`
           @keyframes gr-draw {
             to { stroke-dashoffset: 0; }
           }

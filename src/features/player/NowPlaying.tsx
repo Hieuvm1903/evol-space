@@ -17,6 +17,7 @@ import ProgressBar from "./components/ProgressBar";
 import QueueList from "./QueueList";
 
 import "./NowPlaying.css";
+import BorderGlow from "../../components/BorderGlow";
 
 export type { Track } from "./types";
 
@@ -62,9 +63,9 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
 
   function handleReady(e: { target: YouTubePlayer }) {
     playerRef.current = e.target;
-    try { e.target.setVolume(volume); } catch {}
+    try { e.target.setVolume(volume); } catch { }
     setTimeout(() => {
-      try { if (e.target.isMuted()) setShowUnmute(true); } catch {}
+      try { if (e.target.isMuted()) setShowUnmute(true); } catch { }
     }, 500);
   }
 
@@ -77,7 +78,7 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
 
   function handleEnded() {
     if (mode === "repeatTrack") {
-      try { playerRef.current?.seekTo(0, true); playerRef.current?.playVideo(); } catch {}
+      try { playerRef.current?.seekTo(0, true); playerRef.current?.playVideo(); } catch { }
     } else {
       advance(1);
     }
@@ -92,13 +93,13 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
         const cur = p.getCurrentTime();
         const dur = p.getDuration();
         if (dur > 0) setProgress(cur, dur);
-      } catch {}
+      } catch { }
     }, 500);
     return () => clearInterval(id);
   }, [setProgress]);
-useEffect(() => {
-  setProgress(0, 0);
-}, [track?.video_id, setProgress]);
+  useEffect(() => {
+    setProgress(0, 0);
+  }, [track?.video_id, setProgress]);
   // Re-center the widget's saved position whenever it resizes between
   // pill <-> panel, so it doesn't drift off-screen or overlap content.
   useEffect(() => {
@@ -113,31 +114,31 @@ useEffect(() => {
     try {
       const state = p.getPlayerState();
       if (state === 1) p.pauseVideo(); else p.playVideo();
-    } catch {}
+    } catch { }
   }
 
   function seekToFraction(frac: number) {
     const p = playerRef.current;
     if (!p) return;
-    try { p.seekTo(frac * p.getDuration(), true); } catch {}
+    try { p.seekTo(frac * p.getDuration(), true); } catch { }
   }
 
   function seekToTime(seconds: number) {
-    try { playerRef.current?.seekTo(seconds, true); } catch {}
+    try { playerRef.current?.seekTo(seconds, true); } catch { }
   }
 
   function handleVolumeChange(v: number) {
     setVolumeValue(v);
-    try { playerRef.current?.setVolume(v); } catch {}
+    try { playerRef.current?.setVolume(v); } catch { }
   }
 
   function unmuteNow() {
-    try { playerRef.current?.unMute(); } catch {}
+    try { playerRef.current?.unMute(); } catch { }
     setShowUnmute(false);
   }
 
   function closeWidget() {
-    try { playerRef.current?.stopVideo?.(); } catch {}
+    try { playerRef.current?.stopVideo?.(); } catch { }
     close();
   }
 
@@ -155,49 +156,65 @@ useEffect(() => {
       />
 
       <div id="panel" className={expanded ? "panel-visible" : "panel-hidden"} style={{ display: expanded ? "block" : "none" }}>
-        <div className="panel-inner">
-          <PanelHeader
-            view={view}
-            onViewChange={setView}
-            onPointerDownDrag={drag.startDrag}
-            onTap={() => { if (!drag.wasJustDragged()) setExpanded(false); }}
-            onResetPos={drag.resetPos}
-            onClose={closeWidget}
-            snapEnabled={drag.snapEnabled}
-            onToggleSnap={drag.setSnapMode}
-          />
+        <BorderGlow
+          edgeSensitivity={30}
+          className="np-panel-borderglow"
+          glowColor="40 80 80"
+          backgroundColor="#120F17"
+          borderRadius={28}
+          glowRadius={40}
+          glowIntensity={1}
+          coneSpread={25}
+          animated={false}
+          colors={['#c084fc', '#f472b6', '#38bdf8']}
+        >
+          <div className="panel-inner">
 
-          {showUnmute && (
-            <div id="unmute-banner" onClick={unmuteNow}>Sound off — tap to unmute</div>
-          )}
+            <PanelHeader
+              view={view}
+              onViewChange={setView}
+              onPointerDownDrag={drag.startDrag}
+              onTap={() => { if (!drag.wasJustDragged()) setExpanded(false); }}
+              onResetPos={drag.resetPos}
+              onClose={closeWidget}
+              snapEnabled={drag.snapEnabled}
+              onToggleSnap={drag.setSnapMode}
+            />
 
-          <VideoView
-            visible={view === "video"}
-            track={track}
-            nextVideoId={nextTrack?.video_id}
-            onReady={handleReady}
-            onStateChange={handleStateChange}
-          />
-          <LyricsPanel visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={seekToTime} />
+            {showUnmute && (
+              <div id="unmute-banner" onClick={unmuteNow}>Sound off — tap to unmute</div>
+            )}
 
-          <p className="np-track-title" title={track.title}>{track.title}</p>
+            <VideoView
+              visible={view === "video"}
+              track={track}
+              nextVideoId={nextTrack?.video_id}
+              onReady={handleReady}
+              onStateChange={handleStateChange}
+            />
+            <LyricsPanel visible={view === "lyrics"} track={track} lyrics={lyrics} onSeek={seekToTime} />
 
-          <ProgressBar curTime={curTime} duration={duration} onSeekFraction={seekToFraction} />
+            <p className="np-track-title" title={track.title}>{track.title}</p>
 
-          <TransportControls
-            track={track}
-            playing={playing}
-            onPrev={() => advance(-1)}
-            onNext={() => advance(1)}
-            onTogglePlayPause={togglePlayPause}
-          />
+            <ProgressBar curTime={curTime} duration={duration} onSeekFraction={seekToFraction} />
 
-          <ModeRow mode={mode} onModeChange={setMode} onReshuffle={reshuffle} />
+            <TransportControls
+              track={track}
+              playing={playing}
+              onPrev={() => advance(-1)}
+              onNext={() => advance(1)}
+              onTogglePlayPause={togglePlayPause}
+            />
 
-          <VolumeSlider volume={volume} onChange={handleVolumeChange} />
+            <ModeRow mode={mode} onModeChange={setMode} onReshuffle={reshuffle} />
 
-          <QueueList order={order} queue={queue} currentTrackIdx={currentIdx} onReorder={setOrder} onPlay={playIdx} />
-        </div>
+            <VolumeSlider volume={volume} onChange={handleVolumeChange} />
+
+            <QueueList order={order} queue={queue} currentTrackIdx={currentIdx} onReorder={setOrder} onPlay={playIdx} />
+
+          </div>
+        </BorderGlow>
+
       </div>
     </div>
   );

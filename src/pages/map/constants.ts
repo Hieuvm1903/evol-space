@@ -14,14 +14,16 @@ export const MAP_MODE_OPTIONS: { value: MapMode; label: string; icon: LucideIcon
   { value: "terrain", label: "Terrain", icon: Mountain },
 ];
 
-export const MAP_TILE_CONFIG: Record<MapMode, { url: string; attribution: string }> = {
+// src/pages/map/constants.ts
+export const MAP_TILE_CONFIG: Record<MapMode, { url: string; attribution: string; className?: string }> = {
   light: {
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, FAO, NOAA, USGS",
   },
   dark: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, FAO, NOAA, USGS",
+    className: "map-tiles-deepdark",
   },
   street: {
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",

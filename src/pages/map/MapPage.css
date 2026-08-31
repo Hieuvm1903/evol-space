@@ -245,3 +245,6 @@
 }
 /* Textareas need the label to line up with the top, not center — flex-start
    above already does that; just keep the label from stretching full height. */
+   .map-tiles-deepdark {
+  filter: brightness(0.55) contrast(1.15) saturate(0.9);
+}
