@@ -79,6 +79,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           dragMomentum={false}
           dragElastic={0}
           dragTransition={{ power: 0, timeConstant: 0 }}
+          dragConstraints={drag.dragConstraints}   // NEW — hard-clamps the drag itself to the viewport
+
           // `x`/`y` render as `transform: translate()`, which stacks on TOP of
           // whatever position the element's CSS gives it — App.css's
           // `#now-playing-widget` rule sets `top: 4.5rem; right: 1.25rem`,

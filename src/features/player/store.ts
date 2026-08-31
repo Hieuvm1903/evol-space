@@ -60,7 +60,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
       queue: finalTracks,
       order,
       currentIdx: 0,
-      mode: isShuffle ? "repeatAll" : mapped,
+      mode:  mapped,
       playingPlaylistId: playlistId ?? null,
       curTime: 0,
       duration: 0,
@@ -74,7 +74,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   setPlaylistMode: (modeLabel) => {
     const mapped = MODE_MAP[modeLabel] || "normal";
     if (mapped === "shuffle") {
-      set({ order: shuffleQueue(get().queue.length), mode: "repeatAll" });
+      set({ order: shuffleQueue(get().queue.length) });
     } else {
       set({ mode: mapped });
     }
@@ -82,7 +82,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
 
   setMode: (m) => {
     if (m === "shuffle") {
-      set({ order: shuffleQueue(get().queue.length), mode: "repeatAll" });
+      set({ order: shuffleQueue(get().queue.length) });
     } else {
       set({ mode: m });
     }

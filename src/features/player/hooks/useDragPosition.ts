@@ -60,17 +60,37 @@ export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
   const [snapEnabled, setSnapEnabled] = useState<boolean>(readSnapModePref);
   const snapEnabledRef = useRef(snapEnabled);
   useEffect(() => { snapEnabledRef.current = snapEnabled; }, [snapEnabled]);
-
+// near the other useState calls, after snapEnabled/justDraggedRef:
+const [dragConstraints, setDragConstraints] = useState({
+  left: EDGE_MARGIN,
+  top: TOP_EDGE_MARGIN,
+  right: EDGE_MARGIN,
+  bottom: TOP_EDGE_MARGIN,
+});
   // Set (not cleared until next tick) whenever a real drag happened, so
   // handle components can suppress the click/tap that follows pointerup
   // after an actual drag — but not after a plain tap (framer never fires
   // onDragStart for a tap, since it hasn't crossed the drag threshold).
   const justDraggedRef = useRef(false);
+function currentSize() {
+  const el = containerRef.current;
+  return { w: el?.offsetWidth || PANEL_WIDTH, h: el?.offsetHeight || 60 };
+}
 
-  function currentSize() {
-    const el = containerRef.current;
-    return { w: el?.offsetWidth || PANEL_WIDTH, h: el?.offsetHeight || 60 };
-  }
+// NEW — keeps drag boundaries in sync with the widget's current box size
+// and the viewport, so framer-motion can never let the pill/panel be
+// dragged past the screen edge (previously only clamped on drop).
+function updateDragConstraints() {
+  const { w, h } = currentSize();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  setDragConstraints({
+    left: EDGE_MARGIN,
+    top: TOP_EDGE_MARGIN,
+    right: Math.max(EDGE_MARGIN, vw - w - EDGE_MARGIN),
+    bottom: Math.max(TOP_EDGE_MARGIN, vh - h - EDGE_MARGIN),
+  });
+}
+
 
   function applySavedPosition(animated = false) {
     const { w, h } = currentSize();
@@ -82,6 +102,7 @@ export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
       requestAnimationFrame(() => applySavedPosition(animated));
       return;
     }
+    updateDragConstraints(); // NEW
     const vw = window.innerWidth, vh = window.innerHeight;
     const { left, top } = readSavedPosition(w, h, vw, vh);
     if (animated) {
@@ -96,7 +117,7 @@ export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
   useEffect(() => { applySavedPosition(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const onResize = () => applySavedPosition();
+    const onResize = () => {applySavedPosition();updateDragConstraints();}
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -158,7 +179,8 @@ export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
     }
     // Clear on next tick, after any click/tap the pointerup generated has
     // had a chance to check the flag.
-    setTimeout(() => { justDraggedRef.current = false; }, 0);
+    updateDragConstraints();
+    setTimeout(() => { justDraggedRef.current = false;}, 0);
   }
 
   // Handle components call this from onPointerDown. It starts a
@@ -177,6 +199,6 @@ export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
   return {
     x, y, dragControls,
     startDrag, handleDragStart, handleDragEnd, wasJustDragged,
-    resetPos, applySavedPosition, snapEnabled, setSnapMode,
+    resetPos, applySavedPosition, snapEnabled, setSnapMode,updateDragConstraints,dragConstraints
   };
 }

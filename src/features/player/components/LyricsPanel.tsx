@@ -123,7 +123,7 @@ export default function LyricsPanel({ visible, track, lyrics, onSeek }: Props) {
                   onClick={() => onSeek(line.time)}
                 >
                   {isActive ? (
-                    <GradientText colors={["#8b6ff5", "#22d3ee", "#7955fd"]} animationSpeed={3} >
+                    <GradientText className="lyrics-line-active" colors={["#8b6ff5", "#22d3ee", "#7955fd"]} animationSpeed={3} >
                       {line.text}
                     </GradientText>
                   ) : (
