@@ -35,7 +35,7 @@ export function usePlayerEngine(queue: Track[], initialMode: string) {
   useEffect(() => {
     if (mode === "shuffle") {
       setOrder(shuffleQueue(queueRef.current.length));
-      setMode("repeatAll")
+      // setMode("repeatAll")
     }
     prevModeRef.current = mode;
   }, [mode]);
