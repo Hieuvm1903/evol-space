@@ -37,6 +37,8 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
 
   return (
     <div>
+            <p className="evol-card-meta">Search for a song to add to playlist.</p>
+
       <div className="detail-row">
         <Input
           value={query}

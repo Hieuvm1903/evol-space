@@ -19,12 +19,12 @@ export default function TransportControls({ track, playing, onPrev, onNext, onTo
       <span className={`spin-disk-wrap spin-disk-lg${playing ? " spin-disk-wrap-playing" : ""}`}>
         <span
           className={`spin-disk${playing ? " spin-disk-playing" : ""}`}
-          // style={track.thumbnail_url ? { backgroundImage: `url(${track.thumbnail_url})` } : undefined}
+           style={track.thumbnail_url ? { backgroundImage: `url(${track.thumbnail_url})` } : undefined}
         />
         <button
           type="button"
           className="np-icon-btn np-icon-btn-primary"
-          style={{ position: "relative", zIndex: 1, backgroundImage: `url(${track.thumbnail_url})` }}
+          style={{ position: "relative", zIndex: 1 }}
           onClick={onTogglePlayPause}
           aria-label={playing ? "Pause" : "Play"}
         >

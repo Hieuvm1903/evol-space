@@ -35,6 +35,7 @@ export function NavBar() {
                 lineColor="#432aff"
                 finalColor="#fff"
                 className="navbar-o-ring"
+                showGlow={false}
               />
              
             </span>

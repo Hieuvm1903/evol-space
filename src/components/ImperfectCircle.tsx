@@ -17,6 +17,7 @@ const GalaxyRing = ({
   glowBlur = 8,
   lineColor = "#111",      // NEW — color while drawing
   finalColor = "#fff",     // NEW — color once finished
+  showGlow = true,
 }) => {
   const [animKey, setAnimKey] = useState(0);
   useEffect(() => {
@@ -85,7 +86,7 @@ const GalaxyRing = ({
         </defs>
 
         {/* glow trail — galaxy gradient, follows the drawing, then fades out */}
-        <path
+        {showGlow && (<path
           key={`glow-${animKey}`}
           d={pathD}
           fill="none"
@@ -100,7 +101,8 @@ const GalaxyRing = ({
             animation: `gr-draw ${duration}s ease-in-out forwards,
                         gr-glow-fade ${totalGlow}s ease-in-out forwards`,
           }}
-        />
+        />)}
+
 
         {/* finish flash */}
         <circle
