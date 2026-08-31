@@ -96,7 +96,9 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
     }, 500);
     return () => clearInterval(id);
   }, [setProgress]);
-
+useEffect(() => {
+  setProgress(0, 0);
+}, [track?.video_id, setProgress]);
   // Re-center the widget's saved position whenever it resizes between
   // pill <-> panel, so it doesn't drift off-screen or overlap content.
   useEffect(() => {

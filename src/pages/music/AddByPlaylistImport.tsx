@@ -106,13 +106,16 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
       {searchMsg && <p className={searchMsg.ok ? "success" : "error"}>{searchMsg.text}</p>}
 
       {activeDetail && (
-        <PlaylistDetailModal
-          open={!!activeDetail}
-          onClose={() => setActiveDetail(null)}
-          playlistUrl={`https://www.youtube.com/playlist?list=${activeDetail.playlist_id}`}
-          title={activeDetail.title}
-        />
-      )}
+  <PlaylistDetailModal
+    open={!!activeDetail}
+    onClose={() => setActiveDetail(null)}
+    playlistUrl={`https://www.youtube.com/playlist?list=${activeDetail.playlist_id}`}
+    title={activeDetail.title}
+    playlistId={playlistId}
+    addedBy={addedBy}
+    onAdded={onAdded}
+  />
+)}
     </div>
   );
 }

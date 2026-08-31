@@ -1,18 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Skeleton, Empty } from "antd";
-import { ExternalLink, Music2 } from "lucide-react";
+import { Modal, Skeleton, Empty, Button } from "antd";
+import { ExternalLink, Music2, Download } from "lucide-react";
 import { fetchPlaylistVideos, PlaylistVideo } from "../../lib/youtube";
+import * as musicService from "../../lib/musicService";
+import { openImportNotification } from "./useImportNotification";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   playlistUrl: string;
   title?: string;
+  /** When provided, shows an "Add all to playlist" footer button. */
+  playlistId?: number;
+  addedBy?: string;
+  onAdded?: () => void;
 }
 
-export default function PlaylistDetailModal({ open, onClose, playlistUrl, title }: Props) {
+export default function PlaylistDetailModal({ open, onClose, playlistUrl, title, playlistId, addedBy, onAdded }: Props) {
   const [videos, setVideos] = useState<PlaylistVideo[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (!open) { setVideos(null); return; }
@@ -24,11 +31,39 @@ export default function PlaylistDetailModal({ open, onClose, playlistUrl, title 
     return () => { cancelled = true; };
   }, [open, playlistUrl]);
 
+  async function handleAddAll() {
+    if (playlistId === undefined || addedBy === undefined) return;
+    setImporting(true);
+    const notice = openImportNotification(title ? `"${title}"` : "playlist");
+    const result = await musicService.addPlaylistFromYoutube(playlistId, playlistUrl, addedBy, (done, total, item) => {
+      notice.tick(done, total, item);
+      if (item.wasAdded) onAdded?.();
+    });
+    notice.finish(result.message);
+    setImporting(false);
+    onClose();
+  }
+
+  const canImport = playlistId !== undefined && addedBy !== undefined;
+
   return (
     <Modal
       open={open}
       onCancel={onClose}
-      footer={null}
+      footer={
+        canImport ? (
+          <Button
+            type="primary"
+            className="btn-glow"
+            icon={<Download size={14} />}
+            loading={importing}
+            disabled={loading || !videos || videos.length === 0}
+            onClick={handleAddAll}
+          >
+            Add all to playlist
+          </Button>
+        ) : null
+      }
       destroyOnClose
       centered
       width={480}

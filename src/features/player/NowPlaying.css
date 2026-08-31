@@ -213,73 +213,61 @@
 .lyrics-candidate-select { flex-shrink: 0; width: 100%; margin-bottom: 8px; }
 
 .lyrics-viewport {
-  position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 10px;
-  background: #0c0b16; border: 1px solid #2a2740;
-  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #0c0b16;
+  border: 1px solid #2a2740;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%);
 }
 .lyrics-line {
-  position: relative; padding: 8px 14px; font-size: 0.85rem; line-height: 1.55; color: #8a86a8;
-  cursor: pointer; text-align: center; border-radius: 8px; word-break: break-word;
-  transition: color 0.2s ease, font-size 0.2s ease, opacity 0.2s ease, background 0.15s ease, transform 0.15s ease;
+  position: relative;
+  padding: 8px 14px;          /* symmetric — was 8px 44px 8px 14px, which
+                                  pushed centered text visually left */
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: #b7b3d6;
+  cursor: pointer;
+  text-align: center;
+  border-radius: 8px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  transition: color 0.2s ease, font-size 0.2s ease, background 0.15s ease;
 }
-.lyrics-lines { position: relative; z-index: 1; }
-
-/* Always-centered highlight box behind whatever line the translateY math
-   has pinned to the middle — frames the current line without needing to
-   track any single line's DOM rect. */
-.lyrics-active-frame {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  top: 50%;
-  height: 44px;
-  transform: translateY(-50%);
-  border-radius: 10px;
-  border: 1px solid rgba(139, 111, 245, 0.45);
-  background: linear-gradient(90deg, rgba(139,111,245,0.10), rgba(34,211,238,0.10));
-  box-shadow: 0 0 18px -4px rgba(139,111,245,0.55), inset 0 0 0 1px rgba(255,255,255,0.04);
-  pointer-events: none;
-  z-index: 0;
-  animation: lyrics-frame-pulse 2.4s ease-in-out infinite;
-}
-@keyframes lyrics-frame-pulse {
-  0%, 100% { box-shadow: 0 0 18px -4px rgba(139,111,245,0.55), inset 0 0 0 1px rgba(255,255,255,0.04); }
-  50%      { box-shadow: 0 0 26px -2px rgba(34,211,238,0.65), inset 0 0 0 1px rgba(255,255,255,0.08); }
-}
-
-.lyrics-gradient-text { display: inline-block; }
+.lyrics-line:hover { color: #e8e6f5; background: #1a1830; }
 
 .lyrics-line-active {
   font-weight: 700;
   font-size: 1rem;
   background: rgba(139, 111, 245, 0.14);
-  /* color removed — GradientText/BlurText+.lyrics-gradient-text now own the text color */
+  box-shadow: inset 0 0 0 1px rgba(139, 111, 245, 0.4); /* highlight frame */
 }
-.lyrics-line:hover { color: #d8d5f0; background: #1a1830; transform: translateX(-20px); }
-.lyrics-line-active:hover { color: #22d3ee; background: rgba(139, 111, 245, 0.14); transform: translateX(-20px); }
-.lyrics-line::before {
-  content: attr(data-time); position: absolute; right: -6px; top: 50%;
-  transform: translateY(-50%) translateX(8px); font-size: 0.65rem; color: #6a6690;
-  font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 0.15s ease, transform 0.15s ease; pointer-events: none;
-}
-.lyrics-line:hover::before { opacity: 1; transform: translateY(-50%) translateX(0); }
-/* NowPlaying.css */
-.lyrics-gradient-text {
-  background: linear-gradient(90deg, #8b6ff5, #22d3ee, #8b6ff5);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: lyrics-gradient-shift 3s linear infinite;
-  display: inline-block; /* background-clip:text needs a box, and BlurText's
-                             word spans need to inherit through this wrapper */
-}
+.lyrics-line-active:hover { background: rgba(139, 111, 245, 0.14); }
 
-@keyframes lyrics-gradient-shift {
-  0%   { background-position: 0% center; }
-  100% { background-position: 200% center; }
+/* Timestamp badge — overlays on top rather than reserving box space, so
+   text-align:center centers against the full line width. Only visible
+   on hover; pointer-events:none so it never blocks the click-to-seek. */
+.lyrics-line::before {
+  content: attr(data-time);
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.62rem;
+  color: #6a6690;
+  background: #0c0b16;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
 }
+.lyrics-line:hover::before { opacity: 1; }
+
 .lyrics-empty {
   flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   border-radius: 10px; background: #0c0b16; border: 1px solid #2a2740; color: #9c97b8; font-size: 0.8rem;

@@ -16,6 +16,8 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
   const [previewLoading, setPreviewLoading] = useState(false);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [modalAdding, setModalAdding] = useState(false);
+  const [modalAdded, setModalAdded] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -24,10 +26,9 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
   const isPlaylistLink = !!extractPlaylistId(trimmed);
   const videoId = !isPlaylistLink ? extractVideoId(trimmed) : null;
 
-  // Debounced auto-preview — fetch metadata a moment after typing stops,
-  // not on every keystroke.
   useEffect(() => {
     setPreview(null);
+    setModalAdded(false);
     if (!videoId) return;
     let cancelled = false;
     setPreviewLoading(true);
@@ -62,6 +63,15 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
       if (mountedRef.current) { setBusy(false); setMsg({ text: result.message, ok: result.ok }); }
       if (result.ok) { message.success(result.message); if (mountedRef.current) setUrl(""); onAdded(); }
     }
+  }
+
+  async function handleAddFromVideoModal() {
+    if (!trimmed) return;
+    setModalAdding(true);
+    const result = await musicService.addTrackAndAttach(playlistId, trimmed, addedBy, preview ? { title: preview.title, thumbnail_url: preview.thumbnail_url, artist: preview.author } : undefined);
+    setModalAdding(false);
+    if (result.ok) { message.success(result.message); setModalAdded(true); onAdded(); }
+    else message.error(result.message);
   }
 
   return (
@@ -121,10 +131,26 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
       {msg && <p className={msg.ok ? "success" : "error"}>{msg.text}</p>}
 
       {videoId && (
-        <VideoPreviewModal open={showVideoModal} onClose={() => setShowVideoModal(false)} videoId={videoId} title={preview?.title} />
+        <VideoPreviewModal
+          open={showVideoModal}
+          onClose={() => setShowVideoModal(false)}
+          videoId={videoId}
+          title={preview?.title}
+          onAdd={handleAddFromVideoModal}
+          adding={modalAdding}
+          added={modalAdded}
+        />
       )}
       {isPlaylistLink && (
-        <PlaylistDetailModal open={showPlaylistModal} onClose={() => setShowPlaylistModal(false)} playlistUrl={trimmed} title="Playlist preview" />
+        <PlaylistDetailModal
+          open={showPlaylistModal}
+          onClose={() => setShowPlaylistModal(false)}
+          playlistUrl={trimmed}
+          title="Playlist preview"
+          playlistId={playlistId}
+          addedBy={addedBy}
+          onAdded={onAdded}
+        />
       )}
     </div>
   );

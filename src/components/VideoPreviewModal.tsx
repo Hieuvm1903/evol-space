@@ -1,19 +1,36 @@
 import React from "react";
-import { Modal } from "antd";
+import { Modal, Button } from "antd";
+import { Plus, Check } from "lucide-react";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   videoId: string;
   title?: string;
+  onAdd?: () => void;
+  adding?: boolean;
+  added?: boolean;
 }
 
-export default function VideoPreviewModal({ open, onClose, videoId, title }: Props) {
+export default function VideoPreviewModal({ open, onClose, videoId, title, onAdd, adding, added }: Props) {
   return (
     <Modal
       open={open}
       onCancel={onClose}
-      footer={null}
+      footer={
+        onAdd ? (
+          <Button
+            type="primary"
+            className="btn-glow"
+            icon={added ? <Check size={14} /> : <Plus size={14} />}
+            loading={adding}
+            disabled={added}
+            onClick={onAdd}
+          >
+            {added ? "Added" : "Add to playlist"}
+          </Button>
+        ) : null
+      }
       destroyOnClose
       centered
       width={640}

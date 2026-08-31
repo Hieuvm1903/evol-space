@@ -90,17 +90,22 @@ export default function PlaylistPane({
   const addPanelWrapRef = useRef<HTMLDivElement>(null);
   const addToggleRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!showAdd) return;
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
-      if (addPanelWrapRef.current?.contains(target)) return;
-      if (addToggleRef.current?.contains(target)) return;
-      setShowAdd(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showAdd]);
+useEffect(() => {
+  if (!showAdd) return;
+  function handleClickOutside(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (addPanelWrapRef.current?.contains(target)) return;
+    if (addToggleRef.current?.contains(target)) return;
+    // antd renders modals/notifications/dropdowns/tooltips into a portal at
+    // document.body, outside this component's DOM tree entirely — so a
+    // click on e.g. a modal's close icon looks like "clicked away" unless
+    // we explicitly exclude those portals here.
+    if (target.closest(".ant-modal, .ant-modal-wrap, .ant-notification, .ant-select-dropdown, .ant-popover, .ant-tooltip, .ant-drawer, .ant-dropdown")) return;
+    setShowAdd(false);
+  }
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => document.removeEventListener("mousedown", handleClickOutside);
+}, [showAdd]);
   return (
     <div className="playlist-pane-body fade-in-up">
       <div className="playlist-header-row">

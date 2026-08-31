@@ -13,6 +13,7 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
   const [results, setResults] = useState<SearchSongResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [activePreview, setActivePreview] = useState<SearchSongResult | null>(null);
 
   async function handleSearch() {
@@ -29,6 +30,7 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
       { title: r.title, thumbnail_url: r.thumbnail_url, artist: r.artist },
     );
     setAddingId(null);
+    setAddedIds((s) => new Set(s).add(r.video_id));
     message.success(`Added "${r.title}"`);
     onAdded();
   }
@@ -66,10 +68,10 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
                   <Play size={13} />
                 </button>
               </Tooltip>
-              <a
-                href={`https://www.youtube.com/watch?v=${r.video_id}`} target="_blank" rel="noreferrer"
-                className="search-result-icon-btn" title="Open in new tab">
               
+                href={`https://www.youtube.com/watch?v=${r.video_id}`} target="_blank" rel="noreferrer"
+                className="search-result-icon-btn" title="Open in new tab"
+              <a>
                 <ExternalLink size={13} />
               </a>
               <button className="search-result-add" onClick={() => handleAdd(r)} disabled={addingId === r.video_id}>
@@ -86,6 +88,9 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
           onClose={() => setActivePreview(null)}
           videoId={activePreview.video_id}
           title={activePreview.title}
+          onAdd={() => handleAdd(activePreview)}
+          adding={addingId === activePreview.video_id}
+          added={addedIds.has(activePreview.video_id)}
         />
       )}
     </div>
