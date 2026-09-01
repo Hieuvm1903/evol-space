@@ -85,9 +85,9 @@ function updateDragConstraints() {
   const vw = window.innerWidth, vh = window.innerHeight;
   setDragConstraints({
     left: EDGE_MARGIN,
-    top: TOP_EDGE_MARGIN,
+    top: EDGE_MARGIN,        // was TOP_EDGE_MARGIN — lets the widget be dragged up over the navbar now
     right: Math.max(EDGE_MARGIN, vw - w - EDGE_MARGIN),
-    bottom: Math.max(TOP_EDGE_MARGIN, vh - h - EDGE_MARGIN),
+    bottom: Math.max(EDGE_MARGIN, vh - h - EDGE_MARGIN),
   });
 }
 
