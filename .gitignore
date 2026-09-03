@@ -4,3 +4,4 @@ dist
 package-lock.json
 supabase/.temp/cli-latest
 supabase/.temp/rest-version
+tsconfig.tsbuildinfo

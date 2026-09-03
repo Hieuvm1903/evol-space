@@ -70,10 +70,10 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
                   <Play size={13} />
                 </button>
               </Tooltip>
-              
+              <a
                 href={`https://www.youtube.com/watch?v=${r.video_id}`} target="_blank" rel="noreferrer"
-                className="search-result-icon-btn" title="Open in new tab"
-              <a>
+                className="search-result-icon-btn" title="Open in new tab">
+              
                 <ExternalLink size={13} />
               </a>
               <button className="search-result-add" onClick={() => handleAdd(r)} disabled={addingId === r.video_id}>

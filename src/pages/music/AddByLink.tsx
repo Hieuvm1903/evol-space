@@ -84,6 +84,7 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
           placeholder="Paste a YouTube video or playlist link..."
           onPressEnter={handleSubmit}
           prefix={<Link2 size={13} color="var(--evol-muted)" />}
+          allowClear = {true}
         />
         <Button className="btn-glow" loading={busy} disabled={!trimmed} onClick={handleSubmit}>Add</Button>
       </div>

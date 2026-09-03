@@ -1,0 +1,166 @@
+/* ---------------------------------------------------------------------
+   Photobooth page — fits within the viewport instead of growing the
+   whole document: heading + camera/preview row are fixed height, and
+   only the gallery section underneath scrolls internally (same pattern
+   as MapPage / MusicPage's internal scroll areas).
+--------------------------------------------------------------------- */
+
+.photobooth-page-shell {
+  max-width: 980px !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.photobooth-heading { flex-shrink: 0; margin-bottom: 2px; }
+.photobooth-heading h2 { margin: 0 0 2px; display: flex; align-items: center; }
+.photobooth-heading .evol-card-meta { margin: 0; }
+
+/* ---- Camera (left) + preview (right) — fixed height, never scrolls ---- */
+.photobooth-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 20px;
+  flex-shrink: 0;
+  margin: 14px 0;
+}
+@media (max-width: 720px) {
+  .photobooth-main { grid-template-columns: 1fr; }
+}
+
+.photobooth-camera-col,
+.photobooth-preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.photobooth-video-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 32vh;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--evol-glass-border);
+  box-shadow: var(--evol-shadow-soft);
+}
+.photobooth-video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photobooth-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.2rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(7, 6, 15, 0.45);
+  text-shadow: 0 0 20px rgba(139, 111, 245, 0.8);
+}
+
+.photobooth-timer-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.photobooth-preview-controls-row {
+  display: flex;
+  gap: 8px;
+}
+
+.photobooth-preview-frame {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: 4 / 3;
+  max-height: 32vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  border: 1px dashed var(--evol-border);
+  background: var(--evol-glass-bg);
+  overflow: hidden;
+}
+.photobooth-preview-frame .photobooth-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photobooth-preview-frame .placeholder-note {
+  padding: 0 20px;
+  text-align: center;
+  margin: 0;
+}
+
+.photobooth-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---- Gallery — the only part of the page that scrolls ---- */
+.photobooth-gallery {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--evol-border);
+  padding-top: 10px;
+}
+.photobooth-gallery-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.photobooth-gallery-header h3 { margin: 0; font-size: 1rem; }
+
+.photobooth-gallery-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #8b6ff5 transparent;
+}
+.photobooth-gallery-scroll::-webkit-scrollbar { width: 6px; }
+.photobooth-gallery-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #8b6ff5, #22d3ee);
+  border-radius: 4px;
+}
+
+.photobooth-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding-bottom: 14px;
+}
+.photobooth-gallery-card {
+  margin-bottom: 0;
+  padding: 10px;
+}
+.photobooth-gallery-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 480px) {
+  .photobooth-video-wrap,
+  .photobooth-preview-frame {
+    max-height: 26vh;
+  }
+}
