@@ -79,17 +79,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           dragMomentum={false}
           dragElastic={0}
           dragTransition={{ power: 0, timeConstant: 0 }}
-          dragConstraints={drag.dragConstraints}   // NEW — hard-clamps the drag itself to the viewport
-
-          // `x`/`y` render as `transform: translate()`, which stacks on TOP of
-          // whatever position the element's CSS gives it — App.css's
-          // `#now-playing-widget` rule sets `top: 4.5rem; right: 1.25rem`,
-          // which would otherwise double up with the snap/drag math (which
-          // assumes x/y ARE the absolute viewport position). Pinning the box
-          // to a (0,0) fixed anchor inline — inline styles beat the external
-          // stylesheet rule regardless of CSS load order — makes x/y the
-          // single source of truth for position, so the widget can never
-          // drift off-screen after expanding, resizing, or a reload.
+          dragConstraints={drag.dragConstraints} 
           style={{ position: "fixed", top: 0, left: 0, x: drag.x, y: drag.y, touchAction: "none", willChange: "transform" }}
           onDragStart={drag.handleDragStart}
           onDragEnd={drag.handleDragEnd}

@@ -32,29 +32,30 @@ function QueueRow({ id, track, isCurrent, onPlay }: {
   );
 }
 
-export default function QueueList({ order, queue, currentTrackIdx, onReorder, onPlay }: {
-  order: number[];
+function trackKey(track: Track, idx: number): string {
+  return track.video_id || String(track.id ?? idx);
+}
+
+export default function QueueList({ queue, currentTrackIdx, onReorder, onPlay }: {
   queue: Track[];
   currentTrackIdx: number;
-  onReorder: (newOrder: number[]) => void;
+  onReorder: (newQueue: Track[]) => void;
   onPlay: (trackIdx: number) => void;
 }) {
   const [collapsed, setCollapsed] = useState(true);
-
-  // distance:5 keeps a plain tap-to-play from being swallowed as a drag —
-  // the pointer has to actually move 5px before dnd-kit takes over.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+  const ids = queue.map(trackKey);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldPos = order.findIndex((idx) => String(idx) === active.id);
-    const newPos = order.findIndex((idx) => String(idx) === over.id);
+    const oldPos = ids.indexOf(String(active.id));
+    const newPos = ids.indexOf(String(over.id));
     if (oldPos === -1 || newPos === -1) return;
-    onReorder(arrayMove(order, oldPos, newPos));
+    onReorder(arrayMove(queue, oldPos, newPos));
   }
 
   return (
@@ -65,15 +66,15 @@ export default function QueueList({ order, queue, currentTrackIdx, onReorder, on
       </div>
       <div className={`queue-list-wrapper${collapsed ? " collapsed" : ""}`}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={order.map(String)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             <div className="queue-list">
-              {order.map((origIdx) => (
+              {queue.map((track, idx) => (
                 <QueueRow
-                  key={origIdx}
-                  id={String(origIdx)}
-                  track={queue[origIdx]}
-                  isCurrent={origIdx === currentTrackIdx}
-                  onPlay={() => onPlay(origIdx)}
+                  key={trackKey(track, idx)}
+                  id={trackKey(track, idx)}
+                  track={track}
+                  isCurrent={idx === currentTrackIdx}
+                  onPlay={() => onPlay(idx)}
                 />
               ))}
             </div>

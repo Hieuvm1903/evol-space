@@ -28,7 +28,6 @@ interface Props {
 
 export default function NowPlaying({ drag, onPersistLyrics }: Props) {
   const queue = usePlayerStore((s) => s.queue);
-  const order = usePlayerStore((s) => s.order);
   const currentIdx = usePlayerStore((s) => s.currentIdx);
   const mode = usePlayerStore((s) => s.mode);
   const playing = usePlayerStore((s) => s.playing);
@@ -39,7 +38,7 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
   const expanded = usePlayerStore((s) => s.expanded);
   const showUnmute = usePlayerStore((s) => s.showUnmute);
 
-  const setOrder = usePlayerStore((s) => s.setOrder);
+  const reorderQueue = usePlayerStore((s) => s.reorderQueue);
   const setMode = usePlayerStore((s) => s.setMode);
   const setView = usePlayerStore((s) => s.setView);
   const setExpanded = usePlayerStore((s) => s.setExpanded);
@@ -58,7 +57,7 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
 
   // Keep the next track cued in a hidden player for a snappier transition
   // when it comes up — same intent as the old preload player.
-  const nextIdx = useMemo(() => pickNextTrackIdx(order, mode, currentIdx), [order, mode, currentIdx]);
+  const nextIdx = useMemo(() => pickNextTrackIdx(queue.length, mode, currentIdx), [queue.length, mode, currentIdx]);
   const nextTrack = nextIdx !== null ? queue[nextIdx] : undefined;
 
   function handleReady(e: { target: YouTubePlayer }) {
@@ -210,8 +209,7 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
 
             <VolumeSlider volume={volume} onChange={handleVolumeChange} />
 
-            <QueueList order={order} queue={queue} currentTrackIdx={currentIdx} onReorder={setOrder} onPlay={playIdx} />
-
+            <QueueList queue={queue} currentTrackIdx={currentIdx} onReorder={reorderQueue} onPlay={playIdx} />
           </div>
         </BorderGlow>
 

@@ -9,27 +9,16 @@ export function shuffleArray<T>(arr: T[]): T[] {
   return result;
 }
 
-export function shuffleQueue(queueLen: number): number[] {
-  return shuffleArray(Array.from({ length: queueLen }, (_, i) => i));
+// No more index-permutation layer — queue order == play order.
+export function pickNextTrackIdx(queueLen: number, mode: Mode, currentIdx: number): number | null {
+  if (queueLen <= 1) return mode === "repeatAll" ? currentIdx : null;
+  const next = currentIdx + 1;
+  if (next < queueLen) return next;
+  return mode === "repeatAll" ? 0 : null;
 }
 
-// `order` already holds the play sequence — in shuffle mode that sequence
-// is a random permutation (built once, when shuffle mode is entered, or
-// again via "shuffle again"), but advancing through it is now always
-// sequential, same as normal mode.
-export function pickNextTrackIdx(order: number[], mode: Mode, currentTrackIdx: number): number | null {
-  const len = order.length;
-  if (len <= 1) return mode === "repeatAll" ? currentTrackIdx : null;
-  const pos = order.indexOf(currentTrackIdx);
-  const nextPos = pos + 1;
-  if (nextPos < len) return order[nextPos];
-  return mode === "repeatAll" ? order[0] : null;
-}
-
-export function pickPrevTrackIdx(order: number[], mode: Mode, currentTrackIdx: number): number {
-  const len = order.length;
-  const pos = order.indexOf(currentTrackIdx);
-  const prevPos = pos - 1;
-  if (prevPos >= 0) return order[prevPos];
-  return mode === "repeatAll" ? order[len - 1] : order[0];
+export function pickPrevTrackIdx(queueLen: number, mode: Mode, currentIdx: number): number {
+  const prev = currentIdx - 1;
+  if (prev >= 0) return prev;
+  return mode === "repeatAll" ? queueLen - 1 : 0;
 }

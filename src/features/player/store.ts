@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Track, Mode, View } from "./types";
 import { MODE_MAP, EXPANDED_KEY } from "./constants";
-import { shuffleArray, shuffleQueue, pickNextTrackIdx, pickPrevTrackIdx } from "./utils/queueOrder";
+import { shuffleArray, pickNextTrackIdx, pickPrevTrackIdx } from "./utils/queueOrder";
 
 function readExpanded(): boolean {
   try { return localStorage.getItem(EXPANDED_KEY) === "1"; } catch { return false; }
@@ -9,7 +9,6 @@ function readExpanded(): boolean {
 
 interface PlayerStore {
   queue: Track[];
-  order: number[];
   currentIdx: number;
   mode: Mode;
   playing: boolean;
@@ -20,26 +19,29 @@ interface PlayerStore {
   expanded: boolean;
   showUnmute: boolean;
   playingPlaylistId: number | null;
-
   loadQueue: (tracks: Track[], modeLabel: string, playlistId?: number) => void;
   setPlaylistMode: (modeLabel: string) => void;
   setMode: (m: Mode) => void;
-  setOrder: (order: number[]) => void;
   reshuffle: () => void;
   playIdx: (idx: number) => void;
   advance: (step: number) => void;
   setPlaying: (p: boolean) => void;
   setProgress: (curTime: number, duration: number) => void;
+  reorderQueue: (newQueue: Track[]) => void; // replaces setOrder
   setVolume: (v: number) => void;
   setView: (v: View) => void;
   setExpanded: (e: boolean) => void;
   setShowUnmute: (b: boolean) => void;
   close: () => void;
 }
-
+function reshuffleKeepingCurrent(queue: Track[], currentIdx: number) {
+  const current = queue[currentIdx];
+  const reshuffled = shuffleArray(queue);
+  const newIdx = current ? reshuffled.findIndex((t) => t.video_id === current.video_id) : 0;
+  return { queue: reshuffled, currentIdx: newIdx === -1 ? 0 : newIdx };
+}
 export const usePlayerStore = create<PlayerStore>((set, get) => ({
   queue: [],
-  order: [],
   currentIdx: 0,
   mode: "normal",
   playing: false,
@@ -55,12 +57,10 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
     const mapped = MODE_MAP[modeLabel] || "normal";
     const isShuffle = mapped === "shuffle";
     const finalTracks = isShuffle ? shuffleArray(tracks) : tracks;
-    const order = isShuffle ? shuffleQueue(finalTracks.length) : finalTracks.map((_, i) => i);
     set({
       queue: finalTracks,
-      order,
       currentIdx: 0,
-      mode:  mapped,
+      mode: isShuffle ? "repeatAll" : mapped,
       playingPlaylistId: playlistId ?? null,
       curTime: 0,
       duration: 0,
@@ -71,10 +71,10 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   // Used when the same playlist is already loaded and the user just
   // clicked a different Play/Shuffle/Repeat button — switches mode live
   // without restarting the current track.
-  setPlaylistMode: (modeLabel) => {
+ setPlaylistMode: (modeLabel) => {
     const mapped = MODE_MAP[modeLabel] || "normal";
     if (mapped === "shuffle") {
-      set({ order: shuffleQueue(get().queue.length) });
+      set((s) => ({ ...reshuffleKeepingCurrent(s.queue, s.currentIdx), mode: "repeatAll" }));
     } else {
       set({ mode: mapped });
     }
@@ -82,14 +82,21 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
 
   setMode: (m) => {
     if (m === "shuffle") {
-      set({ order: shuffleQueue(get().queue.length) });
+      set((s) => ({ ...reshuffleKeepingCurrent(s.queue, s.currentIdx), mode: "repeatAll" }));
     } else {
       set({ mode: m });
     }
   },
 
-  setOrder: (order) => set({ order }),
-  reshuffle: () => set({ order: shuffleQueue(get().queue.length) }),
+
+
+reorderQueue: (newQueue) => {
+    const current = get().queue[get().currentIdx];
+    const newIdx = current ? newQueue.findIndex((t) => t.video_id === current.video_id) : get().currentIdx;
+    set({ queue: newQueue, currentIdx: newIdx === -1 ? get().currentIdx : newIdx });
+  },
+
+  reshuffle: () => set((s) => reshuffleKeepingCurrent(s.queue, s.currentIdx)),
 
   playIdx: (idx) => {
     if (!get().queue[idx]) return;
@@ -97,11 +104,11 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   },
 
   advance: (step) => {
-    const { order, mode, currentIdx } = get();
-    if (!order.length) return;
+    const { queue, mode, currentIdx } = get();
+    if (!queue.length) return;
     const next = step > 0
-      ? pickNextTrackIdx(order, mode, currentIdx)
-      : pickPrevTrackIdx(order, mode, currentIdx);
+      ? pickNextTrackIdx(queue.length, mode, currentIdx)
+      : pickPrevTrackIdx(queue.length, mode, currentIdx);
     if (next === null) { set({ playing: false }); return; }
     get().playIdx(next);
   },
@@ -116,5 +123,5 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   },
   setShowUnmute: (showUnmute) => set({ showUnmute }),
 
-  close: () => set({ queue: [], order: [], currentIdx: 0, playingPlaylistId: null, playing: false }),
+  close: () => set({ queue: [], currentIdx: 0, playingPlaylistId: null, playing: false }),
 }));
