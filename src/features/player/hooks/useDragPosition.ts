@@ -5,7 +5,6 @@ import {
   SNAP_MODE_KEY,
   PANEL_WIDTH,
   EDGE_MARGIN,
-  TOP_EDGE_MARGIN,
 } from "../constants";
 import { clampToViewport } from "../utils/dom";
 import {
@@ -42,14 +41,14 @@ function readSavedPosition(
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed.snap === "string") {
-        return snapPixelPosition(parsed.snap as SnapId, w, h, vw, vh, EDGE_MARGIN, TOP_EDGE_MARGIN);
+        return snapPixelPosition(parsed.snap as SnapId, w, h, vw, vh, EDGE_MARGIN, EDGE_MARGIN);
       }
       if (parsed && typeof parsed.leftFrac === "number") {
-        return clampToViewport(parsed.leftFrac * vw, parsed.topFrac * vh, w, h, vw, vh, TOP_EDGE_MARGIN);
+        return clampToViewport(parsed.leftFrac * vw, parsed.topFrac * vh, w, h, vw, vh, EDGE_MARGIN);
       }
     }
   } catch {}
-  return snapPixelPosition(DEFAULT_SNAP, w, h, vw, vh, EDGE_MARGIN, TOP_EDGE_MARGIN);
+  return snapPixelPosition(DEFAULT_SNAP, w, h, vw, vh, EDGE_MARGIN, EDGE_MARGIN);
 }
 
 export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
@@ -63,9 +62,9 @@ export function useDragPosition(containerRef: React.RefObject<HTMLElement>) {
 // near the other useState calls, after snapEnabled/justDraggedRef:
 const [dragConstraints, setDragConstraints] = useState({
   left: EDGE_MARGIN,
-  top: TOP_EDGE_MARGIN,
+  top: EDGE_MARGIN,
   right: EDGE_MARGIN,
-  bottom: TOP_EDGE_MARGIN,
+  bottom: EDGE_MARGIN,
 });
   // Set (not cleared until next tick) whenever a real drag happened, so
   // handle components can suppress the click/tap that follows pointerup
@@ -144,8 +143,8 @@ function updateDragConstraints() {
     const vw = window.innerWidth, vh = window.innerHeight;
 
     if (enabled) {
-      const id = nearestSnapId(rect.left, rect.top, rect.width, rect.height, vw, vh, EDGE_MARGIN, TOP_EDGE_MARGIN);
-      const { left, top } = snapPixelPosition(id, rect.width, rect.height, vw, vh, EDGE_MARGIN, TOP_EDGE_MARGIN);
+      const id = nearestSnapId(rect.left, rect.top, rect.width, rect.height, vw, vh, EDGE_MARGIN, EDGE_MARGIN);
+      const { left, top } = snapPixelPosition(id, rect.width, rect.height, vw, vh, EDGE_MARGIN, EDGE_MARGIN);
       animate(x, left, { type: "spring", bounce: 0.25, duration: 0.3 });
       animate(y, top, { type: "spring", bounce: 0.25, duration: 0.3 });
       saveSnap(id);
@@ -165,13 +164,13 @@ function updateDragConstraints() {
       const vw = window.innerWidth, vh = window.innerHeight;
 
       if (snapEnabledRef.current) {
-        const id = nearestSnapId(rect.left, rect.top, rect.width, rect.height, vw, vh, EDGE_MARGIN, TOP_EDGE_MARGIN);
-        const { left, top } = snapPixelPosition(id, rect.width, rect.height, vw, vh, EDGE_MARGIN, TOP_EDGE_MARGIN);
+        const id = nearestSnapId(rect.left, rect.top, rect.width, rect.height, vw, vh, EDGE_MARGIN, EDGE_MARGIN);
+        const { left, top } = snapPixelPosition(id, rect.width, rect.height, vw, vh, EDGE_MARGIN, EDGE_MARGIN);
         animate(x, left, { type: "spring", bounce: 0.25, duration: 0.3 });
         animate(y, top, { type: "spring", bounce: 0.25, duration: 0.3 });
         saveSnap(id);
       } else {
-        const { left, top } = clampToViewport(rect.left, rect.top, rect.width, rect.height, vw, vh, TOP_EDGE_MARGIN);
+        const { left, top } = clampToViewport(rect.left, rect.top, rect.width, rect.height, vw, vh, EDGE_MARGIN);
         x.set(left);
         y.set(top);
         saveFree(left, top, vw, vh);

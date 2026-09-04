@@ -4,6 +4,8 @@ import { Search, LocateFixed, Pencil, Trash2, Navigation2, ArrowDownAZ } from "l
 import { PLACE_ICON_CHOICES, iconForName, splitIcon } from "../../content/placeIcons";
 import type { Place } from "../../lib/placesService";
 import type { SortOption } from "./types";
+import type { LongPressSelect } from "../../hooks/useLongPressSelect";
+import SelectCheckbox from "../../components/SelectCheckBox";
 
 const { Text } = Typography;
 
@@ -28,6 +30,8 @@ interface Props {
   onSelectAndFly: (p: Place) => void;
   onEdit: (p: Place) => void;
   onDelete: (id: number) => void;
+  /** Hold-to-select template — see hooks/useLongPressSelect.ts */
+  longPress: LongPressSelect<number>;
 }
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -42,7 +46,7 @@ export default function BrowseTab({
   loading, places, nameFilter, onNameFilterChange, iconFilter, onIconFilterChange,
   sortBy, onSortByChange,
   distCenter, onDistCenterChange, onUseMyLocationForDistance, radiusKm, onRadiusKmChange,
-  allTags, tagFilter, onTagFilterChange, selectedId, onSelectAndFly, onEdit, onDelete,
+  allTags, tagFilter, onTagFilterChange, selectedId, onSelectAndFly, onEdit, onDelete, longPress,
 }: Props) {
   return (
     <div className="map-browse-panel">
@@ -132,13 +136,26 @@ export default function BrowseTab({
           places.map((p) => {
             const { name: iconName, color } = splitIcon(p.icon);
             const Icon = iconForName(iconName);
-            const isSelected = selectedId === p.id;
+            const isFlySelected = selectedId === p.id;
+            const bulkChecked = longPress.isSelected(p.id);
+            // Spread onto the row: gives onPointerDown/Move/Up/Leave for
+            // the 1.5s hold detection, plus an onClick that toggles the
+            // checkbox once select mode is on (see useLongPressSelect.ts).
+            const lp = longPress.bind(p.id);
             return (
               <div
                 key={p.id}
-                className={`map-place-row cursor-target${isSelected ? " active" : ""}`}
-                onClick={() => onSelectAndFly(p)}
+                className={`map-place-row cursor-target${isFlySelected ? " active" : ""}${bulkChecked ? " bulk-selected" : ""}`}
+                {...lp}
+                onClick={(e) => {
+                  lp.onClick(e);
+                  // Only fly to the place if this click wasn't a long-press
+                  // and didn't just toggle a checkbox in select mode.
+                  if (!longPress.selectMode && !e.defaultPrevented) onSelectAndFly(p);
+                }}
               >
+                {longPress.selectMode && <SelectCheckbox checked={bulkChecked} />}
+
                 <div className="map-place-swatch" style={{ ["--sw-color" as any]: color }}>
                   <Icon size={15} color="#fff" />
                 </div>
@@ -146,7 +163,7 @@ export default function BrowseTab({
                   <div className="map-place-name">{p.name}</div>
                   {p.description && <div className="map-place-desc">{p.description}</div>}
                 </div>
-                {isSelected && (
+                {isFlySelected && !longPress.selectMode && (
                   <div className="map-place-row-actions" onClick={(e) => e.stopPropagation()}>
                     <Tooltip title="Edit">
                       <Button size="small" icon={<Pencil size={13} />} onClick={() => onEdit(p)} />

@@ -9,6 +9,10 @@ import { Place } from "../../lib/placesService";
 import { splitIcon } from "../../content/placeIcons";
 import "./MapPage.css";
 import TargetCursor from "../../components/TargetCursor";
+import { useConfirm } from "../../components/ConfirmDialog";
+import { notify } from "../../lib/notify";
+import { useLongPressSelect } from "../../hooks/useLongPressSelect";
+import SelectionToolbar from "../../components/SelectionToolbar";
 
 import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./constants";
 import type { MapMode, MapTool, FormState, SortOption } from "./types";
@@ -46,6 +50,7 @@ export function MapPage() {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [nameFilter, setNameFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -53,6 +58,11 @@ export function MapPage() {
   const [radiusKm, setRadiusKm] = useState(0);
   const [iconFilter, setIconFilter] = useState<string[]>([]);
   const mapRef = useRef<L.Map | null>(null);
+
+  const confirmDialog = useConfirm();
+  // Hold-1.5s-to-select-mode for the Browse list — see
+  // hooks/useLongPressSelect.ts for the reusable template this is built on.
+  const longPress = useLongPressSelect<number>();
 
   async function load() {
     if (!user) return;
@@ -95,20 +105,53 @@ export function MapPage() {
     if (lat < -90 || lat > 90 || lon < -180 || lon > 180) { alert("Latitude must be -90..90 and longitude -180..180."); return; }
     const icon = `${form.iconName}|${form.color}`;
     const finalName = form.name.trim() || "Untitled place";
+    const isEdit = form.editId !== null;
 
-    if (form.editId !== null) {
-      await placesService.updatePlace(form.editId, finalName, lat, lon, form.description.trim(), icon, form.tags);
+    if (isEdit) {
+      await placesService.updatePlace(form.editId!, finalName, lat, lon, form.description.trim(), icon, form.tags);
+      notify.updated(`"${finalName}" saved.`);
     } else {
       await placesService.addPlace(user!.id, finalName, lat, lon, form.description.trim(), icon, form.tags);
+      notify.added(`"${finalName}" added to the map.`);
     }
     closeForm();
     load();
   }
 
   async function handleDelete(placeId: number) {
-    if (!confirm("Delete this place?")) return;
+    const ok = await confirmDialog({
+      title: "Delete this place?",
+      description: "This can't be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     await placesService.deletePlace(placeId, user!.id);
     if (selectedId === placeId) setSelectedId(null);
+    notify.deleted("Place removed.");
+    load();
+  }
+
+  // Bulk delete for whatever's checked via the long-press select mode.
+  async function handleBulkDelete() {
+    const ids = Array.from(longPress.selectedIds);
+    if (ids.length === 0) return;
+    const ok = await confirmDialog({
+      title: `Delete ${ids.length} place${ids.length === 1 ? "" : "s"}?`,
+      description: "This can't be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+
+    setBulkDeleting(true);
+    for (const id of ids) {
+      await placesService.deletePlace(id, user!.id);
+    }
+    setBulkDeleting(false);
+    notify.deleted(`${ids.length} place${ids.length === 1 ? "" : "s"} removed.`);
+    if (selectedId !== null && ids.includes(selectedId)) setSelectedId(null);
+    longPress.exitSelectMode();
     load();
   }
 
@@ -298,7 +341,7 @@ export function MapPage() {
           Places
         </Title>
       </div>
-      <p className="map-page-sub">Right-click the map to drop a pin, or use "Add place" on the left.</p>
+      <p className="map-page-sub">Right-click the map to drop a pin, or use "Add place" on the left. Hold a place in the list for 1.5s to select several at once.</p>
 
       <div className="map-layout">
         {/* ---------------- Left rail ---------------- */}
@@ -309,6 +352,7 @@ export function MapPage() {
             onChange={(k) => {
               if (k === "browse") closeForm();
               else if (k === "form" && panelMode === "none") openAdd();
+              if (k !== "browse") longPress.exitSelectMode();
               setTab(k as any);
             }}
             items={[
@@ -340,6 +384,7 @@ export function MapPage() {
               onSelectAndFly={selectAndFly}
               onEdit={openEdit}
               onDelete={handleDelete}
+              longPress={longPress}
             />
           )}
 
@@ -399,6 +444,19 @@ export function MapPage() {
           onOpenAdd={() => openAdd()}
         />
       </div>
+
+      {tab === "browse" && longPress.selectMode && (
+        <SelectionToolbar
+          count={longPress.selectedCount}
+          total={filtered.result.length}
+          itemLabel="place"
+          deleting={bulkDeleting}
+          onSelectAll={() => longPress.selectAll(filtered.result.map((p) => p.id))}
+          onClearSelection={longPress.clearSelection}
+          onCancel={longPress.exitSelectMode}
+          onDelete={handleBulkDelete}
+        />
+      )}
     </div>
   );
 }

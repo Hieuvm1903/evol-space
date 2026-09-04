@@ -1,0 +1,20 @@
+.select-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--evol-border);
+  background: rgba(255, 255, 255, 0.03);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a0a12;
+  margin-right: 4px;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.15s var(--ease);
+  animation: evol-scale-in 0.15s var(--ease) both;
+}
+.select-checkbox.checked {
+  background: linear-gradient(135deg, #8b6ff5, #22d3ee);
+  border-color: transparent;
+  transform: scale(1.05);
+}

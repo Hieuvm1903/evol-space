@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import type { Track } from "../types";
-import { loadYouTubeIframeApi } from "../hooks/useYoutubeiframeApi";
+import { loadYouTubeIframeApi } from "../hooks/useYoutubeIframeApi";
 
 // Mirrors react-youtube's onReady/onStateChange shape so NowPlaying.tsx
 // doesn't need to change its handlers.

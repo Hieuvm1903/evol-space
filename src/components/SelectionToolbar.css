@@ -1,0 +1,71 @@
+.selection-toolbar {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px;
+  background: var(--evol-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--evol-glass-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), var(--evol-glow);
+}
+
+.selection-toolbar-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--evol-border);
+  background: transparent;
+  color: var(--evol-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.selection-toolbar-cancel:hover { color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+
+.selection-toolbar-count {
+  font-size: 0.82rem;
+  color: var(--evol-text);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.selection-toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--evol-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--evol-text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s var(--ease), transform 0.15s var(--ease), box-shadow 0.2s var(--ease), opacity 0.15s var(--ease);
+}
+.selection-toolbar-btn:hover:not(:disabled) { border-color: var(--evol-green); transform: translateY(-1px); }
+.selection-toolbar-btn:disabled { opacity: 0.45; cursor: default; }
+
+.selection-toolbar-delete {
+  background: linear-gradient(135deg, #e05555, #ff8b6b);
+  border-color: transparent;
+  color: #1a0a0a;
+}
+.selection-toolbar-delete:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px rgba(224, 85, 85, 0.4), 0 10px 26px -8px rgba(224, 85, 85, 0.55);
+}
+
+@media (max-width: 480px) {
+  .selection-toolbar { left: 12px; right: 12px; transform: none; justify-content: space-between; }
+}

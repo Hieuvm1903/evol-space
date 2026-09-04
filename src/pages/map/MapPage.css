@@ -91,9 +91,16 @@
   display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px;
   border: 1px solid var(--evol-border); background: rgba(255,255,255,0.02); margin-bottom: 7px; cursor: pointer;
   transition: border-color 0.15s var(--ease), background 0.15s var(--ease), transform 0.15s var(--ease);
+  touch-action: pan-y; /* let vertical scroll through, still catch the hold */
+  user-select: none;
 }
 .map-place-row:hover { border-color: rgba(139,111,245,0.5); transform: translateX(2px); }
 .map-place-row.active { border-color: #8b6ff5; background: rgba(139,111,245,0.12); box-shadow: 0 0 0 1px rgba(34,211,238,0.25); }
+.map-place-row.bulk-selected {
+  border-color: #22d3ee;
+  background: rgba(34, 211, 238, 0.08);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.3);
+}
 .map-place-swatch {
   width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
   color: #fff; flex-shrink: 0; box-shadow: 0 0 10px -2px var(--sw-color, #8b6ff5);

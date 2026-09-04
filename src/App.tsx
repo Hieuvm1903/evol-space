@@ -3,6 +3,7 @@ import { ConfigProvider, theme as antdTheme } from "antd";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PlayerProvider } from "./features/player/PlayerProvider";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import { NavBar } from "./components/NavBar";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -33,38 +34,42 @@ const evolAntdTheme = {
     fontFamily: `"Be Vietnam Pro", sans-serif`,
   },
 };
-
 export default function App() {
   return (
     <ConfigProvider theme={evolAntdTheme}>
-      <AuthProvider>
-        {/* PlayerProvider wraps everything (like app.py's top-level
-            render_now_playing_drawer() call) so the widget floats over
-            whatever page is showing, and any page can call usePlayer().loadQueue(...)
-            once the Music page is ported. */}
-        <PlayerProvider>
-          <BrowserRouter>
-         
-            <GalaxyBackground />
-            <NavBar />
-            <main className="app-content">
+      {/* ConfirmProvider wraps everything so useConfirm() works from any
+          page — it replaces window.confirm() with a themed dialog. See
+          components/ConfirmDialog.tsx. */}
+      <ConfirmProvider>
+        <AuthProvider>
+          {/* PlayerProvider wraps everything (like app.py's top-level
+              render_now_playing_drawer() call) so the widget floats over
+              whatever page is showing, and any page can call usePlayer().loadQueue(...)
+              once the Music page is ported. */}
+          <PlayerProvider>
+            <BrowserRouter>
 
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/relax" element={<RelaxPage />} />
-              <Route path="/music" element={<MusicPage />} />
-              <Route path="/secret" element={<SecretPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-               <Route path="/map" element={<MapPage />} />
-               <Route path="/blank" element={<BlankPage />} />
-            <Route path="/photobooth" element={<PhotoboothPage />} />
-            </Routes>
-                        </main>
+              <GalaxyBackground />
+              <NavBar />
+              <main className="app-content">
 
-          </BrowserRouter>
-        </PlayerProvider>
-      </AuthProvider>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/relax" element={<RelaxPage />} />
+                <Route path="/music" element={<MusicPage />} />
+                <Route path="/secret" element={<SecretPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                 <Route path="/map" element={<MapPage />} />
+                 <Route path="/blank" element={<BlankPage />} />
+              <Route path="/photobooth" element={<PhotoboothPage />} />
+              </Routes>
+                          </main>
+
+            </BrowserRouter>
+          </PlayerProvider>
+        </AuthProvider>
+      </ConfirmProvider>
     </ConfigProvider>
   );
 }
