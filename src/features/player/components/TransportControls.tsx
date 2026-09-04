@@ -24,11 +24,11 @@ export default function TransportControls({ track, playing, onPrev, onNext, onTo
         <button
           type="button"
           className="np-icon-btn np-icon-btn-primary"
-          style={{ position: "relative", zIndex: 1 }}
+          style={{ zIndex: 1 }}
           onClick={onTogglePlayPause}
           aria-label={playing ? "Pause" : "Play"}
         >
-          {playing ? <Pause size={19} /> : <Play size={19} style={{ marginLeft: 2 }} />}
+          {playing ? <Pause size={18} /> : <Play size={18}  />}
         </button>
       </span>
       <button type="button" className="np-icon-btn" onClick={onNext} aria-label="Next track">

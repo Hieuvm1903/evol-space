@@ -52,6 +52,10 @@
   border: 1px solid #2a2740;
   color: #e8e6f5;
   cursor: pointer;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  line-height: 0; /* kills SVG inline baseline gap */
   transition:
     transform 0.15s ease,
     border-color 0.15s ease,
@@ -70,11 +74,24 @@
 }
 
 .np-icon-btn-ghost {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: transparent;
   border: none;
   color: #22d3ee;
   width: 26px;
   height: 26px;
+  transition: transform 0.15s ease, color 0.15s ease, opacity 0.2s ease;
+}
+.np-icon-btn-ghost:hover:not(:disabled) {
+  transform: translate(-50%, -50%) scale(1.08);
+  color: #8b6ff5;
+  opacity: 0.9;
+}
+.np-icon-btn-ghost:active:not(:disabled) {
+  transform: translate(-50%, -50%) scale(0.92);
 }
 .np-close-btn {
   color: #9a9a9a;
@@ -500,7 +517,6 @@
   background: rgba(139, 111, 245, 0.14);
 }
 
-
 /* Timestamp badge — overlays on top rather than reserving box space, so
    text-align:center centers against the full line width. Only visible
    on hover; pointer-events:none so it never blocks the click-to-seek. */
@@ -679,7 +695,6 @@
 .spin-disk-wrap {
   position: relative;
   display: grid;
-  place-items: center;
   flex-shrink: 0;
   flex-grow: 0;
 }
@@ -726,19 +741,33 @@
   background: linear-gradient(135deg, #ffffff, #e6e3fb);
   color: #14121f;
   border: none;
-  grid-area: 1 / 1; /* stacks in the same cell as .spin-disk */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   box-shadow:
     0 0 14px rgba(0, 0, 0, 0.35),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.15); /* symmetric now */
+    inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+}
+.np-icon-btn-primary svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 .np-icon-btn-primary:hover:not(:disabled) {
   box-shadow:
     0 4px 18px rgba(0, 0, 0, 0.4),
     0 0 0 5px rgba(139, 111, 245, 0.28);
-  transform: translateY(-1px) scale(1.04);
+  transform: translate(-50%, -50%) ;
+  background: linear-gradient(135deg, #8b6ff5, #22d3ee);
+  opacity: 0.5;
 }
 .np-icon-btn-primary:active:not(:disabled) {
-  transform: translateY(0) scale(0.92);
+  transform: translate(-50%, -50%);
+   background: linear-gradient(135deg, #8b6ff5, #22d3ee);
+  opacity: 0.5;
 }
 /* --- Collapsed-pill equalizer bars --- */
 .pill-eq {
@@ -749,7 +778,7 @@
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  background: #0c0b16;
+  background: transparent;
   flex-shrink: 0;
   padding: 6px 5px;
   box-sizing: border-box;
