@@ -14,7 +14,27 @@ export function emptyForm(prefill?: { lat: number; lon: number }): FormState {
     tags: "",
   };
 }
+// Detects a pasted Google Maps place fragment like
+// "Ume+matcha+trà+hoa+quả/@20.8283161,106.6902532" (or a full maps.google.com
+// URL containing the same "/place/<name>/@<lat>,<lon>" shape) and extracts
+// a clean name + lat/lon pair out of it.
+const GMAPS_PASTE_RE = /([^/]+)\/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/;
 
+export function parseGoogleMapsPaste(value: string): { name: string; lat: string; lon: string } | null {
+  const m = value.match(GMAPS_PASTE_RE);
+  if (!m) return null;
+
+  let namePart = m[1];
+  // Full URL paste: keep only the segment right after "/place/"
+  const placeIdx = namePart.lastIndexOf("/place/");
+  if (placeIdx !== -1) namePart = namePart.slice(placeIdx + "/place/".length);
+
+  try { namePart = decodeURIComponent(namePart); } catch { /* leave as-is */ }
+  const name = namePart.replace(/\+/g, " ").trim();
+  if (!name) return null;
+
+  return { name, lat: m[2], lon: m[3] };
+}
 export function formFromPlace(p: Place): FormState {
   const { name, color } = splitIcon(p.icon);
   return {

@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Input, Select, Tag, Empty, Tooltip, InputNumber, Typography } from "antd";
-import { Search, LocateFixed, Pencil, Trash2, Navigation2, ArrowDownAZ } from "lucide-react";
+import { Search, LocateFixed, Pencil, Trash2, Navigation2, ArrowDownAZ, MapPinned } from "lucide-react";
 import { PLACE_ICON_CHOICES, iconForName, splitIcon } from "../../content/placeIcons";
 import type { Place } from "../../lib/placesService";
 import type { SortOption } from "./types";
@@ -180,6 +180,13 @@ export default function BrowseTab({
                       <Button
                         size="small" icon={<Navigation2 size={13} />}
                         href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`}
+                        target="_blank"
+                      />
+                    </Tooltip>
+                    <Tooltip title="Find on Google Maps">
+                      <Button
+                        size="small" icon={<MapPinned size={13} />}
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}+${p.lat},${p.lon}`}
                         target="_blank"
                       />
                     </Tooltip>

@@ -2,7 +2,7 @@ import React from "react";
 import { Button, Input, ColorPicker, Popover, Tooltip, Space, AutoComplete } from "antd";
 import { Crosshair } from "lucide-react";
 import { PLACE_ICON_CHOICES, iconForName, labelForName } from "../../content/placeIcons";
-import { tagSuggestions, applyTagSuggestion, splitLatLonPair } from "./formHelpers";
+import { tagSuggestions, applyTagSuggestion, splitLatLonPair, parseGoogleMapsPaste } from "./formHelpers";
 import type { FormState } from "./types";
 import "./MapPage.css";
 interface Props {
@@ -23,7 +23,7 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
           <Input
             value={form.name}
             onChange={(e) => onFormChange({ ...form, name: e.target.value })}
-            placeholder="e.g. Hồ Gươm"
+            allowClear = {true}
           />
         </div>
       </div>
@@ -120,17 +120,29 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
         </div>
       </div>
 
-      <div className="map-form-row">
-        <span className="map-form-row-label">Description</span>
-        <div className="map-form-row-content">
-          <Input.TextArea
-            value={form.description}
-            onChange={(e) => onFormChange({ ...form, description: e.target.value })}
-            placeholder="Why this place matters..."
-            rows={3}
-          />
-        </div>
-      </div>
+   <div className="map-form-row">
+  <span className="map-form-row-label">Description</span>
+  <div className="map-form-row-content">
+    <Input.TextArea
+      value={form.description}
+      onChange={(e) => onFormChange({ ...form, description: e.target.value })}
+      onPaste={(e) => {
+        const pasted = e.clipboardData.getData("text");
+        const parsed = parseGoogleMapsPaste(pasted);
+        if (!parsed) return; // normal paste, let it through
+        e.preventDefault();
+        onFormChange({
+          ...form,
+          name: form.name.trim() ? form.name : parsed.name,
+          lat: parsed.lat,
+          lon: parsed.lon,
+        });
+      }}
+      placeholder="Why this place matters... "
+      rows={3}
+    />
+  </div>
+</div>
 
       <div className="map-form-actions">
         <Button type="primary" block onClick={onSave}>Save</Button>

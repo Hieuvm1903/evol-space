@@ -165,6 +165,14 @@ export default function MapCanvas({
                 <a href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`} target="_blank" rel="noreferrer">
                   Directions ↗
                 </a>
+                {" · "}
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Find ↗
+                </a>
               </Popup>
             </Marker>
           );
@@ -190,6 +198,6 @@ export default function MapCanvas({
           />
         )}
       </MapContainer>
-    </div>
+    </div >
   );
 }
