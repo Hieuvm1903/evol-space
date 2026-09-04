@@ -67,13 +67,38 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
       try { if (e.target.isMuted()) setShowUnmute(true); } catch { }
     }, 500);
   }
+const endHandledRef = useRef(false);
 
-  function handleStateChange(e: { data: number }) {
-    // YT.PlayerState: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
-    if (e.data === 1) setPlaying(true);
-    else if (e.data === 2) setPlaying(false);
-    else if (e.data === 0) handleEnded();
+useEffect(() => {
+  endHandledRef.current = false;
+}, [track?.video_id]);
+
+useEffect(() => {
+  const id = setInterval(() => {
+    const p = playerRef.current;
+    if (!p?.getCurrentTime) return;
+    try {
+      const cur = p.getCurrentTime();
+      const dur = p.getDuration();
+      if (dur > 0) {
+        setProgress(cur, dur);
+        if (!endHandledRef.current && dur - cur < 0.75) {
+          endHandledRef.current = true;
+          handleEnded();
+        }
+      }
+    } catch { }
+  }, 500);
+  return () => clearInterval(id);
+}, [setProgress, mode]); // mode included so handleEnded's repeat-track branch stays current
+ function handleStateChange(e: { data: number }) {
+  if (e.data === 1) setPlaying(true);
+  else if (e.data === 2) setPlaying(false);
+  else if (e.data === 0 && !endHandledRef.current) {
+    endHandledRef.current = true;
+    handleEnded();
   }
+}
 
   function handleEnded() {
     if (mode === "repeatTrack") {
@@ -99,6 +124,20 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
   useEffect(() => {
     setProgress(0, 0);
   }, [track?.video_id, setProgress]);
+  useEffect(() => {
+  if (!track || !("mediaSession" in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: track.title,
+    artist: track.artist ?? "",
+    artwork: track.thumbnail_url ? [{ src: track.thumbnail_url, sizes: "512x512", type: "image/jpeg" }] : [],
+  });
+  navigator.mediaSession.setActionHandler("play", togglePlayPause);
+  navigator.mediaSession.setActionHandler("pause", togglePlayPause);
+  navigator.mediaSession.setActionHandler("previoustrack", () => advance(-1));
+  navigator.mediaSession.setActionHandler("nexttrack", () => advance(1));
+  navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+}, [track?.video_id, playing]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Re-center the widget's saved position whenever it resizes between
   // pill <-> panel, so it doesn't drift off-screen or overlap content.
   useEffect(() => {
