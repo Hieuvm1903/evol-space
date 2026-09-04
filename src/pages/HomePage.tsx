@@ -21,7 +21,7 @@ function TypingQuote() {
 
       <TextType
         text={QUOTE_LINES.map((line) => line.text).join("\n")}
-        typingSpeed={100}
+        typingSpeed={50}
         pauseDuration={1500}
         showCursor
         cursorCharacter="_"

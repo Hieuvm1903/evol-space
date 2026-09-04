@@ -3,6 +3,7 @@ import { Empty, message } from "antd";
 import { Sparkles } from "lucide-react";
 import { usePlayer } from "../../features/player/PlayerProvider";
 import * as musicService from "../../lib/musicService";
+import { notify } from "../../lib/notify";
 import AlbumPickerPane from "./AlbumPickerPane";
 import PlaylistPane from "./PlaylistPane";
 
@@ -31,7 +32,7 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
       return rows[0]?.id ?? null;
     });
   }
-  useEffect(() => { loadPlaylists(); /* eslint-disable-next-line */ }, [userId]);
+  useEffect(() => { loadPlaylists(); /* eslint-disable-line */ }, [userId]);
 
   
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
     setCreating(false);
     setNewPlaylistName("");
     setShowNewPlaylist(false);
-    message.success(`Created "${name}"`);
+    notify.added(`"${name}" created.`);
     const rows = await musicService.getPlaylists(userId);
     setPlaylists(rows);
     setSelectedPlaylistId(rows.find((p) => p.name === name)?.id ?? rows[0]?.id ?? null);
@@ -59,7 +60,7 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
     if (!selectedPlaylist) return;
     const { id, name } = selectedPlaylist;
     await musicService.deletePlaylist(id);
-    message.success(`Deleted "${name}"`);
+    notify.deleted(`"${name}" deleted.`);
     const rows = await musicService.getPlaylists(userId);
     setPlaylists(rows);
     setSelectedPlaylistId(rows[0]?.id ?? null);
@@ -80,12 +81,14 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
 async function handleRemoveTrack(trackId: number) {
   if (!selectedPlaylistId) return;
   const prevTracks = tracks;
+  const removed = tracks.find((t) => t.id === trackId);
   setTracks((cur) => cur.filter((t) => t.id !== trackId)); // optimistic — no loading flicker
   try {
     await musicService.removeTrackFromPlaylist(selectedPlaylistId, trackId);
+    notify.deleted(removed ? `"${removed.title}" removed.` : "Track removed.");
   } catch {
     setTracks(prevTracks); // revert on failure
-    message.warning("Couldn't remove that track — try again.");
+    notify.error("Couldn't remove that track", "Please try again.");
   }
 }
 

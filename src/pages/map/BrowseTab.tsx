@@ -6,6 +6,7 @@ import type { Place } from "../../lib/placesService";
 import type { SortOption } from "./types";
 import type { LongPressSelect } from "../../hooks/useLongPressSelect";
 import SelectCheckbox from "../../components/SelectCheckBox";
+import LongPressRing from "../../components/LongPressRing";
 
 const { Text } = Typography;
 
@@ -145,7 +146,7 @@ export default function BrowseTab({
             return (
               <div
                 key={p.id}
-                className={`map-place-row cursor-target${isFlySelected ? " active" : ""}${bulkChecked ? " bulk-selected" : ""}`}
+                className={`map-place-row cursor-target${isFlySelected ? " active" : ""}${bulkChecked ? " bulk-selected" : ""}${longPress.isPressing(p.id) ? " pressing" : ""}`}
                 {...lp}
                 onClick={(e) => {
                   lp.onClick(e);
@@ -154,7 +155,11 @@ export default function BrowseTab({
                   if (!longPress.selectMode && !e.defaultPrevented) onSelectAndFly(p);
                 }}
               >
-                {longPress.selectMode && <SelectCheckbox checked={bulkChecked} />}
+                {longPress.selectMode ? (
+                  <SelectCheckbox checked={bulkChecked} />
+                ) : longPress.isPressing(p.id) ? (
+                  <LongPressRing />
+                ) : null}
 
                 <div className="map-place-swatch" style={{ ["--sw-color" as any]: color }}>
                   <Icon size={15} color="#fff" />

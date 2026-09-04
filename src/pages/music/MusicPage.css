@@ -176,6 +176,8 @@
   display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 12px;
   border: 1px solid transparent;
   transition: background 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.15s var(--ease);
+  touch-action: pan-y; /* let vertical scroll through, still catch the hold */
+  user-select: none;
 }
 .track-row:hover { background: rgba(255, 255, 255, 0.035); }
 .track-row-expanded { border-color: rgba(139, 111, 245, 0.45); background: rgba(139, 111, 245, 0.08); }
@@ -442,4 +444,18 @@
 .playlist-detail-row-checked {
   background: rgba(139, 111, 245, 0.1);
   box-shadow: inset 0 0 0 1px rgba(139, 111, 245, 0.35);
+}
+
+/* --- Long-press select mode on the track list --- */
+.track-row-checked {
+  border-color: #22d3ee !important;
+  background: rgba(34, 211, 238, 0.08) !important;
+}
+.track-row.pressing {
+  border-color: rgba(139, 111, 245, 0.5);
+  background: rgba(139, 111, 245, 0.05);
+  transform: scale(0.99);
+}
+.playlist-track-count-hint {
+  color: #6a6690;
 }

@@ -101,6 +101,11 @@
   background: rgba(34, 211, 238, 0.08);
   box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.3);
 }
+.map-place-row.pressing {
+  border-color: rgba(139, 111, 245, 0.55);
+  background: rgba(139, 111, 245, 0.06);
+  transform: scale(0.99);
+}
 .map-place-swatch {
   width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
   color: #fff; flex-shrink: 0; box-shadow: 0 0 10px -2px var(--sw-color, #8b6ff5);

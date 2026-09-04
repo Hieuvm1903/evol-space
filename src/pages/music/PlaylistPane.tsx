@@ -8,6 +8,10 @@ import * as musicService from "../../lib/musicService";
 import SpotlightCard from "../../components/SpotlightCard";
 import TrackRow from "./TrackRow";
 import AddTrackPanel from "./AddTrackPanel";
+import { useLongPressSelect } from "../../hooks/useLongPressSelect";
+import SelectionToolbar from "../../components/SelectionToolbar";
+import { useConfirm } from "../../components/ConfirmDialog";
+import { notify } from "../../lib/notify";
 
 type SortMode = "default" | "name-asc" | "name-desc" | "artist-asc" | "artist-desc";
 
@@ -45,6 +49,17 @@ export default function PlaylistPane({
   const [expandedTrackId, setExpandedTrackId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [bulkRemoving, setBulkRemoving] = useState(false);
+
+  const confirmDialog = useConfirm();
+  // Hold-1.5s-to-select-mode for the track list — see
+  // hooks/useLongPressSelect.ts for the reusable template this is built on.
+  const longPress = useLongPressSelect<number>();
+
+  // Exiting the playlist (switching albums) should reset any in-progress
+  // selection — this component remounts via `key={selectedPlaylist.id}`
+  // in MusicWorkspace.tsx, so this mostly matters for tab/search changes.
+  useEffect(() => { longPress.exitSelectMode(); }, [playlist.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveRename() {
     const trimmed = renameValue.trim();
@@ -66,6 +81,27 @@ export default function PlaylistPane({
     a.click();
     URL.revokeObjectURL(url);
     message.success("Download started.");
+  }
+
+  async function handleBulkRemove() {
+    const ids = Array.from(longPress.selectedIds);
+    if (ids.length === 0) return;
+    const ok = await confirmDialog({
+      title: `Remove ${ids.length} track${ids.length === 1 ? "" : "s"} from this playlist?`,
+      description: "This can't be undone.",
+      confirmText: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
+
+    setBulkRemoving(true);
+    for (const id of ids) {
+      await musicService.removeTrackFromPlaylist(playlist.id, id);
+    }
+    setBulkRemoving(false);
+    notify.deleted(`${ids.length} track${ids.length === 1 ? "" : "s"} removed.`);
+    longPress.exitSelectMode();
+    onTracksChanged();
   }
 
   const otherPlaylists = playlists.filter((p) => p.id !== playlist.id);
@@ -207,7 +243,12 @@ useEffect(() => {
         </SpotlightCard>
       )}
 
-      <div className="playlist-track-count">{tracks.length} track{tracks.length === 1 ? "" : "s"}</div>
+      <div className="playlist-track-count">
+        {tracks.length} track{tracks.length === 1 ? "" : "s"}
+        {!longPress.selectMode && tracks.length > 0 && (
+          <span className="playlist-track-count-hint"> · hold a track to select several</span>
+        )}
+      </div>
 
       <div className="playlist-track-list">
         {loadingTracks ? (
@@ -231,10 +272,24 @@ useEffect(() => {
               onPlay={() => onPlayFromTrack(t.id!)}
               onRemove={() => onRemoveTrack(t.id!)}
               onChanged={onTracksChanged}
+              longPress={longPress}
             />
           ))
         )}
       </div>
+
+      {longPress.selectMode && (
+        <SelectionToolbar
+          count={longPress.selectedCount}
+          total={filteredTracks.length}
+          itemLabel="track"
+          deleting={bulkRemoving}
+          onSelectAll={() => longPress.selectAll(filteredTracks.map((t) => t.id!))}
+          onClearSelection={longPress.clearSelection}
+          onCancel={longPress.exitSelectMode}
+          onDelete={handleBulkRemove}
+        />
+      )}
     </div>
   );
 }

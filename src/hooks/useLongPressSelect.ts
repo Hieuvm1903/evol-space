@@ -1,12 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 
-const LONG_PRESS_MS = 1500;
+const LONG_PRESS_MS = 1500; // keep in sync with LongPressRing.css's fill animation
 const MOVE_CANCEL_PX = 10; // finger/mouse drifted too far — treat as a scroll, not a hold
 
 /**
  * Generic "hold 1.5s to enter select mode, then tap to check/uncheck"
  * behavior for any list. Works with touch, mouse, and pen since it's
- * built on pointer events.
+ * built on pointer events, and exposes `isPressing(id)` so a row can
+ * show a circular fill indicator while the hold is in progress (see
+ * components/LongPressRing.tsx).
  *
  * USAGE — drop into any row-rendering list:
  *
@@ -26,7 +28,11 @@ const MOVE_CANCEL_PX = 10; // finger/mouse drifted too far — treat as a scroll
  *           if (!longPress.selectMode && !e.defaultPrevented) openItem(item);
  *         }}
  *       >
- *         {longPress.selectMode && <SelectCheckbox checked={longPress.isSelected(item.id)} />}
+ *         {longPress.selectMode ? (
+ *           <SelectCheckbox checked={longPress.isSelected(item.id)} />
+ *         ) : longPress.isPressing(item.id) ? (
+ *           <LongPressRing />
+ *         ) : null}
  *         ...row content...
  *       </div>
  *     );
@@ -37,6 +43,7 @@ const MOVE_CANCEL_PX = 10; // finger/mouse drifted too far — treat as a scroll
  *       count={longPress.selectedCount}
  *       total={items.length}
  *       onSelectAll={() => longPress.selectAll(items.map((i) => i.id))}
+ *       onClearSelection={longPress.clearSelection}
  *       onCancel={longPress.exitSelectMode}
  *       onDelete={handleBulkDelete}
  *     />
@@ -45,6 +52,10 @@ const MOVE_CANCEL_PX = 10; // finger/mouse drifted too far — treat as a scroll
 export function useLongPressSelect<Id extends string | number>() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<Id>>(new Set());
+  // Which row is currently mid-hold — drives the circular progress ring.
+  // Not the same as `selectedIds`: this clears the instant the finger/
+  // mouse lifts or the hold completes.
+  const [pressingId, setPressingId] = useState<Id | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPos = useRef<{ x: number; y: number } | null>(null);
@@ -56,6 +67,13 @@ export function useLongPressSelect<Id extends string | number>() {
       timerRef.current = null;
     }
   }, []);
+
+  // Cancels an in-progress hold (release, drag-away, or the timer firing)
+  // and hides the ring.
+  const cancelPress = useCallback(() => {
+    clearTimer();
+    setPressingId(null);
+  }, [clearTimer]);
 
   function toggle(id: Id) {
     setSelectedIds((prev) => {
@@ -74,8 +92,10 @@ export function useLongPressSelect<Id extends string | number>() {
         startPos.current = { x: e.clientX, y: e.clientY };
         longPressFiredRef.current = false;
         clearTimer();
+        setPressingId(id);
         timerRef.current = setTimeout(() => {
           longPressFiredRef.current = true;
+          setPressingId(null); // ring's done its job — checkbox takes over
           setSelectMode(true);
           setSelectedIds((prev) => new Set(prev).add(id));
           if (navigator.vibrate) navigator.vibrate(18);
@@ -85,11 +105,11 @@ export function useLongPressSelect<Id extends string | number>() {
         if (!startPos.current || !timerRef.current) return;
         const dx = e.clientX - startPos.current.x;
         const dy = e.clientY - startPos.current.y;
-        if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) clearTimer();
+        if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) cancelPress();
       },
-      onPointerUp: clearTimer,
-      onPointerLeave: clearTimer,
-      onPointerCancel: clearTimer,
+      onPointerUp: cancelPress,
+      onPointerLeave: cancelPress,
+      onPointerCancel: cancelPress,
       onClick: (e: React.MouseEvent) => {
         // Swallow the click that follows a long-press so the row's normal
         // click action (navigate, fly-to, open, ...) doesn't also fire.
@@ -107,8 +127,12 @@ export function useLongPressSelect<Id extends string | number>() {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clearTimer, selectMode],
+    [clearTimer, cancelPress, selectMode],
   );
+
+  function isPressing(id: Id) {
+    return pressingId === id;
+  }
 
   function isSelected(id: Id) {
     return selectedIds.has(id);
@@ -139,6 +163,7 @@ export function useLongPressSelect<Id extends string | number>() {
     bind,
     toggle,
     isSelected,
+    isPressing,
     selectAll,
     clearSelection,
     enterSelectMode,
