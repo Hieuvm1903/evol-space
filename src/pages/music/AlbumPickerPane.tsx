@@ -4,11 +4,14 @@ import { ListMusic, Plus, Upload, Search } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import SpotlightCard from "../../components/SpotlightCard";
 import ImportPanel from "./ImportPanel";
+import type { LongPressSelect } from "../../hooks/useLongPressSelect";
+import SelectCheckbox from "../../components/SelectCheckbox";
+import LongPressRing from "../../components/LongPressRing";
 
 export default function AlbumPickerPane({
   playlists, loadingPlaylists, selectedPlaylistId, onSelect,
   showNewPlaylist, setShowNewPlaylist, newPlaylistName, setNewPlaylistName, creating, onCreate,
-  showImport, setShowImport, userId, onImported,
+  showImport, setShowImport, userId, onImported, longPress,
 }: {
   playlists: musicService.Playlist[];
   loadingPlaylists: boolean;
@@ -24,6 +27,8 @@ export default function AlbumPickerPane({
   setShowImport: React.Dispatch<React.SetStateAction<boolean>>;
   userId: string;
   onImported: () => void;
+  /** Hold-1.5s-to-select template — see hooks/useLongPressSelect.ts */
+  longPress: LongPressSelect<number>;
 }) {
   const [albumSearch, setAlbumSearch] = useState("");
   const filteredPlaylists = useMemo(() => {
@@ -37,20 +42,22 @@ export default function AlbumPickerPane({
       <div className="album-picker-fixed">
         <div className="album-picker-header">
           <h3 className="album-picker-title"><ListMusic size={15} /> Albums</h3>
-          <div className="album-picker-actions">
-            <Tooltip title="New playlist">
-              <Button
-                className="glow-icon-btn" size="small" icon={<Plus size={14} />}
-                onClick={() => { setShowNewPlaylist((v) => !v); setShowImport(false); }}
-              />
-            </Tooltip>
-            <Tooltip title="Import playlist">
-              <Button
-                className="glow-icon-btn" size="small" icon={<Upload size={14} />}
-                onClick={() => { setShowImport((v) => !v); setShowNewPlaylist(false); }}
-              />
-            </Tooltip>
-          </div>
+          {!longPress.selectMode && (
+            <div className="album-picker-actions">
+              <Tooltip title="New playlist">
+                <Button
+                  className="glow-icon-btn" size="small" icon={<Plus size={14} />}
+                  onClick={() => { setShowNewPlaylist((v) => !v); setShowImport(false); }}
+                />
+              </Tooltip>
+              <Tooltip title="Import playlist">
+                <Button
+                  className="glow-icon-btn" size="small" icon={<Upload size={14} />}
+                  onClick={() => { setShowImport((v) => !v); setShowNewPlaylist(false); }}
+                />
+              </Tooltip>
+            </div>
+          )}
         </div>
 
         {playlists.length > 0 && (
@@ -82,6 +89,10 @@ export default function AlbumPickerPane({
         )}
 
         {showImport && <ImportPanel userId={userId} onImported={onImported} />}
+
+        {!longPress.selectMode && playlists.length > 0 && (
+          <div className="album-list-hint">Hold an album to select several</div>
+        )}
       </div>
 
       {loadingPlaylists ? (
@@ -93,16 +104,32 @@ export default function AlbumPickerPane({
           className="album-list"
           size="small"
           dataSource={filteredPlaylists}
-          renderItem={(p) => (
-            <List.Item
-              key={p.id}
-              className={`album-list-item${selectedPlaylistId === p.id ? " album-list-item-active" : ""}`}
-              onClick={() => onSelect(p.id)}
-            >
-              <ListMusic size={14} className="album-list-item-icon" />
-              <span className="album-list-item-name">{p.name}</span>
-            </List.Item>
-          )}
+          renderItem={(p) => {
+            const checked = longPress.isSelected(p.id);
+            const pressing = longPress.isPressing(p.id);
+            const lp = longPress.bind(p.id);
+            return (
+              <List.Item
+                key={p.id}
+                className={`album-list-item${selectedPlaylistId === p.id ? " album-list-item-active" : ""}${checked ? " album-list-item-checked" : ""}${pressing ? " pressing" : ""}`}
+                {...lp}
+                onClick={(e) => {
+                  lp.onClick(e);
+                  // Only switch albums if this click wasn't a long-press
+                  // and didn't just toggle a checkbox in select mode.
+                  if (!longPress.selectMode && !e.defaultPrevented) onSelect(p.id);
+                }}
+              >
+                {longPress.selectMode ? (
+                  <SelectCheckbox checked={checked} />
+                ) : pressing ? (
+                  <LongPressRing />
+                ) : null}
+                <ListMusic size={14} className="album-list-item-icon" />
+                <span className="album-list-item-name">{p.name}</span>
+              </List.Item>
+            );
+          }}
         />
       )}
     </div>

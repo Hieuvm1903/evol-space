@@ -4,6 +4,9 @@ import { Sparkles } from "lucide-react";
 import { usePlayer } from "../../features/player/PlayerProvider";
 import * as musicService from "../../lib/musicService";
 import { notify } from "../../lib/notify";
+import { useConfirm } from "../../components/ConfirmDialog";
+import { useLongPressSelect } from "../../hooks/useLongPressSelect";
+import SelectionToolbar from "../../components/SelectionToolbar";
 import AlbumPickerPane from "./AlbumPickerPane";
 import PlaylistPane from "./PlaylistPane";
 
@@ -21,6 +24,12 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [creating, setCreating] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [bulkDeletingPlaylists, setBulkDeletingPlaylists] = useState(false);
+
+  const confirmDialog = useConfirm();
+  // Hold-1.5s-to-select-mode for the album list — see
+  // hooks/useLongPressSelect.ts for the reusable template this is built on.
+  const albumLongPress = useLongPressSelect<number>();
 
   async function loadPlaylists() {
     setLoadingPlaylists(true);
@@ -64,6 +73,34 @@ export default function MusicWorkspace({ userId }: { userId: string }) {
     const rows = await musicService.getPlaylists(userId);
     setPlaylists(rows);
     setSelectedPlaylistId(rows[0]?.id ?? null);
+  }
+
+  // Bulk delete for whatever albums are checked via the long-press select mode.
+  async function handleBulkDeletePlaylists() {
+    const ids = Array.from(albumLongPress.selectedIds);
+    if (ids.length === 0) return;
+    const ok = await confirmDialog({
+      title: `Delete ${ids.length} playlist${ids.length === 1 ? "" : "s"}?`,
+      description: "Every track link inside will be removed too. This can't be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+
+    setBulkDeletingPlaylists(true);
+    for (const id of ids) {
+      await musicService.deletePlaylist(id);
+    }
+    setBulkDeletingPlaylists(false);
+    notify.deleted(`${ids.length} playlist${ids.length === 1 ? "" : "s"} deleted.`);
+    albumLongPress.exitSelectMode();
+
+    const rows = await musicService.getPlaylists(userId);
+    setPlaylists(rows);
+    setSelectedPlaylistId((current) => {
+      if (current !== null && !ids.includes(current) && rows.some((p) => p.id === current)) return current;
+      return rows[0]?.id ?? null;
+    });
   }
 
   function playMode(modeLabel: string) {
@@ -128,6 +165,7 @@ async function loadTracks() {
             setShowImport={setShowImport}
             userId={userId}
             onImported={() => { setShowImport(false); loadPlaylists(); }}
+            longPress={albumLongPress}
           />
           <div className="music-pane music-pane-right">
             <Empty className="fade-in music-empty-state" description="No playlists yet — tap + on the left to create one." image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -150,6 +188,7 @@ async function loadTracks() {
             setShowImport={setShowImport}
             userId={userId}
             onImported={() => { setShowImport(false); loadPlaylists(); }}
+            longPress={albumLongPress}
           />
 
           <div className="music-pane music-pane-right">
@@ -176,6 +215,19 @@ async function loadTracks() {
             )}
           </div>
         </div>
+      )}
+
+      {albumLongPress.selectMode && (
+        <SelectionToolbar
+          count={albumLongPress.selectedCount}
+          total={playlists.length}
+          itemLabel="playlist"
+          deleting={bulkDeletingPlaylists}
+          onSelectAll={() => albumLongPress.selectAll(playlists.map((p) => p.id))}
+          onClearSelection={albumLongPress.clearSelection}
+          onCancel={albumLongPress.exitSelectMode}
+          onDelete={handleBulkDeletePlaylists}
+        />
       )}
     </div>
   );
