@@ -334,6 +334,11 @@
   max-height: calc(100vh - 100px);
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: none;      /* Firefox — hide panel's own scrollbar, stays scrollable */
+  -ms-overflow-style: none;
+}
+#panel::-webkit-scrollbar {
+  display: none;              /* Chrome/Safari/new Edge */
 }
 #panel.panel-visible {
   opacity: 1;

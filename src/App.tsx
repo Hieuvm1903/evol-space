@@ -1,6 +1,6 @@
 import React from "react";
 import { ConfigProvider, theme as antdTheme } from "antd";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PlayerProvider } from "./features/player/PlayerProvider";
 import { ConfirmProvider } from "./components/ConfirmDialog";
@@ -16,6 +16,7 @@ import "./App.css";
 import GalaxyBackground from "./components/GalaxyBackground";
 import { MapPage } from "./pages/map/MapPage";
 import { PhotoboothPage } from "./pages/PhotoboothPage";
+import { WorkPage } from "./pages/work/WorkPage";
 
 // One dark theme for every antd component in the app (buttons, inputs,
 // cards, skeletons, alerts, toasts, ...) instead of re-declaring
@@ -34,7 +35,32 @@ const evolAntdTheme = {
     fontFamily: `"Be Vietnam Pro", sans-serif`,
   },
 };
+function AppBody() {
+  const location = useLocation();
+  const hideGalaxy = location.pathname === "/work";
+  return (
+    <>
+      {!hideGalaxy && <GalaxyBackground />}
+      <NavBar />
+      <main className="app-content">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/relax" element={<RelaxPage />} />
+          <Route path="/music" element={<MusicPage />} />
+          <Route path="/secret" element={<SecretPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/map" element={<MapPage />} />
+          <Route path="/blank" element={<BlankPage />} />
+          <Route path="/photobooth" element={<PhotoboothPage />} />
+          <Route path="/work" element={<WorkPage />} />
+        </Routes>
+      </main>
+    </>
+  );
+}
 export default function App() {
+  
   return (
     <ConfigProvider theme={evolAntdTheme}>
       {/* ConfirmProvider wraps everything so useConfirm() works from any
@@ -49,22 +75,7 @@ export default function App() {
           <PlayerProvider>
             <BrowserRouter>
 
-              <GalaxyBackground />
-              <NavBar />
-              <main className="app-content">
-
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/relax" element={<RelaxPage />} />
-                <Route path="/music" element={<MusicPage />} />
-                <Route path="/secret" element={<SecretPage />} />
-                <Route path="/history" element={<HistoryPage />} />
-                 <Route path="/map" element={<MapPage />} />
-                 <Route path="/blank" element={<BlankPage />} />
-              <Route path="/photobooth" element={<PhotoboothPage />} />
-              </Routes>
-                          </main>
+            <AppBody />
 
             </BrowserRouter>
           </PlayerProvider>
