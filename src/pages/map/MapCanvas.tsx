@@ -50,6 +50,8 @@ interface Props {
 
   onUseMyLocationOnMap: () => void;
   onOpenAdd: () => void;
+  readOnly?: boolean;
+  children?: React.ReactNode; // rendered inside <MapContainer>
 }
 
 export default function MapCanvas({
@@ -61,8 +63,46 @@ export default function MapCanvas({
   displayedPlaces, onSelectPlace,
   form, hasPreview, previewLat, previewLon,
   myLocation, radiusCircle,
-  onUseMyLocationOnMap, onOpenAdd,
+  onUseMyLocationOnMap, onOpenAdd, readOnly = false, children,
 }: Props) {
+  if (mapMode === "google") {
+    const [lat, lon] = myLocation ?? DEFAULT_CENTER;
+    const zoom = myLocation ? 13 : 6;
+    const src = `https://www.google.com/maps?q=${lat},${lon}&z=${zoom}&output=embed`;
+
+    return (
+      <div className={`map-canvas-wrap${fullscreen ? " map-canvas-fullscreen" : ""}`}>
+        <div className="map-floating-controls">
+          <Tooltip title="My location" placement="left">
+            <Button shape="circle" icon={<LocateFixed size={16} />} onClick={onUseMyLocationOnMap} />
+          </Tooltip>
+          {!readOnly && (
+            <Tooltip title="Add place here" placement="left">
+              <Button shape="circle" icon={<Plus size={16} />} onClick={onOpenAdd} />
+            </Tooltip>
+          )}
+          {fullscreen && (
+            <Tooltip title="Exit full screen" placement="left">
+              <Button
+                className="cursor-target"
+                shape="circle"
+                icon={<Minimize2 size={16} />}
+                onClick={onExitFullscreen}
+              />
+            </Tooltip>
+          )}
+        </div>
+        <iframe
+          key={src}
+          className="map-google-iframe"
+          src={src}
+          title="Google Maps"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      </div>
+    );
+  }
   return (
     <div className={`map-canvas-wrap${fullscreen ? " map-canvas-fullscreen" : ""}`}>
       <div className="map-floating-controls">
@@ -124,7 +164,8 @@ export default function MapCanvas({
           url={MAP_TILE_CONFIG[mapMode].url}
           attribution={MAP_TILE_CONFIG[mapMode].attribution}
           className={MAP_TILE_CONFIG[mapMode].className}
-        />        <MapEvents onRightClick={onRightClickAdd} onLeftClick={onLeftClickDeselect} />
+        />        
+        <MapEvents onRightClick={readOnly ? () => { } : onRightClickAdd} onLeftClick={onLeftClickDeselect} />
         <MapDragLock locked={activeTools.includes("draw")} />
 
         {activeTools.includes("coordinates") && (
@@ -197,7 +238,8 @@ export default function MapCanvas({
             pathOptions={{ color: "#8b6ff5", weight: 2, fillOpacity: 0.08 }}
           />
         )}
-      </MapContainer>
+      {children}
+</MapContainer>
     </div >
   );
 }

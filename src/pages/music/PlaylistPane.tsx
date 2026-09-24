@@ -12,7 +12,9 @@ import { useLongPressSelect } from "../../hooks/useLongPressSelect";
 import SelectionToolbar from "../../components/SelectionToolbar";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { notify } from "../../lib/notify";
-
+import { Share2 } from "lucide-react";           // add to the existing lucide import
+import ShareDialog from "../../components/ShareDialog";
+import { newShareToken, setPlaylistShareToken } from "../../lib/shareService";
 type SortMode = "default" | "name-asc" | "name-desc" | "artist-asc" | "artist-desc";
 
 const SORT_OPTIONS: { key: SortMode; label: string }[] = [
@@ -26,7 +28,7 @@ const SORT_OPTIONS: { key: SortMode; label: string }[] = [
 export default function PlaylistPane({
   userId, playlist, playlists, tracks, loadingTracks,
   isPlaying, nowPlayingTrackId, currentMode,
-  onPlayMode, onPlayFromTrack, onRemoveTrack, onRenamed, onDeleted, onTracksChanged,
+  onPlayMode, onPlayFromTrack, onRemoveTrack, onRenamed, onDeleted, onTracksChanged, onShareChanged
 }: {
   userId: string;
   playlist: musicService.Playlist;
@@ -42,7 +44,11 @@ export default function PlaylistPane({
   onRenamed: () => void;
   onDeleted: () => void;
   onTracksChanged: () => void;
+  onShareChanged: (playlistId: number, token: string | null) => void;
+
 }) {
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareToken = playlist.share_token ?? null;
   const [renameValue, setRenameValue] = useState(playlist.name);
   const [trackSearch, setTrackSearch] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("default");
@@ -126,22 +132,22 @@ export default function PlaylistPane({
   const addPanelWrapRef = useRef<HTMLDivElement>(null);
   const addToggleRef = useRef<HTMLButtonElement>(null);
 
-useEffect(() => {
-  if (!showAdd) return;
-  function handleClickOutside(e: MouseEvent) {
-    const target = e.target as HTMLElement;
-    if (addPanelWrapRef.current?.contains(target)) return;
-    if (addToggleRef.current?.contains(target)) return;
-    // antd renders modals/notifications/dropdowns/tooltips into a portal at
-    // document.body, outside this component's DOM tree entirely — so a
-    // click on e.g. a modal's close icon looks like "clicked away" unless
-    // we explicitly exclude those portals here.
-    if (target.closest(".ant-modal, .ant-modal-wrap, .ant-notification, .ant-select-dropdown, .ant-popover, .ant-tooltip, .ant-drawer, .ant-dropdown")) return;
-    setShowAdd(false);
-  }
-  document.addEventListener("mousedown", handleClickOutside);
-  return () => document.removeEventListener("mousedown", handleClickOutside);
-}, [showAdd]);
+  useEffect(() => {
+    if (!showAdd) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (addPanelWrapRef.current?.contains(target)) return;
+      if (addToggleRef.current?.contains(target)) return;
+      // antd renders modals/notifications/dropdowns/tooltips into a portal at
+      // document.body, outside this component's DOM tree entirely — so a
+      // click on e.g. a modal's close icon looks like "clicked away" unless
+      // we explicitly exclude those portals here.
+      if (target.closest(".ant-modal, .ant-modal-wrap, .ant-notification, .ant-select-dropdown, .ant-popover, .ant-tooltip, .ant-drawer, .ant-dropdown")) return;
+      setShowAdd(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAdd]);
   return (
     <div className="playlist-pane-body fade-in-up">
       <div className="playlist-header-row">
@@ -174,6 +180,13 @@ useEffect(() => {
         <Input className="playlist-name-input" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onPressEnter={saveRename} />
         <Tooltip title="Save name">
           <Button className="btn-glow" icon={<Check size={14} />} onClick={saveRename} />
+        </Tooltip>
+        <Tooltip title="Share">
+          <Button
+            className={`glow-icon-btn${shareToken ? " glow-icon-btn-active" : ""}`}
+            icon={<Share2 size={14} />}
+            onClick={() => setShareOpen(true)}
+          />
         </Tooltip>
         <Popconfirm title="Delete this playlist?" description="This can't be undone." okText="Delete" cancelText="Cancel" okButtonProps={{ danger: true }} onConfirm={onDeleted}>
           <Button danger icon={<Trash2 size={14} />} />
@@ -290,6 +303,22 @@ useEffect(() => {
           onDelete={handleBulkRemove}
         />
       )}
+      <ShareDialog
+  open={shareOpen}
+  onClose={() => setShareOpen(false)}
+  title={playlist.name}
+  kind="album"
+  token={shareToken}
+  onEnable={async () => {
+    const t = newShareToken();
+    await setPlaylistShareToken(playlist.id, t);
+    onShareChanged(playlist.id, t);
+  }}
+  onDisable={async () => {
+    await setPlaylistShareToken(playlist.id, null);
+    onShareChanged(playlist.id, null);
+  }}
+/>
     </div>
   );
 }

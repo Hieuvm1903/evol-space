@@ -17,6 +17,10 @@ import GalaxyBackground from "./components/GalaxyBackground";
 import { MapPage } from "./pages/map/MapPage";
 import { PhotoboothPage } from "./pages/PhotoboothPage";
 import { WorkPage } from "./pages/work/WorkPage";
+import { SharedPlacesPage } from "./pages/SharedPlacesPage";
+import { SharedAlbumPage } from "./pages/SharedAlbumPage";
+
+// inside <Routes>
 
 // One dark theme for every antd component in the app (buttons, inputs,
 // cards, skeletons, alerts, toasts, ...) instead of re-declaring
@@ -54,6 +58,8 @@ function AppBody() {
           <Route path="/blank" element={<BlankPage />} />
           <Route path="/photobooth" element={<PhotoboothPage />} />
           <Route path="/work" element={<WorkPage />} />
+          <Route path="/share/album/:token" element={<SharedAlbumPage />} />
+<Route path="/share/places/:token" element={<SharedPlacesPage />} />
         </Routes>
       </main>
     </>

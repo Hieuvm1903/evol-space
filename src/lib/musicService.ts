@@ -7,6 +7,7 @@ export interface Playlist {
   user_id: string;
   name: string;
   created_at: string;
+  share_token?: string | null;
 }
 
 export interface PlaylistTrack extends Track {

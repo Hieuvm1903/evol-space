@@ -5,8 +5,8 @@ import { PLACE_ICON_CHOICES, iconForName, splitIcon } from "../../content/placeI
 import type { Place } from "../../lib/placesService";
 import type { SortOption } from "./types";
 import type { LongPressSelect } from "../../hooks/useLongPressSelect";
-import SelectCheckbox from "../../components/SelectCheckBox";
 import LongPressRing from "../../components/LongPressRing";
+import SelectCheckbox from "../../components/SelectCheckbox";
 
 const { Text } = Typography;
 
@@ -29,10 +29,13 @@ interface Props {
   onTagFilterChange: (v: string[]) => void;
   selectedId: number | null;
   onSelectAndFly: (p: Place) => void;
-  onEdit: (p: Place) => void;
-  onDelete: (id: number) => void;
+  /** Hold-to-select template — see hooks/useLongPressSelect.ts */
+    onEdit?: (p: Place) => void;
+  onDelete?: (id: number) => void;
   /** Hold-to-select template — see hooks/useLongPressSelect.ts */
   longPress: LongPressSelect<number>;
+  /** Shared/read-only view: no long-press select, no edit/delete. */
+  readOnly?: boolean;
 }
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
@@ -47,7 +50,7 @@ export default function BrowseTab({
   loading, places, nameFilter, onNameFilterChange, iconFilter, onIconFilterChange,
   sortBy, onSortByChange,
   distCenter, onDistCenterChange, onUseMyLocationForDistance, radiusKm, onRadiusKmChange,
-  allTags, tagFilter, onTagFilterChange, selectedId, onSelectAndFly, onEdit, onDelete, longPress,
+  allTags, tagFilter, onTagFilterChange, selectedId, onSelectAndFly, onEdit, onDelete, longPress,readOnly = false,
 }: Props) {
   return (
     <div className="map-browse-panel">
@@ -135,66 +138,62 @@ export default function BrowseTab({
           <Empty description={<span style={{ color: "#9c97b8" }}>No places match.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           places.map((p) => {
-            const { name: iconName, color } = splitIcon(p.icon);
-            const Icon = iconForName(iconName);
-            const isFlySelected = selectedId === p.id;
-            const bulkChecked = longPress.isSelected(p.id);
-            // Spread onto the row: gives onPointerDown/Move/Up/Leave for
-            // the 1.5s hold detection, plus an onClick that toggles the
-            // checkbox once select mode is on (see useLongPressSelect.ts).
-            const lp = longPress.bind(p.id);
-            return (
-              <div
-                key={p.id}
-                className={`map-place-row cursor-target${isFlySelected ? " active" : ""}${bulkChecked ? " bulk-selected" : ""}${longPress.isPressing(p.id) ? " pressing" : ""}`}
-                {...lp}
-                onClick={(e) => {
-                  lp.onClick(e);
-                  // Only fly to the place if this click wasn't a long-press
-                  // and didn't just toggle a checkbox in select mode.
-                  if (!longPress.selectMode && !e.defaultPrevented) onSelectAndFly(p);
-                }}
-              >
-                {longPress.selectMode ? (
-                  <SelectCheckbox checked={bulkChecked} />
-                ) : longPress.isPressing(p.id) ? (
-                  <LongPressRing />
-                ) : null}
+  const { name: iconName, color } = splitIcon(p.icon);
+  const Icon = iconForName(iconName);
+  const isFlySelected = selectedId === p.id;
+  const selecting = !readOnly && longPress.selectMode;
+  const bulkChecked = !readOnly && longPress.isSelected(p.id);
+  const pressing = !readOnly && longPress.isPressing(p.id);
+  const lp = readOnly ? null : longPress.bind(p.id);
+  return (
+    <div
+      key={p.id}
+      className={`map-place-row cursor-target${isFlySelected ? " active" : ""}${bulkChecked ? " bulk-selected" : ""}${pressing ? " pressing" : ""}`}
+      {...(lp ?? {})}
+      onClick={(e) => {
+        lp?.onClick(e);
+        if (!selecting && !e.defaultPrevented) onSelectAndFly(p);
+      }}
+    >
+      {selecting ? (
+        <SelectCheckbox checked={bulkChecked} />
+      ) : pressing ? (
+        <LongPressRing />
+      ) : null}
 
-                <div className="map-place-swatch" style={{ ["--sw-color" as any]: color }}>
-                  <Icon size={15} color="#fff" />
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div className="map-place-name">{p.name}</div>
-                  {p.description && <div className="map-place-desc">{p.description}</div>}
-                </div>
-                {isFlySelected && !longPress.selectMode && (
-                  <div className="map-place-row-actions" onClick={(e) => e.stopPropagation()}>
-                    <Tooltip title="Edit">
-                      <Button size="small" icon={<Pencil size={13} />} onClick={() => onEdit(p)} />
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <Button size="small" danger icon={<Trash2 size={13} />} onClick={() => onDelete(p.id)} />
-                    </Tooltip>
-                    <Tooltip title="Directions">
-                      <Button
-                        size="small" icon={<Navigation2 size={13} />}
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`}
-                        target="_blank"
-                      />
-                    </Tooltip>
-                    <Tooltip title="Find on Google Maps">
-                      <Button
-                        size="small" icon={<MapPinned size={13} />}
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}+${p.lat},${p.lon}`}
-                        target="_blank"
-                      />
-                    </Tooltip>
-                  </div>
-                )}
-              </div>
-            );
-          })
+      <div className="map-place-swatch" style={{ ["--sw-color" as any]: color }}>
+        <Icon size={15} color="#fff" />
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="map-place-name">{p.name}</div>
+        {p.description && <div className="map-place-desc">{p.description}</div>}
+      </div>
+      {isFlySelected && !selecting && (
+        <div className="map-place-row-actions" onClick={(e) => e.stopPropagation()}>
+          {!readOnly && onEdit && (
+            <Tooltip title="Edit">
+              <Button size="small" icon={<Pencil size={13} />} onClick={() => onEdit(p)} />
+            </Tooltip>
+          )}
+          {!readOnly && onDelete && (
+            <Tooltip title="Delete">
+              <Button size="small" danger icon={<Trash2 size={13} />} onClick={() => onDelete(p.id)} />
+            </Tooltip>
+          )}
+          <Tooltip title="Directions">
+            <Button size="small" icon={<Navigation2 size={13} />}
+              href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`} target="_blank" />
+          </Tooltip>
+          <Tooltip title="Find on Google Maps">
+            <Button size="small" icon={<MapPinned size={13} />}
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}+${p.lat},${p.lon}`}
+              target="_blank" />
+          </Tooltip>
+        </div>
+      )}
+    </div>
+  );
+})
         )}
       </div>
     </div>

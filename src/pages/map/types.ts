@@ -1,4 +1,4 @@
-export type MapMode = "light" | "dark" | "street" | "satellite" | "terrain";
+export type MapMode = "light" | "dark" | "street" | "satellite" | "terrain" | "google";
 export type MapTool = "fullscreen" | "measure" | "coordinates" | "draw";
 
 export interface FormState {

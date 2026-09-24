@@ -1,5 +1,5 @@
 import React from "react";
-import { Trash2, X, CheckSquare, Square } from "lucide-react";
+import { Trash2, X, CheckSquare, Square, ListPlus } from "lucide-react";
 import "./SelectionToolbar.css";
 
 interface Props {
@@ -14,10 +14,12 @@ interface Props {
   deleting?: boolean;
   /** e.g. "place" -> "3 places selected". Defaults to "item". */
   itemLabel?: string;
+  onCreateList?: () => void;
+
 }
 
 export default function SelectionToolbar({
-  count, total, onSelectAll, onClearSelection, onCancel, onDelete, deleting, itemLabel = "item",
+  count, total, onSelectAll, onClearSelection, onCancel, onDelete, deleting, itemLabel = "item", onCreateList,
 }: Props) {
   const allSelected = total > 0 && count === total;
 
@@ -38,7 +40,11 @@ export default function SelectionToolbar({
         {allSelected ? <Square size={14} /> : <CheckSquare size={14} />}
         {allSelected ? "None" : "All"}
       </button>
-
+      {onCreateList && (
+        <button className="selection-toolbar-btn" onClick={onCreateList} disabled={count === 0}>
+          <ListPlus size={14} /> New list
+        </button>
+      )}
       <button
         className="selection-toolbar-btn selection-toolbar-delete"
         onClick={onDelete}

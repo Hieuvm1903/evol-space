@@ -20,7 +20,9 @@ import { emptyForm, formFromPlace } from "./formHelpers";
 import BrowseTab from "./BrowseTab";
 import PlaceFormTab from "./PlaceFormTab";
 import MapSettingsTab from "./MapSettingsTab";
-import MapCanvas from "./MapCanvas";
+import MapCanvas from "./MapCanvas";import ListsTab from "./ListsTab";
+
+// widen the tab type (with the other useState calls, above the `if (!user)` early return)
 
 const { Title } = Typography;
 
@@ -35,10 +37,13 @@ const { Title } = Typography;
 // itself. This file just owns state and wires them together.
 
 export function MapPage() {
+  const [tab, setTab] = useState<"browse" | "lists" | "form" | "config">("browse");
+const [listDraftIds, setListDraftIds] = useState<number[] | null>(null);
+const [activeListIds, setActiveListIds] = useState<number[] | null>(null);
+const [activeListId, setActiveListId] = useState<number | null>(null);
   const { user } = useAuth();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"browse" | "form" | "config">("browse");
   const [mapMode, setMapMode] = useState<MapMode>(readMapMode);
   const [activeTools, setActiveTools] = useState<MapTool[]>(readMapTools);
   const [fullscreen, setFullscreen] = useState(false);
@@ -80,7 +85,22 @@ export function MapPage() {
       </div>
     );
   }
+function handleViewList(ids: number[] | null, listId?: number) {
+  setActiveListIds(ids);
+  setActiveListId(ids ? listId ?? null : null);
+  if (ids && ids.length) {
+    const pts = places.filter((p) => ids.includes(p.id)).map((p) => [p.lat, p.lon] as [number, number]);
+    if (pts.length) mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 15 });
+  }
+}
 
+function handleCreateListFromSelection() {
+  const ids = Array.from(longPress.selectedIds);
+  if (!ids.length) return;
+  setListDraftIds(ids);
+  longPress.exitSelectMode();
+  setTab("lists");
+}
   function openAdd(prefill?: { lat: number; lon: number }) {
     setForm(emptyForm(prefill));
     setPanelMode("add");
@@ -330,8 +350,8 @@ export function MapPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [fullscreen, activeTools]);
 
-  const displayedPlaces = tab === "form" ? places : filtered.result;
-
+let displayedPlaces = tab === "form" || tab === "lists" ? places : filtered.result;
+if (activeListIds) displayedPlaces = displayedPlaces.filter((p) => activeListIds.includes(p.id));
   return (
     <div className="page map-page-shell">
       <TargetCursor targetSelector=".cursor-target" />
@@ -357,11 +377,22 @@ export function MapPage() {
             }}
             items={[
               { key: "browse", label: "Browse" },
-              { key: "form", label: panelMode === "edit" ? "Edit place" : "Add place" },
-              { key: "config", label: "Map settings" },
+{ key: "lists", label: "Lists" },
+{ key: "form", label: panelMode === "edit" ? "Edit place" : "Add place" },
+{ key: "config", label: "Map settings" },
             ]}
           />
-
+{tab === "lists" && (
+  <ListsTab
+    userId={user.id}
+    places={places}
+    draftIds={listDraftIds}
+    onDraftConsumed={() => setListDraftIds(null)}
+    activeIds={activeListIds}
+    activeListId={activeListId}
+    onViewList={handleViewList}
+  />
+)}
           {tab === "browse" && (
             <BrowseTab
               loading={loading}

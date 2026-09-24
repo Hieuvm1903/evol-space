@@ -209,6 +209,9 @@ async function loadTracks() {
                 onRenamed={loadPlaylists}
                 onDeleted={handleDeletePlaylist}
                 onTracksChanged={loadTracks}
+                onShareChanged={(id, token) =>
+  setPlaylists((ps) => ps.map((p) => (p.id === id ? { ...p, share_token: token } : p)))
+}
               />
             ) : (
               <Empty className="fade-in" description="Pick an album on the left" image={Empty.PRESENTED_IMAGE_SIMPLE} />
