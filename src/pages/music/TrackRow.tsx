@@ -5,7 +5,7 @@ import * as musicService from "../../lib/musicService";
 import TrackManagePanel from "./TrackManagePanel";
 import type { LongPressSelect } from "../../hooks/useLongPressSelect";
 import LongPressRing from "../../components/LongPressRing";
-import SelectCheckbox from "../../components/SelectCheckBox";
+import SelectCheckbox from "../../components/SelectCheckbox";
 
 export default function TrackRow({
   index, track, playlistId, expanded, playing, onToggleExpand, onPlay, onRemove, onChanged, longPress,

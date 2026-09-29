@@ -1,12 +1,11 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound, type LucideIcon, Hammer } from "lucide-react";
+import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound, type LucideIcon, Hammer, UserRound } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import GalaxyRing from "./ImperfectCircle";
 
 const NAV_ITEMS: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Home", path: "/", icon: Sparkles },
-  { label: "Login", path: "/login", icon: LogIn },
   { label: "Music", path: "/music", icon: Music2 },
   { label: "Map", path: "/map", icon: MapIcon },
   { label: "Photobooth", path: "/photobooth", icon: Camera },
@@ -17,7 +16,13 @@ const NAV_ITEMS: { label: string; path: string; icon: LucideIcon }[] = [
 export function NavBar() {
   const { user } = useAuth();
   const location = useLocation();
-
+const items = [
+  NAV_ITEMS[0], // Home
+  user
+    ? { label: "Profile", path: "/profile", icon: UserRound }
+    : { label: "Login", path: "/login", icon: LogIn },
+  ...NAV_ITEMS.slice(1),
+];
   return (
     <nav className="navbar">
       <span className="navbar-brand">
@@ -45,7 +50,7 @@ export function NavBar() {
         </span>
       </span>
       <div className="navbar-links">
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
           return (
             <Link key={item.path} to={item.path} className={location.pathname === item.path ? "active" : ""}>

@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Card, Segmented, Form, Input, Button, Alert, Typography } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 
 export function LoginPage() {
-  const { user, login, signup, logout } = useAuth();
+const { user, login, signup } = useAuth();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<"login" | "signup">("login");
@@ -14,21 +14,8 @@ export function LoginPage() {
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) {
-    return (
-      <div className="page">
-        <Card className="evol-glass-card fade-in-up" style={{ maxWidth: 380, margin: "0 auto" }}>
-          <Typography.Title level={4} style={{ color: "#e6e6e6", marginTop: 0 }}>Welcome back</Typography.Title>
-          <p style={{ color: "#9a9a9a" }}>
-            You're logged in as <strong style={{ color: "#3ddc57" }}>{user.username}</strong>.
-          </p>
-          <Button danger className="btn-glow" onClick={async () => { await logout(); }}>
-            Log out
-          </Button>
-        </Card>
-      </div>
-    );
-  }
+if (user) return <Navigate to="/profile" replace />;
+
 
   async function handleSubmit() {
     setBusy(true);
@@ -36,7 +23,7 @@ export function LoginPage() {
     const result = tab === "login" ? await login(username, password) : await signup(username, password);
     setBusy(false);
     setMessage({ text: result.message, ok: result.ok });
-    if (result.ok && tab === "login") navigate("/");
+    if (result.ok && tab === "login") navigate("/profile");
   }
 
   return (

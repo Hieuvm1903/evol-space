@@ -1,32 +1,65 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabaseClient";
 
-// Same convention as services/auth_service.py's EMAIL_DOMAIN — usernames
-// map to a placeholder email under the hood, but the UI only ever asks
-// for a username. IMPORTANT: this does NOT lowercase, matching the fix
-// applied to auth_service.py (case must match exactly what an account
-// was created with).
 const EMAIL_DOMAIN = "evolspace.local";
 function emailFor(username: string): string {
   return `${username.trim()}@${EMAIL_DOMAIN}`;
 }
 
-export type AppUser = { id: string; username: string };
+export type Role = "user" | "admin";
+const ROLES: Role[] = ["user", "admin"];
+
+export type AppUser = { id: string; username: string; role: Role };
+type Result = { ok: boolean; message: string };
 
 interface AuthContextValue {
   user: AppUser | null;
+  isAdmin: boolean;
   loading: boolean;
-  login: (username: string, password: string) => Promise<{ ok: boolean; message: string }>;
-  signup: (username: string, password: string) => Promise<{ ok: boolean; message: string }>;
+  login: (username: string, password: string) => Promise<Result>;
+  signup: (username: string, password: string) => Promise<Result>;
   logout: () => Promise<void>;
+  updateUsername: (newUsername: string) => Promise<Result>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<Result>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function toAppUser(u: User | null | undefined): AppUser | null {
-  if (!u) return null;
-  return { id: u.id, username: (u.user_metadata?.username as string) || "" };
+// --- JWT helpers -----------------------------------------------------------
+// Decoding is for UI only (show/hide things). It does NOT verify the
+// signature — real enforcement must happen in RLS / edge functions using
+// auth.jwt(), which is what the SQL helper public.jwt_role() does.
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const part = token.split(".")[1];
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=");
+    const json = decodeURIComponent(
+      atob(b64).split("").map((c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")).join(""),
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function roleFromSession(session: Session): Role {
+  const raw = decodeJwtPayload(session.access_token)?.app_metadata?.role;
+  return ROLES.includes(raw) ? raw : "user";
+}
+
+function toAppUser(session: Session | null | undefined): AppUser | null {
+  if (!session?.user) return null;
+  return {
+    id: session.user.id,
+    username: (session.user.user_metadata?.username as string) || "",
+    role: roleFromSession(session),
+  };
+}
+
+function isTakenError(error: { message: string; code?: string }): boolean {
+  const msg = error.message.toLowerCase();
+  return error.code === "email_exists" || msg.includes("already") ;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -34,31 +67,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // On mount: pick up whatever session supabase-js already restored
-    // from localStorage (equivalent to the Python side's restore_session).
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      setUser(toAppUser(session?.user));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(toAppUser(session));
       setLoading(false);
     });
 
-    // Keep in sync with login/logout/token-refresh events anywhere in the app.
+    // Fires on login/logout/TOKEN_REFRESHED/USER_UPDATED — so the role
+    // re-derives from the new JWT automatically whenever it changes.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(toAppUser(session?.user));
+      setUser(toAppUser(session));
     });
-
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function login(username: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: emailFor(username),
-      password,
-    });
+  async function login(username: string, password: string): Promise<Result> {
+    const { error } = await supabase.auth.signInWithPassword({ email: emailFor(username), password });
     if (error) return { ok: false, message: "Wrong username or password." };
     return { ok: true, message: "Welcome back!" };
   }
 
-  async function signup(username: string, password: string) {
+  async function signup(username: string, password: string): Promise<Result> {
     if (!username.trim() || !password) return { ok: false, message: "Username and password are required." };
     if (password.length < 6) return { ok: false, message: "Password must be at least 6 characters." };
 
@@ -68,10 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: { data: { username: username.trim() } },
     });
     if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes("already registered") || msg.includes("already exists")) {
-        return { ok: false, message: "That username is already taken." };
-      }
+      if (isTakenError(error)) return { ok: false, message: "That username is already taken." };
       return { ok: false, message: `Couldn't create account: ${error.message}` };
     }
     if (!data.user) return { ok: false, message: "Couldn't create account." };
@@ -82,8 +107,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  // Login goes through emailFor(username), so renaming must change the
+  // placeholder email too — updating user_metadata alone would lock the
+  // user out of logging in with their new name.
+  async function updateUsername(newUsername: string): Promise<Result> {
+    const name = newUsername.trim();
+    if (!user) return { ok: false, message: "Not logged in." };
+    if (!name) return { ok: false, message: "Username can't be empty." };
+    if (name === user.username) return { ok: false, message: "That's already your username." };
+
+    const targetEmail = emailFor(name);
+    const { data, error } = await supabase.auth.updateUser({
+      email: targetEmail,
+      data: { username: name },
+    });
+    if (error) {
+      if (isTakenError(error)) return { ok: false, message: "That username is already taken." };
+      return { ok: false, message: `Couldn't update username: ${error.message}` };
+    }
+    // If "Secure email change" is on, Supabase leaves the old email in place
+    // and waits for a confirmation click that can never arrive (fake domain).
+    if (data.user && data.user.email !== targetEmail) {
+      return {
+        ok: false,
+        message: "Change is pending email confirmation — disable 'Secure email change' in Supabase Auth settings.",
+      };
+    }
+    await supabase.auth.refreshSession(); // pick up a fresh JWT with the new claims
+    return { ok: true, message: "Username updated. Use it the next time you log in." };
+  }
+
+  async function changePassword(currentPassword: string, newPassword: string): Promise<Result> {
+    if (!user) return { ok: false, message: "Not logged in." };
+    if (newPassword.length < 6) return { ok: false, message: "Password must be at least 6 characters." };
+    if (newPassword === currentPassword) return { ok: false, message: "New password must be different." };
+
+    // Re-authenticate with the current password before allowing the change.
+    const { data: { session } } = await supabase.auth.getSession();
+    const email = session?.user.email;
+    if (!email) return { ok: false, message: "Session expired — please log in again." };
+    const { error: reauthError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+    if (reauthError) return { ok: false, message: "Current password is wrong." };
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { ok: false, message: `Couldn't change password: ${error.message}` };
+    return { ok: true, message: "Password changed." };
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider
+      value={{
+        user, isAdmin: user?.role === "admin", loading,
+        login, signup, logout, updateUsername, changePassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

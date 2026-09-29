@@ -19,6 +19,8 @@ import { PhotoboothPage } from "./pages/PhotoboothPage";
 import { WorkPage } from "./pages/work/WorkPage";
 import { SharedPlacesPage } from "./pages/SharedPlacesPage";
 import { SharedAlbumPage } from "./pages/SharedAlbumPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 // inside <Routes>
 
@@ -50,6 +52,7 @@ function AppBody() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/relax" element={<RelaxPage />} />
           <Route path="/music" element={<MusicPage />} />
           <Route path="/secret" element={<SecretPage />} />
