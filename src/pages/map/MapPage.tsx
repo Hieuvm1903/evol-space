@@ -486,6 +486,7 @@ if (activeListIds) displayedPlaces = displayedPlaces.filter((p) => activeListIds
           onClearSelection={longPress.clearSelection}
           onCancel={longPress.exitSelectMode}
           onDelete={handleBulkDelete}
+          onCreateList={handleCreateListFromSelection}
         />
       )}
     </div>
