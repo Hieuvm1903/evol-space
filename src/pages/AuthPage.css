@@ -1,0 +1,82 @@
+/* Shared by LoginPage + ProfilePage. Header/pane chrome comes from
+   MusicPage.css (music-shell-header, music-title, music-pane, ...). */
+
+.auth-page-shell {
+  max-width: 940px !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.auth-workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 290px) minmax(0, 1fr);
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+  max-height: 520px;           /* keeps panes compact on tall screens */
+  align-items: stretch;
+}
+@media (max-width: 780px) {
+  .auth-workspace { grid-template-columns: 1fr; max-height: none; overflow-y: auto; }
+}
+
+.auth-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;            /* only scrolls if the screen is too short */
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  scrollbar-width: thin;
+  scrollbar-color: #8b6ff5 transparent;
+}
+.auth-pane-body::-webkit-scrollbar { width: 6px; }
+.auth-pane-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #8b6ff5, #22d3ee);
+  border-radius: 4px;
+}
+
+/* ---- Left pane ---- */
+.auth-side { align-items: center; text-align: center; gap: 6px; }
+.auth-side-icon {
+  color: var(--evol-green);
+  filter: drop-shadow(0 0 10px rgba(139, 111, 245, 0.55));
+}
+.auth-side h3 { margin: 6px 0 2px; font-size: 1.05rem; color: var(--evol-text); }
+.auth-side-sub { margin: 0 0 12px; font-size: 0.8rem; color: var(--evol-muted); }
+
+.auth-feature-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.auth-feature {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--evol-border);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.8rem; color: var(--evol-text); text-align: left;
+  transition: border-color 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.auth-feature:hover { border-color: rgba(139, 111, 245, 0.5); transform: translateX(2px); }
+.auth-feature svg { color: var(--evol-green-light); flex-shrink: 0; }
+
+.auth-avatar {
+  width: 76px; height: 76px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 700; color: #0a0a12; text-transform: uppercase;
+  background: linear-gradient(135deg, #8b6ff5, #22d3ee);
+  box-shadow: 0 0 0 4px rgba(139, 111, 245, 0.25), 0 0 26px rgba(34, 211, 238, 0.4);
+  margin-bottom: 8px;
+}
+.auth-username { font-size: 1.05rem; font-weight: 700; color: var(--evol-text); word-break: break-all; }
+.auth-side .btn-glow { margin-top: 14px; }
+
+/* ---- Right pane ---- */
+.auth-form-wrap { width: 100%; max-width: 380px; margin: 0 auto; }
+.auth-form-wrap .ant-form-item { margin-bottom: 12px; }
+.auth-form-wrap .ant-form-item-label { padding-bottom: 2px; }
+.auth-section-title {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 12px; font-size: 0.95rem; color: var(--evol-text);
+}
+.auth-section-title svg { color: var(--evol-green-light); }

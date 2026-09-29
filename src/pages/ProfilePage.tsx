@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Card, Form, Input, Button, Alert, Typography, Tag } from "antd";
+import { Form, Input, Button, Alert, Segmented, Tag } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { Sparkles, LogOut, UserRound, KeyRound } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import "./music/MusicPage.css";
+import "./AuthPage.css";
 
 type Msg = { text: string; ok: boolean } | null;
 
 export function ProfilePage() {
   const { user, logout, updateUsername, changePassword } = useAuth();
+  const [section, setSection] = useState<"username" | "password">("username");
 
   const [name, setName] = useState(user?.username ?? "");
   const [nameBusy, setNameBusy] = useState(false);
@@ -40,71 +44,94 @@ export function ProfilePage() {
     if (r.ok) { setCurrentPw(""); setNewPw(""); setConfirmPw(""); }
   }
 
-  const cardStyle = { maxWidth: 420, margin: "0 auto 16px" };
-  const title = { color: "#e6e6e6", marginTop: 0 } as const;
+  const icon = (I: typeof UserOutlined) => <I style={{ color: "#9a9a9a" }} />;
 
   return (
-    <div className="page">
-      <Card className="evol-glass-card fade-in-up" style={cardStyle}>
-        <Typography.Title level={4} style={title}>Profile</Typography.Title>
-        <p style={{ color: "#9a9a9a", margin: "0 0 12px" }}>
-          Logged in as <strong style={{ color: "#3ddc57" }}>{user.username}</strong>{" "}
-          <Tag color={user.role === "admin" ? "purple" : "default"}>{user.role}</Tag>
-        </p>
-        <Button danger className="btn-glow" onClick={() => logout()}>Log out</Button>
-      </Card>
+    <div className="page auth-page-shell">
+      <div className="music-shell-header fade-in-up">
+        <h2 className="music-title"><Sparkles size={20} className="music-title-icon" /> Profile</h2>
+        <p className="music-subtitle">Manage how you show up in the galaxy.</p>
+      </div>
 
-      <Card className="evol-glass-card fade-in-up" style={cardStyle}>
-        <Typography.Title level={5} style={title}>Change username</Typography.Title>
-        <Form layout="vertical" onFinish={handleName}>
-          <Form.Item label="New username" style={{ marginBottom: 12 }}>
-            <Input
-              prefix={<UserOutlined style={{ color: "#9a9a9a" }} />}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="username"
-            />
-          </Form.Item>
-          <Button
-            type="primary" htmlType="submit" className="btn-glow" loading={nameBusy}
-            disabled={!name.trim() || name.trim() === user.username}
-          >
-            Save username
-          </Button>
-        </Form>
-        {nameMsg && (
-          <Alert className="fade-in-up" style={{ marginTop: 12 }} showIcon
-            type={nameMsg.ok ? "success" : "error"} message={nameMsg.text} />
-        )}
-      </Card>
+      <div className="auth-workspace">
+        {/* Left: identity */}
+        <div className="music-pane fade-in-up">
+          <div className="auth-pane-body auth-side">
+            <div className="auth-avatar">{user.username.slice(0, 1) || "?"}</div>
+            <div className="auth-username">{user.username}</div>
+            <Tag color={user.role === "admin" ? "purple" : "default"} style={{ marginInlineEnd: 0 }}>
+              {user.role}
+            </Tag>
+            <Button danger className="btn-glow" icon={<LogOut size={14} />} onClick={() => logout()}>
+              Log out
+            </Button>
+          </div>
+        </div>
 
-      <Card className="evol-glass-card fade-in-up" style={cardStyle}>
-        <Typography.Title level={5} style={title}>Change password</Typography.Title>
-        <Form layout="vertical" onFinish={handlePassword}>
-          <Form.Item label="Current password" style={{ marginBottom: 12 }}>
-            <Input.Password prefix={<LockOutlined style={{ color: "#9a9a9a" }} />}
-              value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" />
-          </Form.Item>
-          <Form.Item label="New password" style={{ marginBottom: 12 }}>
-            <Input.Password prefix={<LockOutlined style={{ color: "#9a9a9a" }} />}
-              value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
-          </Form.Item>
-          <Form.Item label="Confirm new password" style={{ marginBottom: 12 }}>
-            <Input.Password prefix={<LockOutlined style={{ color: "#9a9a9a" }} />}
-              value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
-          </Form.Item>
-          <Button
-            type="primary" htmlType="submit" className="btn-glow" loading={pwBusy}
-            disabled={!currentPw || !newPw || !confirmPw}
-          >
-            Change password
-          </Button>
-        </Form>
-        {pwMsg && (
-          <Alert className="fade-in-up" style={{ marginTop: 12 }} showIcon
-            type={pwMsg.ok ? "success" : "error"} message={pwMsg.text} />
-        )}
-      </Card>
+        {/* Right: settings */}
+        <div className="music-pane fade-in-up">
+          <div className="auth-pane-body">
+            <div className="auth-form-wrap">
+              <Segmented
+                block
+                value={section}
+                onChange={(v) => setSection(v as "username" | "password")}
+                options={[
+                  { label: <span><UserRound size={13} style={{ verticalAlign: -2, marginRight: 6 }} />Username</span>, value: "username" },
+                  { label: <span><KeyRound size={13} style={{ verticalAlign: -2, marginRight: 6 }} />Password</span>, value: "password" },
+                ]}
+                style={{ marginBottom: 18 }}
+              />
+
+              {section === "username" ? (
+                <Form layout="vertical" onFinish={handleName} key="username" className="fade-in">
+                  <Form.Item label="New username">
+                    <Input
+                      prefix={icon(UserOutlined)} value={name}
+                      onChange={(e) => setName(e.target.value)} autoComplete="username"
+                    />
+                  </Form.Item>
+                  <Button
+                    type="primary" htmlType="submit" block className="btn-glow" loading={nameBusy}
+                    disabled={!name.trim() || name.trim() === user.username}
+                  >
+                    Save username
+                  </Button>
+                  {nameMsg && (
+                    <Alert className="fade-in-up" style={{ marginTop: 12 }} showIcon
+                      type={nameMsg.ok ? "success" : "error"} message={nameMsg.text} />
+                  )}
+                </Form>
+              ) : (
+                <Form layout="vertical" onFinish={handlePassword} key="password" className="fade-in">
+                  <Form.Item label="Current password">
+                    <Input.Password prefix={icon(LockOutlined)} value={currentPw}
+                      onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" />
+                  </Form.Item>
+                  <Form.Item label="New password">
+                    <Input.Password prefix={icon(LockOutlined)} value={newPw}
+                      onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
+                  </Form.Item>
+                  <Form.Item label="Confirm new password">
+                    <Input.Password prefix={icon(LockOutlined)} value={confirmPw}
+                      onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
+                  </Form.Item>
+                  <Button
+                    type="primary" htmlType="submit" block className="btn-glow" loading={pwBusy}
+                    disabled={!currentPw || !newPw || !confirmPw}
+                  >
+                    Change password
+                  </Button>
+                  {pwMsg && (
+                    <Alert className="fade-in-up" style={{ marginTop: 12 }} showIcon
+                      type={pwMsg.ok ? "success" : "error"} message={pwMsg.text} />
+                  )}
+                </Form>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
