@@ -10,7 +10,9 @@ function emailFor(username: string): string {
 export type Role = "user" | "admin";
 const ROLES: Role[] = ["user", "admin"];
 
-export type AppUser = { id: string; username: string; role: Role };
+// username = login handle (never shown as a title), name = display name
+// (falls back to username when no display name has been set).
+export type AppUser = { id: string; username: string; name: string; role: Role };
 type Result = { ok: boolean; message: string };
 
 interface AuthContextValue {
@@ -18,8 +20,9 @@ interface AuthContextValue {
   isAdmin: boolean;
   loading: boolean;
   login: (username: string, password: string) => Promise<Result>;
-  signup: (username: string, password: string) => Promise<Result>;
+  signup: (username: string, password: string, name?: string) => Promise<Result>;
   logout: () => Promise<void>;
+  updateName: (newName: string) => Promise<Result>;
   updateUsername: (newUsername: string) => Promise<Result>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<Result>;
 }
@@ -50,16 +53,20 @@ function roleFromSession(session: Session): Role {
 
 function toAppUser(session: Session | null | undefined): AppUser | null {
   if (!session?.user) return null;
+  const meta = session.user.user_metadata ?? {};
+  const username = (meta.username as string) || "";
+  const name = ((meta.display_name as string) || "").trim() || username;
   return {
     id: session.user.id,
-    username: (session.user.user_metadata?.username as string) || "",
+    username,
+    name,
     role: roleFromSession(session),
   };
 }
 
 function isTakenError(error: { message: string; code?: string }): boolean {
   const msg = error.message.toLowerCase();
-  return error.code === "email_exists" || msg.includes("already") ;
+  return error.code === "email_exists" || msg.includes("already");
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -73,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Fires on login/logout/TOKEN_REFRESHED/USER_UPDATED — so the role
-    // re-derives from the new JWT automatically whenever it changes.
+    // and display name re-derive from the new session automatically.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(toAppUser(session));
     });
@@ -86,14 +93,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true, message: "Welcome back!" };
   }
 
-  async function signup(username: string, password: string): Promise<Result> {
+  async function signup(username: string, password: string, name?: string): Promise<Result> {
     if (!username.trim() || !password) return { ok: false, message: "Username and password are required." };
     if (password.length < 6) return { ok: false, message: "Password must be at least 6 characters." };
+
+    const displayName = name?.trim();
+    if (displayName && displayName.length > 40) {
+      return { ok: false, message: "Name must be 40 characters or fewer." };
+    }
 
     const { data, error } = await supabase.auth.signUp({
       email: emailFor(username),
       password,
-      options: { data: { username: username.trim() } },
+      options: {
+        data: {
+          username: username.trim(),
+          ...(displayName ? { display_name: displayName } : {}),
+        },
+      },
     });
     if (error) {
       if (isTakenError(error)) return { ok: false, message: "That username is already taken." };
@@ -107,19 +124,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  // Display name lives in user_metadata only — no email involved, so
+  // there's nothing that can lock the user out. An empty string clears it
+  // and the UI falls back to the username.
+  async function updateName(newName: string): Promise<Result> {
+    if (!user) return { ok: false, message: "Not logged in." };
+    const name = newName.trim();
+    if (name.length > 40) return { ok: false, message: "Name must be 40 characters or fewer." };
+    if (name === user.name) return { ok: false, message: "That's already your name." };
+
+    const { error } = await supabase.auth.updateUser({ data: { display_name: name } });
+    if (error) return { ok: false, message: `Couldn't update name: ${error.message}` };
+    return { ok: true, message: name ? "Name updated." : "Name cleared, showing your username." };
+  }
+
   // Login goes through emailFor(username), so renaming must change the
   // placeholder email too — updating user_metadata alone would lock the
   // user out of logging in with their new name.
   async function updateUsername(newUsername: string): Promise<Result> {
-    const name = newUsername.trim();
+    const username = newUsername.trim();
     if (!user) return { ok: false, message: "Not logged in." };
-    if (!name) return { ok: false, message: "Username can't be empty." };
-    if (name === user.username) return { ok: false, message: "That's already your username." };
+    if (!username) return { ok: false, message: "Username can't be empty." };
+    if (username === user.username) return { ok: false, message: "That's already your username." };
 
-    const targetEmail = emailFor(name);
+    const targetEmail = emailFor(username);
     const { data, error } = await supabase.auth.updateUser({
       email: targetEmail,
-      data: { username: name },
+      data: { username },
     });
     if (error) {
       if (isTakenError(error)) return { ok: false, message: "That username is already taken." };
@@ -158,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user, isAdmin: user?.role === "admin", loading,
-        login, signup, logout, updateUsername, changePassword,
+        login, signup, logout, updateName, updateUsername, changePassword,
       }}
     >
       {children}

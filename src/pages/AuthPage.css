@@ -80,3 +80,4 @@
   margin: 0 0 12px; font-size: 0.95rem; color: var(--evol-text);
 }
 .auth-section-title svg { color: var(--evol-green-light); }
+.auth-handle { font-size: 0.8rem; color: var(--evol-muted); margin: -2px 0 6px; word-break: break-all; }

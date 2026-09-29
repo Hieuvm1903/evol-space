@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Segmented, Form, Input, Button, Alert } from "antd";
-import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { UserOutlined, LockOutlined, SmileOutlined } from "@ant-design/icons";
 import { Sparkles, Music2, Map as MapIcon, Camera } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import "./music/MusicPage.css";
@@ -19,6 +19,7 @@ export function LoginPage() {
 
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,7 +29,9 @@ export function LoginPage() {
   async function handleSubmit() {
     setBusy(true);
     setMessage(null);
-    const result = tab === "login" ? await login(username, password) : await signup(username, password);
+    const result = tab === "login"
+      ? await login(username, password)
+      : await signup(username, password, name);
     setBusy(false);
     setMessage({ text: result.message, ok: result.ok });
     if (result.ok && tab === "login") navigate("/profile");
@@ -42,7 +45,6 @@ export function LoginPage() {
       </div>
 
       <div className="auth-workspace">
-        {/* Left: info pane */}
         <div className="music-pane fade-in-up">
           <div className="auth-pane-body auth-side">
             <Sparkles size={38} className="auth-side-icon" />
@@ -56,7 +58,6 @@ export function LoginPage() {
           </div>
         </div>
 
-        {/* Right: form pane */}
         <div className="music-pane fade-in-up">
           <div className="auth-pane-body">
             <div className="auth-form-wrap">
@@ -72,7 +73,7 @@ export function LoginPage() {
               />
 
               <Form layout="vertical" onFinish={handleSubmit} key={tab} className="fade-in">
-                <Form.Item label="Username">
+                <Form.Item label="Username" extra={tab === "signup" ? "Used to log in. Can't contain spaces or @." : undefined}>
                   <Input
                     prefix={<UserOutlined style={{ color: "#9a9a9a" }} />}
                     value={username}
@@ -81,6 +82,18 @@ export function LoginPage() {
                     autoFocus
                   />
                 </Form.Item>
+                {tab === "signup" && (
+                  <Form.Item label="Display name (optional)">
+                    <Input
+                      prefix={<SmileOutlined style={{ color: "#9a9a9a" }} />}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      maxLength={40}
+                      placeholder="How you'd like to be shown"
+                      autoComplete="nickname"
+                    />
+                  </Form.Item>
+                )}
                 <Form.Item label="Password">
                   <Input.Password
                     prefix={<LockOutlined style={{ color: "#9a9a9a" }} />}
