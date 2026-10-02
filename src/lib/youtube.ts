@@ -86,3 +86,13 @@ export async function searchPlaylists(query: string, limit = 8): Promise<SearchP
   if (!query.trim()) return [];
   return callProxy<SearchPlaylistResult[]>({ action: "search-playlists", query, limit });
 }
+
+export function isPlaylistLink(url: string): boolean {
+  const listId = extractPlaylistId(url);
+  if (!listId) return false;
+  if (!extractVideoId(url)) return true;
+
+  const isAutoMix =
+    /^(RD|UL|TL)/i.test(listId) || /[?&]start_radio=1/.test(url);
+  return !isAutoMix;
+}

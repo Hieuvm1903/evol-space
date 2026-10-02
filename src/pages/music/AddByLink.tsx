@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button, Input, message } from "antd";
 import { Link2, Play, ExternalLink, ListMusic } from "lucide-react";
 import * as musicService from "../../lib/musicService";
-import { extractPlaylistId, extractVideoId, normalizeUrl, fetchMetadata, VideoMeta } from "../../lib/youtube";
+import { isPlaylistLink as isPlaylistUrl, extractVideoId, normalizeUrl, fetchMetadata, VideoMeta } from "../../lib/youtube";
 import { openImportNotification } from "./useImportNotification";
 import VideoPreviewModal from "../../components/VideoPreviewModal";
 import PlaylistDetailModal from "./PlaylistDetailModal";
@@ -23,7 +23,7 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
   useEffect(() => () => { mountedRef.current = false; }, []);
 
   const trimmed = url.trim();
-  const isPlaylistLink = !!extractPlaylistId(trimmed);
+  const isPlaylistLink = isPlaylistUrl(trimmed);
   const videoId = !isPlaylistLink ? extractVideoId(trimmed) : null;
 
   useEffect(() => {
