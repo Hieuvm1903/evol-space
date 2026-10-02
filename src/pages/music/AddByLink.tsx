@@ -53,8 +53,8 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
       const notice = openImportNotification("playlist");
       const result = await musicService.addPlaylistFromYoutube(playlistId, trimmed, addedBy, (done, total, item) => {
         notice.tick(done, total, item);
-        if (item.wasAdded) onAdded();
       });
+      onAdded();
       notice.finish(result.message);
       if (mountedRef.current) { setBusy(false); setMsg({ text: result.message, ok: result.ok }); }
       if (result.ok) { message.success(result.message); if (mountedRef.current) setUrl(""); }

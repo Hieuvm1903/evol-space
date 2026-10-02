@@ -65,21 +65,22 @@ export default function QueueList({ queue, currentTrackIdx, onReorder, onPlay }:
         {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
       </div>
       <div className={`queue-list-wrapper${collapsed ? " collapsed" : ""}`}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            <div className="queue-list">
-              {queue.map((track, idx) => (
-                <QueueRow
-                  key={trackKey(track, idx)}
-                  id={trackKey(track, idx)}
-                  track={track}
-                  isCurrent={idx === currentTrackIdx}
-                  onPlay={() => onPlay(idx)}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+        {!collapsed && (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+              <div className="queue-list">
+                {queue.map((track, idx) => (
+                  <QueueRow
+                    key={trackKey(track, idx)}
+                    id={trackKey(track, idx)}
+                    track={track}
+                    isCurrent={idx === currentTrackIdx}
+                    onPlay={() => onPlay(idx)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>)}
       </div>
     </div>
   );

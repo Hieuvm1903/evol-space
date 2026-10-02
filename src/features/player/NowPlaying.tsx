@@ -25,14 +25,13 @@ interface Props {
   drag: ReturnType<typeof useDragPosition>;
   onPersistLyrics: PersistLyricsSelection;
 }
+const GLOW_COLORS = ['#c084fc', '#f472b6', '#38bdf8'];
 
 export default function NowPlaying({ drag, onPersistLyrics }: Props) {
   const queue = usePlayerStore((s) => s.queue);
   const currentIdx = usePlayerStore((s) => s.currentIdx);
   const mode = usePlayerStore((s) => s.mode);
   const playing = usePlayerStore((s) => s.playing);
-  const curTime = usePlayerStore((s) => s.curTime);
-  const duration = usePlayerStore((s) => s.duration);
   const volume = usePlayerStore((s) => s.volume);
   const view = usePlayerStore((s) => s.view);
   const expanded = usePlayerStore((s) => s.expanded);
@@ -53,7 +52,7 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
 
   const playerRef = useRef<YouTubePlayer | null>(null);
   const track = queue[currentIdx];
-  const lyrics = useLyrics(track, curTime, onPersistLyrics);
+  const lyrics = useLyrics(track, onPersistLyrics);
 
   // Keep the next track cued in a hidden player for a snappier transition
   // when it comes up — same intent as the old preload player.
@@ -73,24 +72,7 @@ useEffect(() => {
   endHandledRef.current = false;
 }, [track?.video_id]);
 
-useEffect(() => {
-  const id = setInterval(() => {
-    const p = playerRef.current;
-    if (!p?.getCurrentTime) return;
-    try {
-      const cur = p.getCurrentTime();
-      const dur = p.getDuration();
-      if (dur > 0) {
-        setProgress(cur, dur);
-        if (!endHandledRef.current && dur - cur < 0.75) {
-          endHandledRef.current = true;
-          handleEnded();
-        }
-      }
-    } catch { }
-  }, 500);
-  return () => clearInterval(id);
-}, [setProgress, mode]); // mode included so handleEnded's repeat-track branch stays current
+
  function handleStateChange(e: { data: number }) {
   if (e.data === 1) setPlaying(true);
   else if (e.data === 2) setPlaying(false);
@@ -109,18 +91,27 @@ useEffect(() => {
   }
 
   // Poll playback progress every 500ms — same cadence as before.
-  useEffect(() => {
-    const id = setInterval(() => {
-      const p = playerRef.current;
-      if (!p?.getCurrentTime) return;
-      try {
-        const cur = p.getCurrentTime();
-        const dur = p.getDuration();
-        if (dur > 0) setProgress(cur, dur);
-      } catch { }
-    }, 500);
-    return () => clearInterval(id);
-  }, [setProgress]);
+useEffect(() => {
+  const id = setInterval(() => {
+    const p = playerRef.current;
+    if (!p?.getCurrentTime) return;
+    try {
+      const cur = p.getCurrentTime();
+      const dur = p.getDuration();
+      if (!(dur > 0)) return;
+
+      // the pill doesn't show time, so don't touch the store when collapsed
+      if (usePlayerStore.getState().expanded) setProgress(cur, dur);
+
+      if (!endHandledRef.current && dur - cur < 0.75) {
+        endHandledRef.current = true;
+        handleEnded();
+      }
+    } catch { }
+  }, 500);
+  return () => clearInterval(id);
+}, [setProgress, mode]);
+
   useEffect(() => {
     setProgress(0, 0);
   }, [track?.video_id, setProgress]);
@@ -204,7 +195,7 @@ useEffect(() => {
           glowIntensity={1}
           coneSpread={25}
           animated={false}
-          colors={['#c084fc', '#f472b6', '#38bdf8']}
+          colors={GLOW_COLORS}
         >
           <div className="panel-inner">
 
@@ -234,7 +225,7 @@ useEffect(() => {
 
             <p className="np-track-title" title={track.title}>{track.title}</p>
 
-            <ProgressBar curTime={curTime} duration={duration} onSeekFraction={seekToFraction} />
+            <ProgressBar  onSeekFraction={seekToFraction} />
 
             <TransportControls
               track={track}

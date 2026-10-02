@@ -2,12 +2,27 @@ import { useLocation } from "react-router-dom";
 import Galaxy from "./Galaxy";
 import "./Galaxy.css";
 import GalaxyRing from "./ImperfectCircle";
+import React from "react";
+function RingOverlay() {
+  const { pathname } = useLocation();
+  return (
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 0,
+      pointerEvents: "none"
+    }}>
+      <GalaxyRing size={400} trigger={pathname} />
+    </div>
+  );
+}
 
-export default function GalaxyBackground() {
-const location = useLocation();
+export default React.memo(function GalaxyBackground() {
   return (
     <div className="galaxy-background">
-      {/* Galaxy stays in the background */}
       <Galaxy
         starSpeed={0.1}
         density={1.4}
@@ -21,21 +36,7 @@ const location = useLocation();
         rotationSpeed={0.05}
         transparent
       />
-
-      {/* Centered ring overlay */}
-      <div
-        style={{
-          position: "fixed",   // or "fixed" if you prefer
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 0,
-          pointerEvents: "none"          
-        }}
-      >
-        <GalaxyRing  size={400} trigger={location.pathname}/>
-      </div>
+      <RingOverlay />
     </div>
   );
-}
+});

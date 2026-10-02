@@ -4,6 +4,7 @@ import { splitArtistTitle } from "../utils/artist";
 import {
   currentLineIndex, fetchLyrics, fetchLyricsCached, fetchLyricsByIdCached, LyricsCandidate,
 } from "../lyricsProvider";
+import { usePlayerStore } from "../store";
 
 export type PersistLyricsSelection = (
   trackId: number,
@@ -11,7 +12,7 @@ export type PersistLyricsSelection = (
   lyricsUrl: string,
 ) => void;
 
-export function useLyrics(track: Track | undefined, curTime: number, onPersist: PersistLyricsSelection) {
+export function useLyrics(track: Track | undefined, onPersist: PersistLyricsSelection) {
   const [lyricsCandidates, setLyricsCandidates] = useState<LyricsCandidate[] | undefined>(undefined);
   const [selectedCandidateIdx, setSelectedCandidateIdx] = useState(0);
   const [manualTitle, setManualTitle] = useState("");
@@ -86,8 +87,13 @@ export function useLyrics(track: Track | undefined, curTime: number, onPersist: 
     }
   }
 
-  const selectedCandidate = lyricsCandidates?.[selectedCandidateIdx];
-  const activeLineIdx = selectedCandidate ? currentLineIndex(selectedCandidate.lines, curTime) : -1;
+   const selectedCandidate = lyricsCandidates?.[selectedCandidateIdx];
+
+  const activeLineIdx = usePlayerStore((s) =>
+    selectedCandidate && s.view === "lyrics"
+      ? currentLineIndex(selectedCandidate.lines, s.curTime)
+      : -1
+  );
 
   useEffect(() => {
     if (!selectedCandidate || !track || track.id == null) return;

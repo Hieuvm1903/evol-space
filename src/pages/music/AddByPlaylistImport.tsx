@@ -38,9 +38,10 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
       playlistId, `https://www.youtube.com/playlist?list=${pr.playlist_id}`, addedBy,
       (done, total, item) => {
         notice.tick(done, total, item);
-        if (item.wasAdded) onAdded();
+       
       },
     );
+    onAdded();
     notice.finish(result.message);
     if (mountedRef.current) { setAddingId(null); setSearchMsg({ text: result.message, ok: result.ok }); }
     if (result.ok) message.success(result.message);

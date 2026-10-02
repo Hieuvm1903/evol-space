@@ -8,18 +8,18 @@ import { iconForName } from "../../content/placeIcons";
 // per place.
 const markerIconCache = new Map<string, L.DivIcon>();
 
-export function glowDivIcon(iconName: string, colorHex: string, opacity = 1): L.DivIcon {
-  const key = `${iconName}|${colorHex}|${opacity}`;
+export function glowDivIcon(iconName: string, colorHex: string, opacity = 1, selected = false): L.DivIcon {
+  const key = `${iconName}|${colorHex}|${opacity}|${selected}`;
   const cached = markerIconCache.get(key);
   if (cached) return cached;
   const Icon = iconForName(iconName);
   const svg = renderToStaticMarkup(<Icon size={16} color="#fff" strokeWidth={2.4} />);
   const html = `
-       <div class="galaxy-marker cursor-target" style="--marker-color:${colorHex};opacity:${opacity}">
-
+       <div class="galaxy-marker cursor-target${selected ? " selected" : ""}" style="--marker-color:${colorHex};opacity:${opacity}">
       <div class="galaxy-marker-glow"></div>
       <div class="galaxy-marker-pin">${svg}</div>
     </div>`;
+   
   const icon = L.divIcon({ html, className: "galaxy-marker-wrap", iconSize: [36, 36], iconAnchor: [18, 34] });
   markerIconCache.set(key, icon);
   return icon;

@@ -20,7 +20,7 @@ import { emptyForm, formFromPlace } from "./formHelpers";
 import BrowseTab from "./BrowseTab";
 import PlaceFormTab from "./PlaceFormTab";
 import MapSettingsTab from "./MapSettingsTab";
-import MapCanvas from "./MapCanvas";import ListsTab from "./ListsTab";
+import MapCanvas from "./MapCanvas"; import ListsTab from "./ListsTab";
 
 // widen the tab type (with the other useState calls, above the `if (!user)` early return)
 
@@ -38,9 +38,9 @@ const { Title } = Typography;
 
 export function MapPage() {
   const [tab, setTab] = useState<"browse" | "lists" | "form" | "config">("browse");
-const [listDraftIds, setListDraftIds] = useState<number[] | null>(null);
-const [activeListIds, setActiveListIds] = useState<number[] | null>(null);
-const [activeListId, setActiveListId] = useState<number | null>(null);
+  const [listDraftIds, setListDraftIds] = useState<number[] | null>(null);
+  const [activeListIds, setActiveListIds] = useState<number[] | null>(null);
+  const [activeListId, setActiveListId] = useState<number | null>(null);
   const { user } = useAuth();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +75,7 @@ const [activeListId, setActiveListId] = useState<number | null>(null);
     setPlaces(await placesService.getPlaces(user.id));
     setLoading(false);
   }
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => { load(); }, [user?.id]);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   if (!user) {
     return (
@@ -85,22 +85,22 @@ const [activeListId, setActiveListId] = useState<number | null>(null);
       </div>
     );
   }
-function handleViewList(ids: number[] | null, listId?: number) {
-  setActiveListIds(ids);
-  setActiveListId(ids ? listId ?? null : null);
-  if (ids && ids.length) {
-    const pts = places.filter((p) => ids.includes(p.id)).map((p) => [p.lat, p.lon] as [number, number]);
-    if (pts.length) mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 15 });
+  function handleViewList(ids: number[] | null, listId?: number) {
+    setActiveListIds(ids);
+    setActiveListId(ids ? listId ?? null : null);
+    if (ids && ids.length) {
+      const pts = places.filter((p) => ids.includes(p.id)).map((p) => [p.lat, p.lon] as [number, number]);
+      if (pts.length) mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 15 });
+    }
   }
-}
 
-function handleCreateListFromSelection() {
-  const ids = Array.from(longPress.selectedIds);
-  if (!ids.length) return;
-  setListDraftIds(ids);
-  longPress.exitSelectMode();
-  setTab("lists");
-}
+  function handleCreateListFromSelection() {
+    const ids = Array.from(longPress.selectedIds);
+    if (!ids.length) return;
+    setListDraftIds(ids);
+    longPress.exitSelectMode();
+    setTab("lists");
+  }
   function openAdd(prefill?: { lat: number; lon: number }) {
     setForm(emptyForm(prefill));
     setPanelMode("add");
@@ -210,7 +210,13 @@ function handleCreateListFromSelection() {
   }
 
   function handleSketchExtend(lat: number, lng: number) {
-    setActiveSketch((line) => (line ? [...line, [lat, lng]] : [[lat, lng]]));
+    setActiveSketch((line) => {
+      if (!line) return [[lat, lng]];
+      const [pl, pn] = line[line.length - 1];
+      // ~ a few metres at street zoom; scale if you want coarser lines
+      if (Math.abs(pl - lat) < 0.00002 && Math.abs(pn - lng) < 0.00002) return line;
+      return [...line, [lat, lng]];
+    });
   }
 
   function handleSketchEnd() {
@@ -338,7 +344,7 @@ function handleCreateListFromSelection() {
   const previewLat = parseFloat(form.lat);
   const previewLon = parseFloat(form.lon);
   const hasPreview = tab === "form" && !Number.isNaN(previewLat) && !Number.isNaN(previewLon);
-
+  
   useEffect(() => {
     if (!fullscreen) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -350,8 +356,11 @@ function handleCreateListFromSelection() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [fullscreen, activeTools]);
 
-let displayedPlaces = tab === "form" || tab === "lists" ? places : filtered.result;
-if (activeListIds) displayedPlaces = displayedPlaces.filter((p) => activeListIds.includes(p.id));
+  const displayedPlaces = useMemo(() => {
+    let list = tab === "form" || tab === "lists" ? places : filtered.result;
+    if (activeListIds) list = list.filter((p) => activeListIds.includes(p.id));
+    return list;
+  }, [tab, places, filtered.result, activeListIds]);
   return (
     <div className="page map-page-shell">
       <TargetCursor targetSelector=".cursor-target" />
@@ -377,22 +386,22 @@ if (activeListIds) displayedPlaces = displayedPlaces.filter((p) => activeListIds
             }}
             items={[
               { key: "browse", label: "Browse" },
-{ key: "lists", label: "Lists" },
-{ key: "form", label: panelMode === "edit" ? "Edit place" : "Add place" },
-{ key: "config", label: "Map settings" },
+              { key: "lists", label: "Lists" },
+              { key: "form", label: panelMode === "edit" ? "Edit place" : "Add place" },
+              { key: "config", label: "Map settings" },
             ]}
           />
-{tab === "lists" && (
-  <ListsTab
-    userId={user.id}
-    places={places}
-    draftIds={listDraftIds}
-    onDraftConsumed={() => setListDraftIds(null)}
-    activeIds={activeListIds}
-    activeListId={activeListId}
-    onViewList={handleViewList}
-  />
-)}
+          {tab === "lists" && (
+            <ListsTab
+              userId={user.id}
+              places={places}
+              draftIds={listDraftIds}
+              onDraftConsumed={() => setListDraftIds(null)}
+              activeIds={activeListIds}
+              activeListId={activeListId}
+              onViewList={handleViewList}
+            />
+          )}
           {tab === "browse" && (
             <BrowseTab
               loading={loading}
@@ -473,6 +482,7 @@ if (activeListIds) displayedPlaces = displayedPlaces.filter((p) => activeListIds
           radiusCircle={filtered.radiusCircle}
           onUseMyLocationOnMap={useMyLocationOnMap}
           onOpenAdd={() => openAdd()}
+          selectedId={selectedId}
         />
       </div>
 

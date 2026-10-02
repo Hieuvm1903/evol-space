@@ -712,3 +712,8 @@ form button:disabled { opacity: 0.6; cursor: default; }
     @apply font-sans;
   }
 }
+.evol-card, .evol-glass-card, .music-pane, .map-sidebar, .work-sidebar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(20, 18, 33, 0.88);
+}

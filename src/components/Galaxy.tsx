@@ -188,10 +188,11 @@ interface GalaxyProps {
   autoCenterRepulsion?: number;
   transparent?: boolean;
 }
-
+const DEFAULT_FOCAL: [number, number] = [0.5, 0.5];
+const DEFAULT_ROTATION: [number, number] = [1, 0];
 export default function Galaxy({
-  focal = [0.5, 0.5],
-  rotation = [1.0, 0.0],
+  focal = DEFAULT_FOCAL,
+  rotation = DEFAULT_ROTATION,
   starSpeed = 0.5,
   density = 1,
   hueShift = 140,
@@ -219,7 +220,8 @@ export default function Galaxy({
     const ctn = ctnDom.current;
     const renderer = new Renderer({
       alpha: transparent,
-      premultipliedAlpha: false
+      premultipliedAlpha: false,
+      dpr: 0.5
     });
     const gl = renderer.gl;
 
@@ -279,9 +281,12 @@ export default function Galaxy({
 
     const mesh = new Mesh(gl, { geometry, program });
     let animateId: number;
+    let last = 0;
 
     function update(t: number) {
       animateId = requestAnimationFrame(update);
+      if (document.hidden || t - last < 33) return;
+      last = t;
       if (!disableAnimation) {
         program.uniforms.uTime.value = t * 0.001;
         program.uniforms.uStarSpeed.value = (t * 0.001 * starSpeed) / 10.0;

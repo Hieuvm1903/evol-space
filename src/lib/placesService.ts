@@ -42,7 +42,10 @@ export async function deletePlace(placeId: number, userId: string): Promise<void
   const { error } = await supabase.from("places").delete().eq("id", placeId).eq("user_id", userId);
   if (error) throw error;
 }
-
+export async function deletePlaces(ids: number[], userId: string) {
+  const { error } = await supabase.from("places").delete().in("id", ids).eq("user_id", userId);
+  if (error) throw error;
+}
 export function getAllTags(places: Place[]): string[] {
   const tags = new Set<string>();
   for (const p of places) {

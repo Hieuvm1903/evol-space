@@ -88,7 +88,11 @@ export async function removeTrackFromPlaylist(playlistId: number, trackId: numbe
     .eq("playlist_id", playlistId).eq("track_id", trackId);
   if (error) throw error;
 }
-
+export async function removeTracksFromPlaylist(playlistId: number, trackIds: number[]) {
+  const { error } = await supabase
+    .from("playlist_tracks").delete().eq("playlist_id", playlistId).in("track_id", trackIds);
+  if (error) throw error;
+}
 export async function getPlaylistTracks(playlistId: number): Promise<PlaylistTrack[]> {
   const { data, error } = await supabase
     .from("playlist_tracks")
@@ -186,34 +190,31 @@ export async function addPlaylistFromYoutube(
     return true;
   });
 
-  let added = 0;
-  // Sequential, not batched — slower for huge playlists, but each track
-  // lands in the playlist (and can be reported to the UI) one at a time,
-  // instead of the old all-or-nothing batch insert that only surfaced a
-  // single count at the very end with no incremental feedback.
-  for (let i = 0; i < unique.length; i++) {
-    const v = unique[i];
-    const videoUrl = `https://www.youtube.com/watch?v=${v.video_id}`;
-    let ok = false;
-    let wasAdded = false;
-    try {
-      const result = await addTrackAndAttach(
-        playlistId, videoUrl, addedBy,
-        v.title ? { title: v.title, thumbnail_url: v.thumbnail_url } : undefined,
-      );
-      ok = result.ok;
-      wasAdded = result.wasAdded ?? false;
-      if (wasAdded) added++;
-    } catch {
-      ok = false;
-    }
-    onProgress?.(i + 1, unique.length, {
+const IMPORT_CHUNK = 10;
+let added = 0;
+
+for (let i = 0; i < unique.length; i += IMPORT_CHUNK) {
+  const part = unique.slice(i, i + IMPORT_CHUNK);
+  let addedIds = new Set<string>();
+  let ok = true;
+  try {
+    ({ addedVideoIds: addedIds } = await addTracksBulk(
+      playlistId,
+      part.map((v) => ({ video_id: v.video_id, title: v.title, thumbnail_url: v.thumbnail_url })),
+      addedBy,
+    ));
+    added += addedIds.size;
+  } catch { ok = false; }
+
+  part.forEach((v, j) =>
+    onProgress?.(i + j + 1, unique.length, {
       title: v.title || "Untitled track",
       thumbnail_url: v.thumbnail_url,
       ok,
-      wasAdded,
-    });
-  }
+      wasAdded: addedIds.has(v.video_id),
+    }),
+  );
+}
 
   if (added === 0) {
     return { ok: false, added: 0, message: "Every track in that playlist is already in this playlist." };
@@ -225,18 +226,12 @@ export async function addPlaylistFromYoutube(
 // Cross-playlist copy
 // ---------------------------------------------------------------------------
 
-export async function copyPlaylistTracks(sourcePlaylistId: number, targetPlaylistId: number): Promise<number> {
-  const sourceTracks = await getPlaylistTracks(sourcePlaylistId);
-  if (!sourceTracks.length) return 0;
-  const existingIds = new Set((await getPlaylistTracks(targetPlaylistId)).map((t) => t.id!));
-  let added = 0;
-  for (const t of sourceTracks) {
-    if (!existingIds.has(t.id!)) {
-      await addTrackToPlaylist(targetPlaylistId, t.id!);
-      added++;
-    }
-  }
-  return added;
+export async function copyPlaylistTracks(sourceId: number, targetId: number): Promise<number> {
+  const { data, error } = await supabase
+    .from("playlist_tracks").select("track_id").eq("playlist_id", sourceId).order("position");
+  if (error) throw error;
+  const linked = await linkTracksToPlaylist(targetId, (data ?? []).map((r) => r.track_id));
+  return linked.size;
 }
 
 // ---------------------------------------------------------------------------
@@ -353,4 +348,82 @@ export async function importPlaylist(
     return { ok: false, message: "Couldn't import any valid tracks from that text.", added: 0 };
   }
   return { ok: true, message: `Imported "${finalName}" with ${added} track(s).`, added };
+}
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+/** Links many existing tracks to a playlist in 3 queries. Returns ids that were newly linked. */
+async function linkTracksToPlaylist(playlistId: number, trackIds: number[]): Promise<Set<number>> {
+  if (!trackIds.length) return new Set();
+
+  const { data: linked, error: e1 } = await supabase
+    .from("playlist_tracks").select("track_id").eq("playlist_id", playlistId);
+  if (e1) throw e1;
+  const already = new Set((linked ?? []).map((r) => r.track_id as number));
+
+  const toLink = [...new Set(trackIds)].filter((id) => !already.has(id));
+  if (!toLink.length) return new Set();
+
+  const { data: last } = await supabase
+    .from("playlist_tracks").select("position")
+    .eq("playlist_id", playlistId).order("position", { ascending: false }).limit(1);
+  const start = last && last.length ? last[0].position + 1 : 0;
+
+  const rows = toLink.map((track_id, i) => ({ playlist_id: playlistId, track_id, position: start + i }));
+  for (const part of chunk(rows, 500)) {
+    const { error } = await supabase.from("playlist_tracks").insert(part);
+    if (error) throw error;
+  }
+  return new Set(toLink);
+}
+
+export interface BulkTrackInput {
+  video_id: string;
+  title?: string;
+  thumbnail_url?: string;
+  artist?: string;
+}
+
+/** Adds many YouTube videos to a playlist in ~4 queries total (not ~4 per track). */
+export async function addTracksBulk(
+  playlistId: number, items: BulkTrackInput[], addedBy: string,
+): Promise<{ addedVideoIds: Set<string> }> {
+  const byId = new Map<string, BulkTrackInput>();
+  for (const it of items) if (it.video_id && !byId.has(it.video_id)) byId.set(it.video_id, it);
+  const ids = [...byId.keys()];
+  if (!ids.length) return { addedVideoIds: new Set() };
+
+  // 1. which tracks already exist in the shared library (chunked: .in() goes in the URL)
+  const trackIdByVideo = new Map<string, number>();
+  for (const part of chunk(ids, 100)) {
+    const { data, error } = await supabase.from("tracks").select("id, video_id").in("video_id", part);
+    if (error) throw error;
+    data?.forEach((r) => trackIdByVideo.set(r.video_id, r.id));
+  }
+
+  // 2. insert the missing ones in one go
+  const missing = ids.filter((id) => !trackIdByVideo.has(id)).map((id) => {
+    const it = byId.get(id)!;
+    return {
+      title: it.title || "Untitled track",
+      artist: it.artist ?? "",
+      video_id: id,
+      youtube_url: `https://www.youtube.com/watch?v=${id}`,
+      thumbnail_url: it.thumbnail_url ?? "",
+      added_by: addedBy,
+    };
+  });
+  for (const part of chunk(missing, 200)) {
+    const { data, error } = await supabase.from("tracks").insert(part).select("id, video_id");
+    if (error) throw error;
+    data?.forEach((r) => trackIdByVideo.set(r.video_id, r.id));
+  }
+
+  // 3. link everything to the playlist
+  const newlyLinked = await linkTracksToPlaylist(playlistId, ids.map((v) => trackIdByVideo.get(v)!).filter(Boolean));
+  const addedVideoIds = new Set(ids.filter((v) => newlyLinked.has(trackIdByVideo.get(v)!)));
+  return { addedVideoIds };
 }

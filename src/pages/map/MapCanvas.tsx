@@ -9,6 +9,8 @@ import { glowDivIcon } from "./mapIcons";
 import { MapEvents, MapDragLock, CursorCoordinatesTool, MeasureTool, SketchTool } from "./MapEventHandlers";
 import { DEFAULT_CENTER, DEFAULT_ZOOM, MAP_TILE_CONFIG } from "./constants";
 import type { MapMode, MapTool, FormState } from "./types";
+import PlaceMarkers from "./PlaceMarkers";
+import MarkerClusterGroup from "react-leaflet-cluster";
 
 interface Props {
   mapRef: React.RefObject<L.Map>;
@@ -52,6 +54,7 @@ interface Props {
   onOpenAdd: () => void;
   readOnly?: boolean;
   children?: React.ReactNode; // rendered inside <MapContainer>
+  selectedId: number | null;
 }
 
 export default function MapCanvas({
@@ -63,7 +66,7 @@ export default function MapCanvas({
   displayedPlaces, onSelectPlace,
   form, hasPreview, previewLat, previewLon,
   myLocation, radiusCircle,
-  onUseMyLocationOnMap, onOpenAdd, readOnly = false, children,
+  onUseMyLocationOnMap, onOpenAdd, readOnly = false, children, selectedId
 }: Props) {
   if (mapMode === "google") {
     const [lat, lon] = myLocation ?? DEFAULT_CENTER;
@@ -164,7 +167,8 @@ export default function MapCanvas({
           url={MAP_TILE_CONFIG[mapMode].url}
           attribution={MAP_TILE_CONFIG[mapMode].attribution}
           className={MAP_TILE_CONFIG[mapMode].className}
-        />        
+          updateWhenZooming={false} keepBuffer={2}
+        />
         <MapEvents onRightClick={readOnly ? () => { } : onRightClickAdd} onLeftClick={onLeftClickDeselect} />
         <MapDragLock locked={activeTools.includes("draw")} />
 
@@ -189,36 +193,9 @@ export default function MapCanvas({
           <Polyline key={`sketch-${i}`} positions={line} pathOptions={{ color: "#e879f9", weight: 3 }} />
         ))}
         {activeSketch && <Polyline positions={activeSketch} pathOptions={{ color: "#e879f9", weight: 3 }} />}
-
-        {displayedPlaces.map((p) => {
-          const { name: iconName, color } = splitIcon(p.icon);
-          return (
-            <Marker
-              key={p.id}
-              position={[p.lat, p.lon]}
-              icon={glowDivIcon(iconName, color)}
-              eventHandlers={{ click: () => onSelectPlace(p.id) }}
-            >
-              <Popup>
-                <strong>{p.name}</strong>
-                {p.description && <div>{p.description}</div>}
-                <br />
-                <a href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`} target="_blank" rel="noreferrer">
-                  Directions ↗
-                </a>
-                {" · "}
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Find ↗
-                </a>
-              </Popup>
-            </Marker>
-          );
-        })}
-
+        <MarkerClusterGroup chunkedLoading maxClusterRadius={50}>
+          <PlaceMarkers places={displayedPlaces} selectedId={selectedId} onSelect={onSelectPlace} />
+        </MarkerClusterGroup>
         {hasPreview && (
           <Marker position={[previewLat, previewLon]} icon={glowDivIcon(form.iconName, form.color, 0.75)} />
         )}
@@ -238,8 +215,8 @@ export default function MapCanvas({
             pathOptions={{ color: "#8b6ff5", weight: 2, fillOpacity: 0.08 }}
           />
         )}
-      {children}
-</MapContainer>
+        {children}
+      </MapContainer>
     </div >
   );
 }

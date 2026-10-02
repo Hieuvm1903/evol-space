@@ -1,13 +1,11 @@
 import React, { useState } from "react";
 import { formatTime } from "../utils/time";
+import { usePlayerStore } from "../store";
 
-interface Props {
-  curTime: number;
-  duration: number;
-  onSeekFraction: (frac: number) => void;
-}
-
-export default function ProgressBar({ curTime, duration, onSeekFraction }: Props) {
+interface Props { onSeekFraction: (frac: number) => void }
+export default function ProgressBar({  onSeekFraction }: Props) {
+  const curTime = usePlayerStore((s) => s.curTime);
+  const duration = usePlayerStore((s) => s.duration);
   const [dragValue, setDragValue] = useState<number | null>(null);
   const livePercent = duration ? (curTime / duration) * 100 : 0;
   const percent = dragValue ?? livePercent;

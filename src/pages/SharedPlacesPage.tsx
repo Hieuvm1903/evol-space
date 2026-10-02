@@ -259,6 +259,7 @@ export function SharedPlacesPage() {
             })
           }
           onOpenAdd={() => {}}
+          selectedId={selectedId}
         >
           <FitBounds points={points} />
         </MapCanvas>

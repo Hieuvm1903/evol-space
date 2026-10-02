@@ -81,8 +81,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Fires on login/logout/TOKEN_REFRESHED/USER_UPDATED — so the role
     // and display name re-derive from the new session automatically.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(toAppUser(session));
+    // AuthContext.tsx
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      const next = toAppUser(session);
+      setUser((prev) =>
+        prev && next && prev.id === next.id && prev.name === next.name &&
+          prev.username === next.username && prev.role === next.role
+          ? prev
+          : next
+      );
     });
     return () => sub.subscription.unsubscribe();
   }, []);
