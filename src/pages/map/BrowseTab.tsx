@@ -174,12 +174,7 @@ export default function BrowseTab({
             <Tooltip title="Edit">
               <Button size="small" icon={<Pencil size={13} />} onClick={() => onEdit(p)} />
             </Tooltip>
-          )}
-          {!readOnly && onDelete && (
-            <Tooltip title="Delete">
-              <Button size="small" danger icon={<Trash2 size={13} />} onClick={() => onDelete(p.id)} />
-            </Tooltip>
-          )}
+          )}         
           <Tooltip title="Directions">
             <Button size="small" icon={<Navigation2 size={13} />}
               href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`} target="_blank" />
@@ -189,6 +184,11 @@ export default function BrowseTab({
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}+${p.lat},${p.lon}`}
               target="_blank" />
           </Tooltip>
+          {!readOnly && onDelete && (
+            <Tooltip title="Delete">
+              <Button size="small" danger icon={<Trash2 size={13} />} onClick={() => onDelete(p.id)} />
+            </Tooltip>
+          )}
         </div>
       )}
     </div>

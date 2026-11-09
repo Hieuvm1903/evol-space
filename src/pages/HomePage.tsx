@@ -90,7 +90,7 @@ export function HomePage() {
       <div className="music-shell-header fade-in-up">
         <h2 className="music-title"><Sparkles size={20} className="music-title-icon" /> Home</h2>
         <p className="music-subtitle">
-          {user ? `Welcome back, ${user.username}.` : "Welcome to your little corner of the galaxy."}
+          {user ? `Welcome back, ${user.name}.` : "Welcome to your little corner of the galaxy."}
         </p>
       </div>
 

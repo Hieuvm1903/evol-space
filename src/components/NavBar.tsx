@@ -60,7 +60,7 @@ const items = [
           );
         })}
       </div>
-      {user && <span className="navbar-user">{user.username}</span>}
+      {user && <span className="navbar-user">{user.name}</span>}
     </nav>
   );
 }
