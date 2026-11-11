@@ -1,17 +1,34 @@
 export type Vec3 = [number, number, number];
 
+export type ObjectKind = "model" | "group" | "light";
+export type LightType = "point" | "spot" | "directional";
+
+export interface LightProps {
+  type: LightType;
+  color: string;
+  intensity: number;
+  distance: number;   // 0 = unlimited (point/spot)
+  angle: number;      // spot cone, degrees
+  castShadow: boolean;
+}
+
 export interface SceneObjectData {
   id: string;
-  asset: string;                 // key in model_sets.files, e.g. "rack"
-  label: string;
-  position: Vec3;                // metres, three.js axes (Y up)
-  rotationY: number;             // degrees
-  scale: number;
+  kind: ObjectKind;
+  asset: string | null;           // key in model_sets.files (models only)
+  label: string;                  // scripts refer to objects by label — keep them free of spaces
+  parentId: string | null;        // hierarchy; position/rotation/scale are LOCAL to the parent
+  position: Vec3;                 // metres, Y up
+  rotation: Vec3;                 // degrees, Euler XYZ
+  scale: number;                  // uniform
   joints: Record<string, number>; // radians (revolute/continuous) or metres (prismatic)
+  static: boolean;                // true = drawn through GPU instancing (and never moves)
+  light?: LightProps;
+  script?: string;                // behaviour script, run in Play mode
 }
 
 export interface SceneDoc {
-  version: 1;
+  version: 2;
   objects: SceneObjectData[];
 }
 
@@ -30,7 +47,7 @@ export interface SceneRow {
   name: string;
   model_set_name: string | null;
   model_set_version: string | null;
-  data: SceneDoc;
+  data: { version: number; objects: unknown[] }; // v1 docs are migrated on load (see sceneMath.normalizeObject)
   created_at: string;
   updated_at: string;
 }
@@ -47,4 +64,30 @@ export interface JointDef {
 export interface CanvasBridge {
   screenToFloor: (clientX: number, clientY: number) => Vec3 | null;
   centerOnFloor: () => Vec3 | null;
+}
+
+/** Editor/view preferences (stored in localStorage, not in the scene). */
+export interface ViewPrefs {
+  instancing: boolean;      // draw static objects through InstancedMesh
+  frustumCull: boolean;     // per-instance (static) / per-mesh (dynamic) frustum culling
+  distanceCull: boolean;
+  cullDistance: number;     // metres
+  lod: boolean;
+  lodDistance: number;      // metres: beyond this, a box proxy replaces the full model
+  showGizmos: boolean;      // view cube, light icons, group axes, selection box
+  defaultLight: boolean;    // editor lighting on top of scene lights
+  shadows: boolean;
+  space: "world" | "local"; // transform-gizmo space
+  focusSelection: boolean;  // orbit around the selected object
+  forceWebGL: boolean;      // skip WebGPU and use the WebGL2 backend (troubleshooting)
+}
+
+export interface PerfStats {
+  calls: number;
+  triangles: number;
+  instNear: number;
+  instFar: number;
+  instCulled: number;
+  instTotal: number;
+  dynamic: number;
 }
