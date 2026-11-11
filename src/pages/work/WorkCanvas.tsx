@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewcube, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
-import { WebGPURenderer } from "three/webgpu";
 import { childrenIndex, descendantsOf } from "../../lib/sceneMath";
 import type { CanvasBridge, JointDef, PerfStats, SceneObjectData, Vec3, ViewPrefs } from "../../lib/workTypes";
 import type { Runtime } from "./runtime";
@@ -10,17 +9,41 @@ import StaticBatches, { type LiveDrag, type PerfCounters } from "./StaticBatches
 import { DynNode, StaticProxy, type NodeCtx, type VisEntry } from "./SceneNodes";
 
 // ---------------------------------------------------------------------------
-// WebGPU. three's WebGPURenderer uses the WebGPU API when the browser has it and silently falls back to a
-// WebGL2 backend when it doesn't. Two things to know:
-//   * it must be init()'d (async) before the first render, so render() is a no-op until it's ready;
-//   * it can't run hand-written GLSL (ShaderMaterial) — that's why the grid below is built from line
-//     meshes instead of drei's <Grid>. Standard materials (everything in the GLBs) work unchanged.
+// Renderer: the standard WebGLRenderer (r3f's default).
+// The previous WebGPURenderer ("three/webgpu") was removed because r3f v8 and drei assume a WebGLRenderer:
+// drei's GizmoViewcube calls gl.capabilities.getMaxAnisotropy(), which WebGPURenderer doesn't have. That threw
+// during the first render, and with no error boundary React unmounted the whole page (only the body background
+// was left). "three/webgpu" also bundles a second copy of three ("Multiple instances of Three.js").
 // ---------------------------------------------------------------------------
-class ReadyWebGPURenderer extends WebGPURenderer {
-  ready = false;
-  override render(scene: THREE.Scene, camera: THREE.Camera) {
-    if (!this.ready) return;
-    return super.render(scene, camera);
+
+/** Keeps a canvas failure from blanking the whole page: shows the error and a retry button instead. */
+class CanvasErrorBoundary extends React.Component<
+  { children: React.ReactNode; onError?: (msg: string) => void },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) {
+    console.error("[WorkCanvas] render error:", error);
+    this.props.onError?.(`error: ${error.message}`);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", gap: 12, padding: 24, textAlign: "center", color: "#e8e6f5", background: "#07060f",
+      }}>
+        <strong>The 3D view failed to render.</strong>
+        <code style={{ maxWidth: 560, opacity: 0.8, whiteSpace: "pre-wrap" }}>{this.state.error.message}</code>
+        <button
+          onClick={() => this.setState({ error: null })}
+          style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #8b6ff5", background: "transparent", color: "#e8e6f5", cursor: "pointer" }}
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 }
 
@@ -171,6 +194,14 @@ export interface WorkCanvasProps {
 const HOME = new THREE.Vector3(0, 0, 2);
 
 export default function WorkCanvas(p: WorkCanvasProps) {
+  return (
+    <CanvasErrorBoundary onError={p.onBackend}>
+      <WorkCanvasInner {...p} />
+    </CanvasErrorBoundary>
+  );
+}
+
+function WorkCanvasInner(p: WorkCanvasProps) {
   const { objects, worlds, staticIds, forced, prefs, selectedId, onBackend } = p;
   const groups = useRef(new Map<string, THREE.Object3D>());
   const selectedRef = useRef<string | null>(selectedId);
@@ -180,6 +211,9 @@ export default function WorkCanvas(p: WorkCanvasProps) {
   const perf = useRef<PerfCounters>({});
   const live = useRef<LiveDrag | null>(null);
   const dirty = useRef(0);
+
+  // r3f's default renderer is WebGL (WebGL2 where available).
+  useEffect(() => { onBackend("WebGL2"); }, [onBackend]);
 
   const register = useCallback((id: string, node: THREE.Object3D | null) => {
     if (node) groups.current.set(id, node); else groups.current.delete(id);
@@ -217,18 +251,6 @@ export default function WorkCanvas(p: WorkCanvasProps) {
     lodDist: prefs.lod ? prefs.lodDistance : Infinity,
   }), [prefs.frustumCull, prefs.distanceCull, prefs.cullDistance, prefs.lod, prefs.lodDistance]);
 
-  // --- renderer factory (r3f v8 accepts `gl={(canvas) => renderer}`)
-  const gpuFactory = useCallback((canvas: HTMLCanvasElement | OffscreenCanvas) => {
-    const r = new ReadyWebGPURenderer({
-      canvas: canvas as HTMLCanvasElement, antialias: true, powerPreference: "high-performance", forceWebGL: prefs.forceWebGL,
-    });
-    r.init().then(() => {
-      r.ready = true;
-      onBackend((r as any).backend?.isWebGPUBackend ? "WebGPU" : "WebGL2");
-    }).catch((e: unknown) => onBackend(`error: ${e instanceof Error ? e.message : String(e)}`));
-    return r as any;
-  }, [prefs.forceWebGL, onBackend]);
-
   // --- gizmo drag on a STATIC object: move its instances live, commit on release
   const oldInv = useMemo(
     () => (sel && selIsStatic && worlds.get(sel.id) ? worlds.get(sel.id)!.clone().invert() : null), [sel, selIsStatic, worlds]);
@@ -236,11 +258,10 @@ export default function WorkCanvas(p: WorkCanvasProps) {
 
   return (
     <Canvas
-      key={prefs.forceWebGL ? "webgl" : "webgpu"}
       shadows
       dpr={[1, 2]}
       camera={{ position: [9, 7, 11], fov: 40, near: 0.05, far: 300 }}
-      gl={gpuFactory}
+      gl={{ antialias: true, powerPreference: "high-performance" }}
       // Clicking the transform gizmo counts as "clicking nothing" to r3f — ignore that.
       onPointerMissed={() => { if (!gizmoBusy.current) p.onSelect(null); }}
     >
