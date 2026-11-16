@@ -8,6 +8,7 @@ type NotifyKind = "success" | "error" | "info";
 interface NotifyOpts {
   description?: string;
   duration?: number; // seconds
+  key?: string;
 }
 
 const ICONS: Record<NotifyKind, React.ReactNode> = {
@@ -18,6 +19,7 @@ const ICONS: Record<NotifyKind, React.ReactNode> = {
 
 function push(kind: NotifyKind, message: string, opts: NotifyOpts = {}) {
   notification.open({
+    key: opts.key,
     message,
     description: opts.description,
     icon: ICONS[kind],
@@ -41,12 +43,12 @@ function push(kind: NotifyKind, message: string, opts: NotifyOpts = {}) {
  *   notify.error("Couldn't save", "Check your connection and try again.");
  */
 export const notify = {
-  success: (message: string, description?: string, duration?: number) =>
-    push("success", message, { description, duration }),
-  error: (message: string, description?: string, duration?: number) =>
-    push("error", message, { description, duration }),
-  info: (message: string, description?: string, duration?: number) =>
-    push("info", message, { description, duration }),
+  success: (message: string, description?: string, duration?: number, key?: string) =>
+    push("success", message, { description, duration, key }),
+  error: (message: string, description?: string, duration?: number, key?: string) =>
+    push("error", message, { description, duration, key }),
+  info: (message: string, description?: string, duration?: number, key?: string) =>
+    push("info", message, { description, duration, key }),
 
   added: (description?: string) => push("success", "Added", { description }),
   updated: (description?: string) => push("success", "Saved", { description }),

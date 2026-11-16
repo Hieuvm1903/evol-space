@@ -1,41 +1,266 @@
-/* Layout chrome comes from AuthPage.css (auth-page-shell, auth-workspace,
-   auth-pane-body, auth-side, auth-feature) + MusicPage.css (music-*). */
-
-.home-links { width: 100%; display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.home-link {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; border-radius: 10px;
-  border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.02);
-  font-size: 0.84rem; color: var(--evol-text); text-decoration: none; text-align: left;
-  transition: border-color 0.15s var(--ease), transform 0.15s var(--ease), background 0.15s var(--ease);
+.home-page-shell {
+  max-width: 1120px !important;
+  height: 100%;
+  max-height: 100%;
+  padding: 16px 20px !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
 }
-.home-link:hover {
-  border-color: rgba(139, 111, 245, 0.55);
-  background: rgba(139, 111, 245, 0.08);
-  color: #fff;
-  transform: translateX(2px);
+
+/* ---- Top hero split ---- */
+.home-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
 }
-.home-link svg { color: var(--evol-green-light); flex-shrink: 0; }
 
-/* Right pane: quote on top, embed underneath, both centered. */
-.home-main { align-items: center; justify-content: center; gap: 18px; }
+.home-hero-card {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
 
-/* Reserve height so the pane doesn't jump while the quote types out. */
-.home-main .evol-quote-card {
+.home-kicker-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: var(--evol-muted);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-kicker-accent {
+  color: var(--evol-green-light);
+  font-weight: 600;
+}
+
+.home-hero-headline {
   margin: 0;
-  padding: 0 12px;
-  min-height: 118px;
+  font-size: clamp(1.45rem, 2.5vw, 2.05rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  background: linear-gradient(95deg, #f3f1ff 15%, #c4b5fd 60%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Signature poetic quote block */
+.home-quote-block {
+  padding: 12px 0;
+  border-top: 1px solid rgba(196, 181, 253, 0.1);
+  border-bottom: 1px solid rgba(196, 181, 253, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-quote-body {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.home-quote-text {
+  font-style: italic;
+  font-size: clamp(0.88rem, 1.3vw, 1.02rem);
+  line-height: 1.55;
+  color: #e4e1f7;
+  white-space: pre-line;
+}
+
+.home-quote-replay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--evol-border);
+  border-radius: 8px;
+  color: var(--evol-muted);
+  cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+
+.home-quote-replay:hover {
+  color: var(--evol-text);
+  border-color: rgba(139, 111, 245, 0.55);
+}
+
+/* Hero actions */
+.home-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-primary-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--evol-green), var(--evol-green-light));
+  color: #07060f;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.home-primary-cta:hover {
+  color: #07060f;
+  transform: translateY(-1px);
+  box-shadow: var(--evol-glow);
+}
+
+.home-secondary-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--evol-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--evol-text);
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+.home-secondary-cta:hover {
+  border-color: rgba(34, 211, 238, 0.55);
+  background: rgba(34, 211, 238, 0.08);
+  color: #fff;
+}
+
+/* ---- Right memory pane (exact fit, no title) ---- */
+.home-memory-card {
+  padding: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.home-main .evol-quote-text {
-  font-style: italic;
-  font-size: clamp(1rem, 2vw, 1.3rem);
-  line-height: 1.8;
-  color: #d8d8d8;
-  text-align: center;
+  background: #161616;
+  align-self: center;
 }
 
-.home-embed-outer { max-width: 100%; overflow: hidden; }
+/* ---- Spaces grid ---- */
+.home-spaces-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.home-space-link {
+  display: flex;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.home-space-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--evol-glass-border);
+  background: rgba(20, 18, 33, 0.84);
+  color: var(--evol-text);
+  transition: border-color 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.home-space-card:hover {
+  border-color: rgba(139, 111, 245, 0.5);
+  transform: translateY(-2px);
+  color: #fff;
+}
+
+.home-space-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.home-space-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-space-icon {
+  color: var(--evol-green-light);
+  flex-shrink: 0;
+}
+
+.home-space-name {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--evol-text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-space-arrow {
+  color: var(--evol-muted);
+  flex-shrink: 0;
+  transition: transform 0.18s var(--ease), color 0.18s var(--ease);
+}
+
+.home-space-card:hover .home-space-arrow {
+  transform: translate(2px, -2px);
+  color: var(--evol-text);
+}
+
+.home-space-meta {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--evol-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 960px) {
+  .home-hero-grid {
+    grid-template-columns: 1fr;
+  }
+  .home-memory-card {
+    display: none;
+  }
+  .home-spaces-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

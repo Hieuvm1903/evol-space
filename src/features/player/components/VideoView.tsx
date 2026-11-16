@@ -8,46 +8,80 @@ interface Props {
   visible: boolean;
   track: Track;
   nextVideoId?: string;
+  retryNonce?: number;
   onReady: (e: { target: any }) => void;
   onStateChange: (e: { data: number; target: any }) => void;
+  onError?: (e: { data: number; target: any }) => void;
 }
 
-export default function VideoView({ visible, track, nextVideoId, onReady, onStateChange }: Props) {
+export default function VideoView({ visible, track, nextVideoId, retryNonce = 0, onReady, onStateChange, onError }: Props) {
   const mainElRef = useRef<HTMLDivElement>(null);
   const preloadElRef = useRef<HTMLDivElement>(null);
   const mainPlayerRef = useRef<any>(null);
   const preloadPlayerRef = useRef<any>(null);
   const currentVideoId = useRef<string | null>(null);
+  const lastRetryNonce = useRef<number>(retryNonce);
+  const latestVideoIdRef = useRef<string>(track.video_id);
+  latestVideoIdRef.current = track.video_id;
+
+  const callbacksRef = useRef({ onReady, onStateChange, onError });
+  callbacksRef.current = { onReady, onStateChange, onError };
 
   // Create both players exactly once for the widget's lifetime.
   useEffect(() => {
     let cancelled = false;
-    loadYouTubeIframeApi().then(() => {
-      if (cancelled || !mainElRef.current) return;
-      const YT = (window as any).YT;
+    loadYouTubeIframeApi()
+      .then(() => {
+        if (cancelled || !mainElRef.current) return;
+        const YT = (window as any).YT;
+        if (!YT?.Player) {
+          callbacksRef.current.onError?.({ data: -100, target: null });
+          return;
+        }
 
-      mainPlayerRef.current = new YT.Player(mainElRef.current, {
-        width: "100%",
-        height: "100%",
-        videoId: track.video_id,
-        playerVars: { autoplay: 1, mute: 0, playsinline: 1, rel: 0 },
-        events: {
-          onReady: (e: any) => { currentVideoId.current = track.video_id; onReady(e); },
-          onStateChange: (e: any) => onStateChange(e),
-        },
+        const initialVideoId = latestVideoIdRef.current?.trim() || "";
+        try {
+          mainPlayerRef.current = new YT.Player(mainElRef.current, {
+            width: "100%",
+            height: "100%",
+            videoId: initialVideoId,
+            playerVars: { autoplay: 1, mute: 0, playsinline: 1, rel: 0 },
+            events: {
+              onReady: (e: any) => {
+                currentVideoId.current = initialVideoId;
+                callbacksRef.current.onReady(e);
+                const latest = latestVideoIdRef.current?.trim() || "";
+                if (latest && latest !== currentVideoId.current) {
+                  currentVideoId.current = latest;
+                  try { e.target.loadVideoById(latest); } catch {
+                    callbacksRef.current.onError?.({ data: -101, target: e.target });
+                  }
+                }
+              },
+              onStateChange: (e: any) => callbacksRef.current.onStateChange(e),
+              onError: (e: any) => callbacksRef.current.onError?.(e),
+            },
+          });
+        } catch {
+          callbacksRef.current.onError?.({ data: -101, target: null });
+        }
+
+        if (preloadElRef.current) {
+          try {
+            preloadPlayerRef.current = new YT.Player(preloadElRef.current, {
+              videoId: "",
+              playerVars: { mute: 1, controls: 0 },
+            });
+          } catch { /* preload is best-effort */ }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) callbacksRef.current.onError?.({ data: -100, target: null });
       });
-
-      if (preloadElRef.current) {
-        preloadPlayerRef.current = new YT.Player(preloadElRef.current, {
-          videoId: "",
-          playerVars: { mute: 1, controls: 0 },
-        });
-      }
-    });
     return () => {
       cancelled = true;
-      mainPlayerRef.current?.destroy?.();
-      preloadPlayerRef.current?.destroy?.();
+      try { mainPlayerRef.current?.destroy?.(); } catch { }
+      try { preloadPlayerRef.current?.destroy?.(); } catch { }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -56,10 +90,23 @@ export default function VideoView({ visible, track, nextVideoId, onReady, onStat
   // key difference from react-youtube, which tears down/recreates the
   // iframe on prop changes and can interrupt playback.
   useEffect(() => {
-    if (currentVideoId.current === track.video_id) return;
-    currentVideoId.current = track.video_id;
-    try { mainPlayerRef.current?.loadVideoById?.(track.video_id); } catch { }
-  }, [track.video_id]);
+    const isRetry = retryNonce !== lastRetryNonce.current;
+    lastRetryNonce.current = retryNonce;
+    const vid = track.video_id?.trim() || "";
+    if (!vid) {
+      currentVideoId.current = "";
+      callbacksRef.current.onError?.({ data: 2, target: mainPlayerRef.current });
+      return;
+    }
+    if (!isRetry && currentVideoId.current === vid) return;
+    currentVideoId.current = vid;
+    if (!mainPlayerRef.current?.loadVideoById) return;
+    try {
+      mainPlayerRef.current.loadVideoById(vid);
+    } catch {
+      callbacksRef.current.onError?.({ data: -101, target: mainPlayerRef.current });
+    }
+  }, [track.video_id, retryNonce]);
 
   useEffect(() => {
     if (!nextVideoId) return;
