@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
+import { getProceduralAsset } from "./proceduralTwin";
 
 /** Everything the instancing / culling / LOD code needs to know about one model, computed once. */
 export interface AssetInfo {
@@ -50,6 +51,11 @@ export function buildAssetInfo(scene: THREE.Object3D): AssetInfo {
   };
   cache.set(scene, info);
   return info;
+}
+
+export function getProceduralAssetInfo(url: string): { scene: THREE.Object3D; info: AssetInfo } {
+  const scene = getProceduralAsset(url);
+  return { scene, info: buildAssetInfo(scene) };
 }
 
 export function useAssetInfo(url: string): { scene: THREE.Object3D; info: AssetInfo } {

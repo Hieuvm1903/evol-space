@@ -2,7 +2,8 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef } from "react"
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { JointDef, LightProps, SceneObjectData, Vec3, ViewPrefs } from "../../lib/workTypes";
-import { useAssetInfo } from "./assetInfo";
+import { getProceduralAssetInfo, useAssetInfo, type AssetInfo } from "./assetInfo";
+import { isProceduralUrl } from "./proceduralTwin";
 import { applyJoint, buildRig } from "./rig";
 import type { Runtime } from "./runtime";
 
@@ -84,7 +85,7 @@ export function DynNode({ id, root, ctx }: { id: string; root: boolean; ctx: Nod
 }
 
 // ---------------------------------------------------------------------------
-// A model: its own clone of the glTF node tree (own joints), a box LOD proxy, selection box.
+// A model: its own clone of the glTF/procedural node tree (own joints), a box LOD proxy, selection box.
 // ---------------------------------------------------------------------------
 interface ModelProps {
   o: SceneObjectData; url: string; ctx: NodeCtx; selected: boolean;
@@ -92,8 +93,24 @@ interface ModelProps {
   contentRef: React.RefObject<THREE.Group>;
 }
 
-function ModelContent({ o, url, ctx, selected, groupRef, contentRef }: ModelProps) {
-  const { scene, info } = useAssetInfo(url);
+function ModelContent(props: ModelProps) {
+  if (isProceduralUrl(props.url)) {
+    return <ProceduralModelContent {...props} />;
+  }
+  return <GltfModelContent {...props} />;
+}
+
+function ProceduralModelContent(props: ModelProps) {
+  const { scene, info } = useMemo(() => getProceduralAssetInfo(props.url), [props.url]);
+  return <ModelRigRenderer {...props} scene={scene} info={info} />;
+}
+
+function GltfModelContent(props: ModelProps) {
+  const { scene, info } = useAssetInfo(props.url);
+  return <ModelRigRenderer {...props} scene={scene} info={info} />;
+}
+
+function ModelRigRenderer({ o, ctx, selected, groupRef, contentRef, scene, info }: ModelProps & { scene: THREE.Object3D; info: AssetInfo }) {
   const clone = useMemo(() => cloneSkinned(scene), [scene]);
   const rig = useMemo(() => buildRig(clone), [clone]);
   const proxy = useMemo(() => {
@@ -203,7 +220,19 @@ export function StaticProxy({ o, world, url, register, showGizmos }: {
 }
 
 function ProxyBox({ url, show }: { url: string; show: boolean }) {
+  if (!show) return null;
+  if (isProceduralUrl(url)) return <ProceduralProxyBox url={url} />;
+  return <GltfProxyBox url={url} />;
+}
+
+function ProceduralProxyBox({ url }: { url: string }) {
+  const { info } = useMemo(() => getProceduralAssetInfo(url), [url]);
+  const helper = useMemo(() => new THREE.Box3Helper(info.bbox, 0x22d3ee), [info]);
+  return <primitive object={helper} />;
+}
+
+function GltfProxyBox({ url }: { url: string }) {
   const { info } = useAssetInfo(url);
   const helper = useMemo(() => new THREE.Box3Helper(info.bbox, 0x22d3ee), [info]);
-  return show ? <primitive object={helper} /> : null;
+  return <primitive object={helper} />;
 }

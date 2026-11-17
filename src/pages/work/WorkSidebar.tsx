@@ -1,23 +1,50 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Dropdown, Empty, Segmented, Select, Slider, Switch, Tabs, Tag, Tooltip } from "antd";
 import {
-  Box, Bot, Boxes, Container, Monitor, Package, Plus, Trash2, Download, FilePlus, LogIn, ChevronRight, ChevronDown,
-  Folder, FolderPlus, Lightbulb, Zap,
+  ArrowLeftRight, BatteryCharging, Bot, Box, Boxes, Building2, ChevronDown, ChevronRight, Container, Cpu, Download,
+  FilePlus, Folder, FolderPlus, Layers, Lightbulb, LogIn, Monitor, Package, Plane, Plus, Route, ShoppingBag, Trash2,
+  Truck, User, Zap,
 } from "lucide-react";
 import { childrenIndex } from "../../lib/sceneMath";
 import type {
-  LightType, ModelSetRow, PerfStats, SceneObjectData, SceneSummary, ViewPrefs,
+  AssetTelemetry,
+  LightType,
+  ModelSetRow,
+  PerfStats,
+  SceneObjectData,
+  SceneSummary,
+  StreamStatus,
+  TwinAlert,
+  TwinScenario,
+  ViewPrefs,
+  WorkspaceMode,
 } from "../../lib/workTypes";
+import TwinSidebarTab from "./TwinSidebarTab";
 
 export const DRAG_MIME = "application/x-work-asset";
 const NODE_MIME = "application/x-work-node";
 
-const ASSET_ICONS: Record<string, React.ReactNode> = {
-  rack: <Boxes size={18} />, tote: <Package size={18} />, robot: <Bot size={18} />,
-  conveyor: <Container size={18} />, station: <Monitor size={18} />,
+const assetIcon = (asset: string | null, size = 18) => {
+  switch (asset) {
+    case "warehouse": return <Building2 size={size} />;
+    case "rack": return <Boxes size={size} />;
+    case "tote": return <Package size={size} />;
+    case "robot": return <Bot size={size} />;
+    case "conveyor": return <Container size={size} />;
+    case "station": return <Monitor size={size} />;
+    case "charger": return <BatteryCharging size={size} />;
+    case "pallet": return <Layers size={size} />;
+    case "goods": return <Box size={size} />;
+    case "bag": return <ShoppingBag size={size} />;
+    case "track": return <Route size={size} />;
+    case "robot_arm": return <Cpu size={size} />;
+    case "robot_transfer": return <ArrowLeftRight size={size} />;
+    case "humanoid": return <User size={size} />;
+    case "drone": return <Plane size={size} />;
+    case "truck": return <Truck size={size} />;
+    default: return <Box size={size} />;
+  }
 };
-const assetIcon = (asset: string | null, size = 18) =>
-  asset && ASSET_ICONS[asset] ? ASSET_ICONS[asset] : <Box size={size} />;
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 
@@ -35,19 +62,57 @@ interface Props {
   onReparent: (id: string, parentId: string | null) => void;
   // view
   prefs: ViewPrefs; onPrefs: (patch: Partial<ViewPrefs>) => void; stats: PerfStats | null; backend: string;
+  // digital twin
+  workspaceMode: WorkspaceMode;
+  activeTab: string;
+  onTabChange: (key: string) => void;
+  fleet: AssetTelemetry[];
+  scenario: TwinScenario;
+  alerts: TwinAlert[];
+  streamStatus: StreamStatus;
+  onScenario: (s: TwinScenario) => void;
+  onAcknowledgeAlert: (alertId: string) => void;
+  onClearAlerts: () => void;
+  onConnectStream: (url: string) => void;
+  onDisconnectStream: () => void;
 }
 
 export default function WorkSidebar(p: Props) {
+  const twinItem = {
+    key: "twin",
+    label: `Twin${p.alerts.some((a) => !a.acknowledged) ? ` (${p.alerts.filter((a) => !a.acknowledged).length})` : ""}`,
+    children: (
+      <TwinSidebarTab
+        fleet={p.fleet}
+        selectedId={p.selectedId}
+        scenario={p.scenario}
+        alerts={p.alerts}
+        streamStatus={p.streamStatus}
+        onSelectAsset={p.onSelectObject}
+        onScenario={p.onScenario}
+        onAcknowledgeAlert={p.onAcknowledgeAlert}
+        onClearAlerts={p.onClearAlerts}
+        onConnectStream={p.onConnectStream}
+        onDisconnectStream={p.onDisconnectStream}
+      />
+    ),
+  };
+
+  const authorItems = [
+    { key: "models", label: "Models", children: <ModelsTab {...p} /> },
+    { key: "tree", label: "Hierarchy", children: <HierarchyTab {...p} /> },
+    { key: "scenes", label: "Scenes", children: <ScenesTab {...p} /> },
+    { key: "view", label: "View", children: <ViewTab {...p} /> },
+  ];
+
+  const items = p.workspaceMode === "twin" ? [twinItem, ...authorItems] : [...authorItems, twinItem];
+
   return (
     <Tabs
       className="work-side-tabs"
-      defaultActiveKey="models"
-      items={[
-        { key: "models", label: "Models", children: <ModelsTab {...p} /> },
-        { key: "tree", label: `Hierarchy`, children: <HierarchyTab {...p} /> },
-        { key: "scenes", label: "Scenes", children: <ScenesTab {...p} /> },
-        { key: "view", label: "View", children: <ViewTab {...p} /> },
-      ]}
+      activeKey={p.activeTab}
+      onChange={p.onTabChange}
+      items={items}
     />
   );
 }

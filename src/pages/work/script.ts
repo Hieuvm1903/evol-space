@@ -15,6 +15,8 @@
  */
 export type Instr =
   | { op: "speed"; value: number }
+  | { op: "alt"; value: number }
+  | { op: "joint"; name: string; value: number }
   | { op: "goto"; label: string | null; x: number; z: number; dx: number; dz: number }
   | { op: "face"; label: string }
   | { op: "turn"; deg: number }
@@ -59,6 +61,13 @@ export function parseScript(src: string): ParseResult {
 
     switch (cmd) {
       case "speed": { const v = num(t[1], "a speed"); if (v !== null) { if (v <= 0) err("speed must be > 0"); else program.push({ op: "speed", value: v }); } break; }
+      case "alt": { const v = num(t[1], "an altitude in metres"); if (v !== null) program.push({ op: "alt", value: Math.max(0, v) }); break; }
+      case "joint": {
+        if (!t[1]) { err("'joint' needs <name> <value>"); break; }
+        const v = num(t[2], "a target value");
+        if (v !== null) program.push({ op: "joint", name: t[1], value: v });
+        break;
+      }
       case "goto": {
         if (t.length < 2) { err("'goto' needs a label or x z"); break; }
         if (isNum(t[1]) && isNum(t[2])) program.push({ op: "goto", label: null, x: Number(t[1]), z: Number(t[2]), dx: 0, dz: 0 });

@@ -24,6 +24,11 @@ export interface Entity {
   promoted?: boolean;           // was static, now rendered as its own node
   movable?: true;
   ctl?: true;
+  faulted?: boolean;
+  speedScale?: number;
+  targetY?: number;
+  gaitPhase?: number;
+  jointTargets?: Map<string, number>;
   mover?: { speed: number; turnRate: number; goal: { x: number; z: number } | null; faceYaw: number | null };
   lift?: { value: number; target: number; min: number; max: number; speed: number };
   script?: { program: Instr[]; pc: number; loops: { start: number; remaining: number }[]; timer: number; active: boolean; done: boolean };
@@ -40,7 +45,7 @@ const WHEEL_R = 0.05;
 const TRACK = 0.25;      // m, wheel offset from the centreline
 const TAU = Math.PI * 2;
 const wrap = (a: number) => { a = ((a + Math.PI) % TAU + TAU) % TAU - Math.PI; return a; };
-const MOTION_OPS = new Set(["goto", "face", "turn", "lift", "pick", "place"]);
+const MOTION_OPS = new Set(["goto", "face", "turn", "lift", "pick", "place", "alt", "joint"]);
 
 const _m = new THREE.Matrix4();
 const _inv = new THREE.Matrix4();
@@ -58,6 +63,8 @@ export class Runtime {
   logVersion = 0;
   running = false;
   time = 0;
+  pickups = 0;
+  deliveries = 0;
   onPromote?: (id: string) => void;
   private lastLog = new Map<string, number>();
 
@@ -70,6 +77,8 @@ export class Runtime {
     this.onPromote = onPromote;
     this.running = true;
     this.time = 0;
+    this.pickups = 0;
+    this.deliveries = 0;
     this.logs = [];
     this.logVersion++;
     for (const o of objects) {
@@ -80,6 +89,9 @@ export class Runtime {
       const e: Entity = {
         id: o.id, label: o.label, asset: o.asset, pos: _p.clone(),
         yaw: _eu.setFromQuaternion(_q, "YXZ").y, scale: _s.x,
+        speedScale: 1,
+        targetY: _p.y,
+        gaitPhase: 0,
       };
       const isStatic = staticIds.has(o.id);
       if (isStatic) e.staticSource = true;
@@ -112,6 +124,33 @@ export class Runtime {
     this.byId.clear();
   }
 
+  setEntityControl(id: string, patch: { faulted?: boolean; speedScale?: number }) {
+    const e = this.byId.get(id);
+    if (!e) return;
+    if (patch.faulted !== undefined) e.faulted = patch.faulted;
+    if (patch.speedScale !== undefined) e.speedScale = patch.speedScale;
+  }
+
+  /** Drives named status tower lamps (tower_green, tower_amber, tower_red) or charger LEDs on live nodes. */
+  setStatusLamp(id: string, status: "nominal" | "warning" | "fault" | "offline") {
+    const node = this.nodes.get(id)?.group;
+    if (!node) return;
+    node.traverse((child) => {
+      const m = child as THREE.Mesh;
+      if (!m.isMesh || !m.material) return;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      const std = mat as THREE.MeshStandardMaterial;
+      if (!std || !("emissiveIntensity" in std)) return;
+      if (child.name === "tower_green") {
+        std.emissiveIntensity = status === "nominal" ? 2.4 : 0.15;
+      } else if (child.name === "tower_amber") {
+        std.emissiveIntensity = status === "warning" ? 2.8 : 0.15;
+      } else if (child.name === "tower_red") {
+        std.emissiveIntensity = status === "fault" ? 3.2 : 0.15;
+      }
+    });
+  }
+
   /** Called by the renderer whenever a dynamic object's node (re)mounts. */
   attach(id: string, group: THREE.Object3D, rig: JointRig[]) {
     this.nodes.set(id, { group, rig });
@@ -127,8 +166,10 @@ export class Runtime {
 
   private setupJoints(e: Entity) {
     if (!e.rig || e.lift || !e.mover) return;
-    const lift = e.rig.find((r) => r.def.type === "prismatic");
-    if (lift) this.world.set(e, "lift", { value: 0, target: 0, min: lift.def.lower, max: lift.def.upper, speed: 0.15 });
+    const lift = e.rig.find((r) => r.def.name === "lift_slide" || (r.def.type === "prismatic" && Math.abs(r.axis.y) > 0.5));
+    if (lift && e.asset === "robot") {
+      this.world.set(e, "lift", { value: 0, target: 0, min: lift.def.lower, max: lift.def.upper, speed: 0.15 });
+    }
   }
 
   log(msg: string) {
@@ -144,9 +185,12 @@ export class Runtime {
   tick(dt: number) {
     if (!this.running || dt <= 0) return;
     this.time += dt;
-    for (const e of this.world.with("script", "mover")) if (!e.script!.done) this.step(e, dt);
+    for (const e of this.world.with("script", "mover")) {
+      if (!e.script!.done && !e.faulted) this.step(e, dt * (e.speedScale ?? 1));
+    }
     this.motion(dt);
     this.lifts(dt);
+    this.jointMotors(dt);
     this.carry();
     this.belts(dt);
     this.sync();
@@ -172,6 +216,27 @@ export class Runtime {
       if (!ins) { s.done = true; return; }
       switch (ins.op) {
         case "speed": m.speed = ins.value; s.pc++; break;
+        case "alt": {
+          e.targetY = ins.value;
+          s.pc++;
+          break;
+        }
+        case "joint": {
+          const r = e.rig?.find((x) => x.def.name === ins.name);
+          if (!r) { s.pc++; break; }
+          if (!e.jointTargets) e.jointTargets = new Map();
+          const clamped = r.def.type === "continuous" ? ins.value : Math.min(r.def.upper, Math.max(r.def.lower, ins.value));
+          if (!s.active) {
+            e.jointTargets.set(ins.name, clamped);
+            s.active = true;
+          }
+          if (Math.abs(r.value - clamped) < 0.02) {
+            s.active = false;
+            s.pc++;
+            break;
+          }
+          return;
+        }
         case "loop": s.loops.push({ start: s.pc, remaining: ins.count }); s.pc++; break;
         case "end": {
           const top = s.loops[s.loops.length - 1];
@@ -265,7 +330,8 @@ export class Runtime {
     this.world.set(it, "carriedBy", carrier);
     this.flag(it, "ctl");
     this.flag(it, "movable");
-    if (it.staticSource && !it.promoted) {   // leave its instanced batch and become a real node
+    this.pickups++;
+    if (it.staticSource && !it.promoted) {
       it.promoted = true;
       this.onPromote?.(it.id);
     }
@@ -278,36 +344,71 @@ export class Runtime {
   private release(carrier: Entity, it: Entity) {
     this.world.unset(carrier, "carrying");
     this.world.unset(it, "carriedBy");
+    this.deliveries++;
   }
 
   // ------------------------------------------------------------------ systems
   private motion(dt: number) {
     for (const e of this.world.with("mover")) {
+      if (e.faulted) continue;
       const m = e.mover!;
+      const scale = e.speedScale ?? 1;
       let dist = 0, dyaw = 0;
+
+      // Altitude climbing for aerial drones
+      if (e.targetY !== undefined && Math.abs(e.pos.y - e.targetY) > 0.01) {
+        const yStep = 1.6 * scale * dt;
+        const diff = e.targetY - e.pos.y;
+        e.pos.y += Math.abs(diff) <= yStep ? diff : Math.sign(diff) * yStep;
+      }
+
       if (m.faceYaw !== null) {
-        const err = wrap(m.faceYaw - e.yaw), step = m.turnRate * dt;
+        const err = wrap(m.faceYaw - e.yaw), step = m.turnRate * scale * dt;
         if (Math.abs(err) <= step) { e.yaw = m.faceYaw; dyaw = err; m.faceYaw = null; }
         else { dyaw = Math.sign(err) * step; e.yaw += dyaw; }
       } else if (m.goal) {
         const dx = m.goal.x - e.pos.x, dz = m.goal.z - e.pos.z, d = Math.hypot(dx, dz);
-        if (d < 0.03) m.goal = null;
+        if (d < 0.05) m.goal = null;
         else {
           const err = wrap(Math.atan2(-dz, dx) - e.yaw);
-          dyaw = Math.max(-m.turnRate * dt, Math.min(m.turnRate * dt, err));
+          dyaw = Math.max(-m.turnRate * scale * dt, Math.min(m.turnRate * scale * dt, err));
           e.yaw += dyaw;
-          if (Math.abs(wrap(Math.atan2(-dz, dx) - e.yaw)) < 0.35) {
-            dist = Math.min(m.speed * dt, d);
+          if (Math.abs(wrap(Math.atan2(-dz, dx) - e.yaw)) < 0.45) {
+            dist = Math.min(m.speed * scale * dt, d);
             e.pos.x += Math.cos(e.yaw) * dist;
             e.pos.z -= Math.sin(e.yaw) * dist;
           }
         }
       }
-      if ((dist || dyaw) && e.rig) {
-        for (const r of e.rig) {
-          if (!r.def.name.startsWith("wheel")) continue;
-          const v = dist + dyaw * TRACK * r.side;   // left wheel (+Z) speeds up when turning counter-clockwise
-          applyJoint(r, r.value + (v / WHEEL_R) * r.spinSign);
+
+      if (e.rig) {
+        // Wheels (AMRs and Trucks)
+        if (dist || dyaw) {
+          const wr = e.asset === "truck" ? 0.5 : WHEEL_R;
+          for (const r of e.rig) {
+            if (!r.def.name.startsWith("wheel")) continue;
+            const v = dist + dyaw * TRACK * r.side;
+            applyJoint(r, r.value + (v / wr) * r.spinSign);
+          }
+        }
+        // Drone rotors spin continuously whenever airborne
+        if (e.asset === "drone" && e.pos.y > 0.15) {
+          for (const r of e.rig) {
+            if (r.def.name.startsWith("rotor_")) {
+              applyJoint(r, r.value + 28 * scale * dt);
+            }
+          }
+        }
+        // Humanoid walking gait when moving
+        if (e.asset === "humanoid") {
+          e.gaitPhase = (e.gaitPhase ?? 0) + (dist > 0 ? dist * 4.5 : 0);
+          const swing = dist > 0 ? Math.sin(e.gaitPhase) * 0.42 : 0;
+          for (const r of e.rig) {
+            if (r.def.name === "knee_l_pitch") applyJoint(r, swing);
+            else if (r.def.name === "knee_r_pitch") applyJoint(r, -swing);
+            else if (r.def.name === "elbow_l_pitch") applyJoint(r, -swing * 0.7 - 0.25);
+            else if (r.def.name === "elbow_r_pitch") applyJoint(r, swing * 0.7 - 0.25);
+          }
         }
       }
     }
@@ -315,11 +416,28 @@ export class Runtime {
 
   private lifts(dt: number) {
     for (const e of this.world.with("lift")) {
+      if (e.faulted) continue;
       const l = e.lift!;
-      const diff = l.target - l.value, step = l.speed * dt;
+      const diff = l.target - l.value, step = l.speed * (e.speedScale ?? 1) * dt;
       if (Math.abs(diff) <= step) l.value = l.target; else l.value += Math.sign(diff) * step;
-      const r = e.rig?.find((x) => x.def.type === "prismatic");
+      const r = e.rig?.find((x) => x.def.name === "lift_slide" || x.def.type === "prismatic");
       if (r) applyJoint(r, l.value);
+    }
+  }
+
+  private jointMotors(dt: number) {
+    for (const e of this.world.with("mover")) {
+      if (e.faulted || !e.jointTargets || !e.rig) continue;
+      const scale = e.speedScale ?? 1;
+      for (const [name, target] of e.jointTargets.entries()) {
+        const r = e.rig.find((x) => x.def.name === name);
+        if (!r) continue;
+        const speed = r.def.type === "prismatic" ? 0.9 * scale : 1.8 * scale;
+        const diff = target - r.value;
+        const step = speed * dt;
+        const next = Math.abs(diff) <= step ? target : r.value + Math.sign(diff) * step;
+        applyJoint(r, next);
+      }
     }
   }
 
@@ -335,25 +453,24 @@ export class Runtime {
     const belts = this.world.with("belt");
     if (!belts.length) return;
     for (const b of belts) {
+      if (b.faulted) continue;
       const cfg = b.belt!;
-      const dx = Math.cos(b.yaw), dz = -Math.sin(b.yaw);   // belt direction (local +X)
+      const dx = Math.cos(b.yaw), dz = -Math.sin(b.yaw);
       const top = b.pos.y + cfg.top;
-      // everything resting on this belt, with its position along / across it
       const onBelt: { it: Entity; along: number; across: number }[] = [];
       for (const it of this.world.with("movable")) {
         if (it === b || it.mover || it.carriedBy) continue;
         const rx = it.pos.x - b.pos.x, rz = it.pos.z - b.pos.z;
         const along = rx * dx + rz * dz, across = rx * -dz + rz * dx;
-        if (Math.abs(across) > cfg.width / 2 || Math.abs(along) > cfg.length / 2 || Math.abs(it.pos.y - top) > 0.15) continue;
+        if (Math.abs(across) > cfg.width / 2 || Math.abs(along) > cfg.length / 2 || Math.abs(it.pos.y - top) > 0.2) continue;
         onBelt.push({ it, along, across });
       }
-      // front-most first: each item stops one tote-length behind the one ahead, so they queue at the end
       onBelt.sort((a, c) => c.along - a.along);
       let limit = cfg.length / 2 - 0.3;
+      const spd = cfg.speed * (b.speedScale ?? 1);
       for (const e of onBelt) {
-        // never slide backwards: on a full belt an item simply waits (or overlaps) instead of being pushed off
-        const along = Math.max(e.along, Math.min(e.along + cfg.speed * dt, limit));
-        limit = along - 0.65;
+        const along = Math.max(e.along, Math.min(e.along + spd * dt, limit));
+        limit = along - 0.58;
         e.it.pos.set(b.pos.x + dx * along - dz * e.across, top, b.pos.z + dz * along + dx * e.across);
         this.flag(e.it, "ctl");
       }
@@ -370,6 +487,22 @@ export class Runtime {
       n.parent.updateWorldMatrix(true, false);
       _inv.copy(n.parent.matrixWorld).invert();
       _m.premultiply(_inv).decompose(n.position, n.quaternion, n.scale);
+    }
+  }
+
+  /** Restores poses from a replay snapshot frame into live render nodes. */
+  applyReplayPoses(poses: Record<string, { pos: [number, number, number]; yaw: number; lift: number }>) {
+    for (const [id, pose] of Object.entries(poses)) {
+      const n = this.nodes.get(id);
+      if (!n?.group.parent) continue;
+      _p.set(pose.pos[0], pose.pos[1], pose.pos[2]);
+      _q.setFromAxisAngle(_up, pose.yaw);
+      _m.compose(_p, _q, _s.setScalar(1));
+      n.group.parent.updateWorldMatrix(true, false);
+      _inv.copy(n.group.parent.matrixWorld).invert();
+      _m.premultiply(_inv).decompose(n.group.position, n.group.quaternion, n.group.scale);
+      const lift = n.rig.find((r) => r.def.name === "lift_slide" || r.def.type === "prismatic");
+      if (lift) applyJoint(lift, pose.lift);
     }
   }
 

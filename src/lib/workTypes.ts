@@ -91,3 +91,86 @@ export interface PerfStats {
   instTotal: number;
   dynamic: number;
 }
+
+export type WorkspaceMode = "author" | "twin";
+export type HealthStatus = "nominal" | "warning" | "fault" | "offline";
+export type CameraPreset = "overview" | "isometric" | "top" | "conveyor" | "dock";
+export type TwinScenario = "nominal" | "peak_rush" | "conveyor_jam" | "low_battery";
+export type FaultKind = "overheat" | "battery" | "jam" | "sensor";
+export type StreamStatus = "disconnected" | "connecting" | "connected" | "error";
+
+export interface ZoneDef {
+  id: string;
+  name?: string;
+  kind: string;
+  x: [number, number];
+  z: [number, number];
+  color?: string;
+}
+
+export interface TwinOverlayPrefs {
+  statusHalos: boolean;
+  pathTrails: boolean;
+  zoneHeatmap: boolean;
+  floatingLabels: boolean;
+  followSelected: boolean;
+}
+
+export interface AssetTelemetry {
+  id: string;
+  label: string;
+  asset: string | null;
+  kind: ObjectKind;
+  status: HealthStatus;
+  utilizationPct: number;
+  speedMps: number;
+  batteryPct: number;
+  temperatureC: number;
+  powerKw: number;
+  cyclesCompleted: number;
+  carrying: boolean;
+  currentTask: string;
+  faultReason: string | null;
+  speedScale: number;
+  history: { speed: number; temp: number; util: number }[];
+  trail: Vec3[];
+  goal: Vec3 | null;
+}
+
+export interface FacilityKpis {
+  throughputPerHr: number;
+  activeRobots: number;
+  totalRobots: number;
+  avgUtilizationPct: number;
+  avgCycleSec: number;
+  totalPowerKw: number;
+  activeAlerts: number;
+  uptimeSec: number;
+  totalPickups: number;
+  totalDeliveries: number;
+}
+
+export interface TwinAlert {
+  id: string;
+  objectId: string;
+  label: string;
+  severity: "warning" | "fault" | "info";
+  title: string;
+  detail: string;
+  timeSec: number;
+  acknowledged: boolean;
+}
+
+export interface ReplayEntityPose {
+  pos: Vec3;
+  yaw: number;
+  lift: number;
+  carrying: boolean;
+  status: HealthStatus;
+}
+
+export interface ReplayFrame {
+  timeSec: number;
+  entities: Record<string, ReplayEntityPose>;
+  kpis: FacilityKpis;
+}

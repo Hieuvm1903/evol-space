@@ -1,7 +1,8 @@
 import React, { Suspense, useEffect, useMemo, useRef } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
-import { useAssetInfo } from "./assetInfo";
+import { getProceduralAssetInfo, useAssetInfo, type AssetInfo } from "./assetInfo";
+import { isProceduralUrl } from "./proceduralTwin";
 import type { SceneObjectData } from "../../lib/workTypes";
 
 /** Static objects are never drawn as individual nodes. Per model there is one InstancedMesh per
@@ -33,8 +34,24 @@ interface BatchProps {
   onSelect: (id: string) => void;
 }
 
-function StaticBatch({ asset, url, items, hidden, cfg, live, dirty, perf, onSelect }: BatchProps) {
-  const { info } = useAssetInfo(url);
+function StaticBatch(props: BatchProps) {
+  if (isProceduralUrl(props.url)) {
+    return <ProceduralStaticBatch {...props} />;
+  }
+  return <GltfStaticBatch {...props} />;
+}
+
+function ProceduralStaticBatch(props: BatchProps) {
+  const { info } = useMemo(() => getProceduralAssetInfo(props.url), [props.url]);
+  return <StaticBatchRenderer {...props} info={info} />;
+}
+
+function GltfStaticBatch(props: BatchProps) {
+  const { info } = useAssetInfo(props.url);
+  return <StaticBatchRenderer {...props} info={info} />;
+}
+
+function StaticBatchRenderer({ asset, items, hidden, cfg, live, dirty, perf, onSelect, info }: BatchProps & { info: AssetInfo }) {
   const cap = Math.max(1, items.length);
 
   const parts = useMemo(() => info.parts.map((p) => {

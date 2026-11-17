@@ -3,18 +3,24 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewcube, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import { childrenIndex, descendantsOf } from "../../lib/sceneMath";
-import type { CanvasBridge, JointDef, PerfStats, SceneObjectData, Vec3, ViewPrefs } from "../../lib/workTypes";
+import type {
+  AssetTelemetry,
+  CameraPreset,
+  CanvasBridge,
+  JointDef,
+  PerfStats,
+  SceneObjectData,
+  TwinOverlayPrefs,
+  Vec3,
+  ViewPrefs,
+  WorkspaceMode,
+  ZoneDef,
+} from "../../lib/workTypes";
 import type { Runtime } from "./runtime";
 import StaticBatches, { type LiveDrag, type PerfCounters } from "./StaticBatches";
 import { DynNode, StaticProxy, type NodeCtx, type VisEntry } from "./SceneNodes";
-
-// ---------------------------------------------------------------------------
-// Renderer: the standard WebGLRenderer (r3f's default).
-// The previous WebGPURenderer ("three/webgpu") was removed because r3f v8 and drei assume a WebGLRenderer:
-// drei's GizmoViewcube calls gl.capabilities.getMaxAnisotropy(), which WebGPURenderer doesn't have. That threw
-// during the first render, and with no error boundary React unmounted the whole page (only the body background
-// was left). "three/webgpu" also bundles a second copy of three ("Multiple instances of Three.js").
-// ---------------------------------------------------------------------------
+import { StudioEnvironment, TwinCameraController, TwinOverlays } from "./TwinOverlays";
+import type { TwinEngine } from "./twinEngine";
 
 /** Keeps a canvas failure from blanking the whole page: shows the error and a retry button instead. */
 class CanvasErrorBoundary extends React.Component<
@@ -86,8 +92,7 @@ function Bridge({ bridgeRef }: { bridgeRef: React.MutableRefObject<CanvasBridge 
   return null;
 }
 
-/** Orbit around the selected object; with nothing selected, go back to the default pivot.
- *  It only *animates* the pivot (a short ease), so panning with the right mouse button still works. */
+/** Orbit around the selected object; with nothing selected, go back to the default pivot. */
 function FocusController({ selectedId, enabled, getObject, home }: {
   selectedId: string | null; enabled: boolean; getObject: () => THREE.Object3D | null; home: THREE.Vector3;
 }) {
@@ -103,7 +108,7 @@ function FocusController({ selectedId, enabled, getObject, home }: {
     if (pending.current) {
       if (!selectedId || !enabled) { goal.current = home.clone(); pending.current = false; }
       else {
-        const obj = getObject();            // may not be mounted yet — try again next frame
+        const obj = getObject();
         if (obj) {
           box.setFromObject(obj);
           if (!box.isEmpty()) goal.current = box.getCenter(new THREE.Vector3());
@@ -120,7 +125,7 @@ function FocusController({ selectedId, enabled, getObject, home }: {
   return null;
 }
 
-/** Distance culling + LOD swap for dynamic (non-instanced) models. Frustum culling is three.js's own. */
+/** Distance culling + LOD swap for dynamic (non-instanced) models. */
 function DynamicVisibility({ vis, prefs, selectedId }: {
   vis: React.MutableRefObject<Map<string, VisEntry>>; prefs: ViewPrefs; selectedId: string | null;
 }) {
@@ -143,8 +148,28 @@ function DynamicVisibility({ vis, prefs, selectedId }: {
   return null;
 }
 
-function RuntimeDriver({ runtime, playing, paused, timeScale }: { runtime: Runtime; playing: boolean; paused: boolean; timeScale: number }) {
-  useFrame((_, dt) => { if (playing && !paused) runtime.tick(Math.min(dt, 0.05) * timeScale); });
+function RuntimeDriver({
+  runtime,
+  twinEngine,
+  objects,
+  worlds,
+  playing,
+  paused,
+  timeScale,
+}: {
+  runtime: Runtime;
+  twinEngine: TwinEngine;
+  objects: SceneObjectData[];
+  worlds: Map<string, THREE.Matrix4>;
+  playing: boolean;
+  paused: boolean;
+  timeScale: number;
+}) {
+  useFrame((_, dt) => {
+    const clamped = Math.min(dt, 0.05) * timeScale;
+    if (playing && !paused) runtime.tick(clamped);
+    twinEngine.tick(clamped, runtime, objects, worlds, playing, paused);
+  });
   return null;
 }
 
@@ -167,12 +192,11 @@ function StatsProbe({ perf, vis, onStats }: {
   return null;
 }
 
-// ---------------------------------------------------------------------------
 export interface WorkCanvasProps {
   objects: SceneObjectData[];
   worlds: Map<string, THREE.Matrix4>;
   staticIds: Set<string>;
-  forced: Set<string>;                 // static objects the simulation turned into real nodes (picked up)
+  forced: Set<string>;
   assetUrls: Record<string, string>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
@@ -181,6 +205,13 @@ export interface WorkCanvasProps {
   snap: boolean;
   prefs: ViewPrefs;
   runtime: Runtime;
+  twinEngine: TwinEngine;
+  workspaceMode: WorkspaceMode;
+  telemetryList: AssetTelemetry[];
+  zones: ZoneDef[];
+  overlays: TwinOverlayPrefs;
+  cameraPreset: CameraPreset;
+  cameraPresetSeq: number;
   playing: boolean;
   paused: boolean;
   timeScale: number;
@@ -191,7 +222,7 @@ export interface WorkCanvasProps {
   onBackend: (label: string) => void;
 }
 
-const HOME = new THREE.Vector3(0, 0, 2);
+const HOME = new THREE.Vector3(0.0, 1.0, 2.2);
 
 export default function WorkCanvas(p: WorkCanvasProps) {
   return (
@@ -212,7 +243,6 @@ function WorkCanvasInner(p: WorkCanvasProps) {
   const live = useRef<LiveDrag | null>(null);
   const dirty = useRef(0);
 
-  // r3f's default renderer is WebGL (WebGL2 where available).
   useEffect(() => { onBackend("WebGL2"); }, [onBackend]);
 
   const register = useCallback((id: string, node: THREE.Object3D | null) => {
@@ -260,20 +290,30 @@ function WorkCanvasInner(p: WorkCanvasProps) {
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ position: [9, 7, 11], fov: 40, near: 0.05, far: 300 }}
-      gl={{ antialias: true, powerPreference: "high-performance" }}
+      camera={{ position: [14.5, 11.5, 17.5], fov: 42, near: 0.05, far: 300 }}
+      gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      onCreated={({ gl }) => {
+        gl.domElement.addEventListener("webglcontextlost", (e) => {
+          e.preventDefault();
+          onBackend("error: context lost");
+        });
+        gl.domElement.addEventListener("webglcontextrestored", () => {
+          onBackend("WebGL2");
+        });
+      }}
       // Clicking the transform gizmo counts as "clicking nothing" to r3f — ignore that.
       onPointerMissed={() => { if (!gizmoBusy.current) p.onSelect(null); }}
     >
       <color attach="background" args={["#07060f"]} />
+      <StudioEnvironment />
       {prefs.defaultLight ? (
         <>
-          <ambientLight intensity={0.7} color="#8f84e0" />
+          <ambientLight intensity={0.45} color="#8f84e0" />
           <hemisphereLight args={["#22d3ee", "#14121f", 0.25]} />
           <directionalLight
-            position={[8, 14, 8]} intensity={1.1} castShadow={prefs.shadows}
+            position={[10, 16, 10]} intensity={1.15} castShadow={prefs.shadows}
             shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
-            shadow-camera-left={-14} shadow-camera-right={14} shadow-camera-top={14} shadow-camera-bottom={-14}
+            shadow-camera-left={-16} shadow-camera-right={16} shadow-camera-top={16} shadow-camera-bottom={-16}
           />
         </>
       ) : (
@@ -281,7 +321,7 @@ function WorkCanvasInner(p: WorkCanvasProps) {
       )}
 
       <ViewGrid />
-      {prefs.showGizmos && <axesHelper args={[1.2]} />}
+      {prefs.showGizmos && p.workspaceMode === "author" && <axesHelper args={[1.2]} />}
 
       <StaticBatches
         statics={statics} worlds={worlds} assetUrls={p.assetUrls} hidden={forced} cfg={cfg}
@@ -290,6 +330,17 @@ function WorkCanvasInner(p: WorkCanvasProps) {
 
       {roots.map((o) => <DynNode key={`${o.id}:${p.epoch}`} id={o.id} root ctx={ctx} />)}
 
+      <TwinOverlays
+        workspaceMode={p.workspaceMode}
+        objects={objects}
+        worlds={worlds}
+        telemetryList={p.telemetryList}
+        zones={p.zones}
+        selectedId={selectedId}
+        overlays={p.overlays}
+        runtime={p.runtime}
+      />
+
       {sel && selIsStatic && worlds.get(sel.id) && (
         <StaticProxy
           o={sel} world={worlds.get(sel.id)!} url={sel.asset ? p.assetUrls[sel.asset] : undefined}
@@ -297,7 +348,7 @@ function WorkCanvasInner(p: WorkCanvasProps) {
         />
       )}
 
-      {selGroup && sel && !p.playing && (
+      {selGroup && sel && !p.playing && p.workspaceMode === "author" && (
         <TransformControls
           key={sel.id}
           object={selGroup}
@@ -324,7 +375,20 @@ function WorkCanvasInner(p: WorkCanvasProps) {
       )}
 
       <OrbitControls makeDefault enableDamping target={HOME.toArray()} minDistance={1.2} maxDistance={80} maxPolarAngle={Math.PI / 2 - 0.02} />
-      <FocusController selectedId={selectedId} enabled={prefs.focusSelection} getObject={() => selGroup} home={HOME} />
+      <FocusController
+        selectedId={selectedId}
+        enabled={prefs.focusSelection && !(p.workspaceMode === "twin" && p.overlays.followSelected)}
+        getObject={() => selGroup}
+        home={HOME}
+      />
+      <TwinCameraController
+        preset={p.cameraPreset}
+        presetSeq={p.cameraPresetSeq}
+        followId={selectedId}
+        followEnabled={p.workspaceMode === "twin" && p.overlays.followSelected}
+        runtime={p.runtime}
+        worlds={worlds}
+      />
 
       {prefs.showGizmos && (
         <GizmoHelper alignment="bottom-right" margin={[84, 84]}>
@@ -333,7 +397,15 @@ function WorkCanvasInner(p: WorkCanvasProps) {
       )}
 
       <DynamicVisibility vis={vis} prefs={prefs} selectedId={selectedId} />
-      <RuntimeDriver runtime={p.runtime} playing={p.playing} paused={p.paused} timeScale={p.timeScale} />
+      <RuntimeDriver
+        runtime={p.runtime}
+        twinEngine={p.twinEngine}
+        objects={objects}
+        worlds={worlds}
+        playing={p.playing}
+        paused={p.paused}
+        timeScale={p.timeScale}
+      />
       <StatsProbe perf={perf} vis={vis} onStats={p.onStats} />
       <Bridge bridgeRef={p.bridgeRef} />
     </Canvas>
