@@ -1,4 +1,19 @@
 import * as THREE from "three";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+
+function ensureIndexedTangents(geom: THREE.BufferGeometry): THREE.BufferGeometry {
+  const indexed = geom.index ? geom : mergeVertices(geom);
+  if (indexed !== geom) geom.dispose();
+  if (
+    indexed.index &&
+    indexed.attributes.position &&
+    indexed.attributes.normal &&
+    indexed.attributes.uv
+  ) {
+    indexed.computeTangents();
+  }
+  return indexed;
+}
 
 export interface InterceptorHandle {
   group: THREE.Group;
@@ -7,8 +22,8 @@ export interface InterceptorHandle {
 }
 
 /**
- * Composite 8-part PBR Interceptor spacecraft (Extrude fuselage, Lathe nose cone,
- * swept wings, vertical stabilizer, tinted canopy, twin engine bells & plasma cones).
+ * Composite 10-part PBR Interceptor spacecraft (Extrude fuselage, Lathe nose cone,
+ * swept wings, vertical stabilizer, tinted clearcoat canopy, twin engine bells & plasma cones).
  */
 export function createInterceptorShip(): InterceptorHandle {
   const group = new THREE.Group();
@@ -20,26 +35,27 @@ export function createInterceptorShip(): InterceptorHandle {
   });
   const wingMat = new THREE.MeshStandardMaterial({
     color: "#38bdf8",
-    roughness: 0.48,
-    metalness: 0.32,
+    roughness: 0.58,
+    metalness: 0.24,
   });
   const trimMat = new THREE.MeshStandardMaterial({
     color: "#8b6ff5",
-    roughness: 0.25,
-    metalness: 0.85,
+    roughness: 0.22,
+    metalness: 0.88,
   });
   const canopyMat = new THREE.MeshPhysicalMaterial({
     color: "#f59e0b",
     emissive: "#d97706",
     emissiveIntensity: 0.35,
-    roughness: 0.12,
-    metalness: 0.15,
+    roughness: 0.1,
+    metalness: 0.1,
     clearcoat: 1.0,
+    clearcoatRoughness: 0.08,
   });
   const engineMat = new THREE.MeshStandardMaterial({
     color: "#1e293b",
-    roughness: 0.62,
-    metalness: 0.88,
+    roughness: 0.65,
+    metalness: 0.86,
   });
   const plasmaMat = new THREE.MeshBasicMaterial({
     color: "#22d3ee",
@@ -57,14 +73,15 @@ export function createInterceptorShip(): InterceptorHandle {
   hullShape.lineTo(-0.42, 0.06);
   hullShape.closePath();
 
-  const hullGeom = new THREE.ExtrudeGeometry(hullShape, {
+  const rawHullGeom = new THREE.ExtrudeGeometry(hullShape, {
     depth: 1.65,
     bevelEnabled: true,
     bevelThickness: 0.08,
     bevelSize: 0.06,
     bevelSegments: 2,
   });
-  hullGeom.center();
+  rawHullGeom.center();
+  const hullGeom = ensureIndexedTangents(rawHullGeom);
   const hullMesh = new THREE.Mesh(hullGeom, hullMat);
   hullMesh.position.set(0, 0.28, 0.08);
   hullMesh.castShadow = true;
@@ -77,8 +94,9 @@ export function createInterceptorShip(): InterceptorHandle {
     new THREE.Vector2(0.28, 0.18),
     new THREE.Vector2(0.35, 0),
   ];
-  const noseGeom = new THREE.LatheGeometry(nosePts, 12);
-  noseGeom.rotateX(-Math.PI / 2);
+  const rawNoseGeom = new THREE.LatheGeometry(nosePts, 14);
+  rawNoseGeom.rotateX(-Math.PI / 2);
+  const noseGeom = ensureIndexedTangents(rawNoseGeom);
   const noseMesh = new THREE.Mesh(noseGeom, trimMat);
   noseMesh.position.set(0, 0.28, -0.76);
   noseMesh.castShadow = true;
@@ -100,14 +118,15 @@ export function createInterceptorShip(): InterceptorHandle {
   wingShape.lineTo(0, 0.65);
   wingShape.closePath();
 
-  const wingGeom = new THREE.ExtrudeGeometry(wingShape, {
+  const rawWingGeom = new THREE.ExtrudeGeometry(wingShape, {
     depth: 0.06,
     bevelEnabled: true,
     bevelThickness: 0.02,
     bevelSize: 0.02,
     bevelSegments: 1,
   });
-  wingGeom.rotateX(Math.PI / 2);
+  rawWingGeom.rotateX(Math.PI / 2);
+  const wingGeom = ensureIndexedTangents(rawWingGeom);
 
   const rightWing = new THREE.Mesh(wingGeom, wingMat);
   rightWing.position.set(0.32, 0.24, -0.2);
@@ -138,7 +157,7 @@ export function createInterceptorShip(): InterceptorHandle {
   finMesh.position.set(-0.02, 0.5, 0.25);
   group.add(finMesh);
 
-  // 7 & 8) Twin thruster bells + glowing plasma cones + wingtip beacons
+  // 7–10) Twin thruster bells, glowing plasma cones & wingtip beacons
   const bellGeom = new THREE.CylinderGeometry(0.14, 0.19, 0.28, 12);
   bellGeom.rotateX(Math.PI / 2);
   const coneGeom = new THREE.ConeGeometry(0.13, 0.62, 10);
@@ -168,6 +187,85 @@ export function createInterceptorShip(): InterceptorHandle {
 }
 
 /**
+ * Shared geometries for composite 5-part trench portal gates (no single primitive arches).
+ */
+export interface TrenchPortalGeometries {
+  outerRing: THREE.TorusGeometry;
+  innerRing: THREE.TorusGeometry;
+  stanchion: THREE.BoxGeometry;
+  crown: THREE.BoxGeometry;
+}
+
+export function createTrenchPortalGeometries(): TrenchPortalGeometries {
+  return {
+    outerRing: new THREE.TorusGeometry(6.8, 0.26, 8, 8),
+    innerRing: new THREE.TorusGeometry(6.3, 0.1, 6, 8),
+    stanchion: new THREE.BoxGeometry(0.85, 2.4, 0.85),
+    crown: new THREE.BoxGeometry(2.6, 0.45, 0.72),
+  };
+}
+
+export function createTrenchPortal(
+  accentColor: string,
+  geoms: TrenchPortalGeometries,
+  frameMat: THREE.Material,
+): { group: THREE.Group; ring: THREE.Mesh } {
+  const group = new THREE.Group();
+
+  const glowMat = new THREE.MeshStandardMaterial({
+    color: accentColor,
+    emissive: accentColor,
+    emissiveIntensity: 0.62,
+    roughness: 0.26,
+    metalness: 0.72,
+  });
+
+  // 1) Rotating octagonal outer portal ring
+  const ring = new THREE.Mesh(geoms.outerRing, glowMat);
+  ring.position.set(0, 3.0, 0);
+  ring.rotation.z = Math.PI / 8;
+  group.add(ring);
+
+  // 2) Inner crisp accent bevel ring
+  const inner = new THREE.Mesh(geoms.innerRing, frameMat);
+  inner.position.set(0, 3.0, 0);
+  inner.rotation.z = Math.PI / 8;
+  group.add(inner);
+
+  // 3 & 4) Grounded port & starboard anchor stanchions seated flush at y = 0
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Mesh(geoms.stanchion, frameMat);
+    leg.position.set(side * 6.5, 1.2, 0);
+    group.add(leg);
+  }
+
+  // 5) Upper crown keystone bracket
+  const crown = new THREE.Mesh(geoms.crown, frameMat);
+  crown.position.set(0, 9.55, 0);
+  group.add(crown);
+
+  return { group, ring };
+}
+
+/**
+ * Procedural basalt canyon monolith spire (LatheGeometry, bottom-center pivoted at y = 0)
+ * for InstancedMesh perimeter canyon terrain.
+ */
+export function createCanyonMonolithGeometry(): THREE.LatheGeometry {
+  const pts = [
+    new THREE.Vector2(1.45, 0),
+    new THREE.Vector2(1.25, 2.2),
+    new THREE.Vector2(0.95, 5.4),
+    new THREE.Vector2(0.68, 8.6),
+    new THREE.Vector2(0.24, 11.2),
+    new THREE.Vector2(0.01, 12.0),
+  ];
+  const geom = new THREE.LatheGeometry(pts, 7);
+  geom.computeVertexNormals();
+  return geom;
+}
+
+/**
  * Composite 5-part crystal asteroid cluster for obstacle dodging.
  */
 export function createAsteroidCluster(): THREE.Group {
@@ -177,7 +275,7 @@ export function createAsteroidCluster(): THREE.Group {
     color: "#ef4444",
     emissive: "#7f1d1d",
     emissiveIntensity: 0.25,
-    roughness: 0.82,
+    roughness: 0.84,
     metalness: 0.12,
     flatShading: true,
   });
@@ -185,8 +283,8 @@ export function createAsteroidCluster(): THREE.Group {
     color: "#fb923c",
     emissive: "#ea580c",
     emissiveIntensity: 0.5,
-    roughness: 0.28,
-    metalness: 0.68,
+    roughness: 0.24,
+    metalness: 0.72,
   });
 
   const core = new THREE.Mesh(new THREE.DodecahedronGeometry(0.88, 0), rockMat);
@@ -229,7 +327,7 @@ export function createEnergyOrb(): THREE.Group {
     color: "#facc15",
     emissive: "#eab308",
     emissiveIntensity: 0.45,
-    roughness: 0.22,
+    roughness: 0.24,
     metalness: 0.88,
   });
 
@@ -250,59 +348,112 @@ export function createEnergyOrb(): THREE.Group {
   return group;
 }
 
-/**
- * Composite 7-part Orbital Gyro Reactor for the 3D Studio Sandbox showcase.
- */
+export interface ExplodePart {
+  object: THREE.Object3D;
+  restPos: THREE.Vector3;
+  offset: THREE.Vector3;
+}
+
 export interface ShowcaseHandle {
   group: THREE.Group;
   ringA: THREE.Mesh;
   ringB: THREE.Mesh;
   ringC: THREE.Mesh;
   core: THREE.Mesh;
+  dome: THREE.Mesh;
+  explodeParts: ExplodePart[];
 }
 
-export function createShowcaseReactor(): ShowcaseHandle {
+/**
+ * Composite 11-part Orbital Gyro Reactor for the 3D Studio Sandbox showcase
+ * with anisotropic brushed metal, optical containment dome, and exploded-view layers.
+ */
+export function createShowcaseReactor(isSoftwareGl: boolean): ShowcaseHandle {
   const group = new THREE.Group();
+  const explodeParts: ExplodePart[] = [];
+
+  const addExplode = (object: THREE.Object3D, ox: number, oy: number, oz: number) => {
+    explodeParts.push({
+      object,
+      restPos: object.position.clone(),
+      offset: new THREE.Vector3(ox, oy, oz),
+    });
+  };
 
   const baseMat = new THREE.MeshStandardMaterial({
     color: "#334155",
-    roughness: 0.58,
-    metalness: 0.72,
+    roughness: 0.62,
+    metalness: 0.58,
   });
-  const ringMatA = new THREE.MeshStandardMaterial({
+  const brushedBrassMat = new THREE.MeshPhysicalMaterial({
+    color: "#f59e0b",
+    roughness: 0.16,
+    metalness: 0.94,
+    anisotropy: 0.8,
+    anisotropyRotation: 0.25,
+    clearcoat: 0.45,
+  });
+  const ringMatA = new THREE.MeshPhysicalMaterial({
     color: "#22d3ee",
-    roughness: 0.22,
-    metalness: 0.88,
+    roughness: 0.18,
+    metalness: 0.9,
+    anisotropy: 0.75,
+    clearcoat: 0.6,
   });
   const ringMatB = new THREE.MeshStandardMaterial({
     color: "#f472b6",
-    roughness: 0.28,
+    roughness: 0.34,
     metalness: 0.78,
-  });
-  const ringMatC = new THREE.MeshStandardMaterial({
-    color: "#f59e0b",
-    roughness: 0.2,
-    metalness: 0.9,
   });
   const coreMat = new THREE.MeshStandardMaterial({
     color: "#a78bfa",
     emissive: "#6d28d9",
-    emissiveIntensity: 0.65,
+    emissiveIntensity: 0.72,
     roughness: 0.18,
     metalness: 0.4,
   });
+  const domeMat = new THREE.MeshPhysicalMaterial({
+    color: "#bae6fd",
+    metalness: 0,
+    roughness: 0.08,
+    transmission: isSoftwareGl ? 0 : 0.9,
+    transparent: true,
+    opacity: isSoftwareGl ? 0.28 : 1.0,
+    ior: 1.62,
+    thickness: 1.1,
+    attenuationColor: new THREE.Color("#22d3ee"),
+    attenuationDistance: 2.2,
+    clearcoat: 1.0,
+    depthWrite: false,
+  });
 
-  // Pedestal base grounded at y = 0
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.5, 0.42, 24), baseMat);
+  // 1) Pedestal plinth grounded flush at y = 0
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.55, 0.42, 28), baseMat);
   plinth.position.y = 0.21;
   plinth.receiveShadow = true;
   group.add(plinth);
+  addExplode(plinth, 0, -0.35, 0);
 
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.65, 0.36, 20), ringMatC);
+  // 2) Anisotropic brushed brass collar
+  const collarGeom = ensureIndexedTangents(new THREE.CylinderGeometry(1.38, 1.7, 0.36, 24));
+  const collar = new THREE.Mesh(collarGeom, brushedBrassMat);
   collar.position.y = 0.6;
   group.add(collar);
+  addExplode(collar, 0, -0.12, 0);
 
-  // Twin support pylons
+  // 3–6) Four radial stabilizer anchor fins grounded at y = 0
+  const finGeom = new THREE.BoxGeometry(0.24, 0.56, 0.75);
+  for (let i = 0; i < 4; i++) {
+    const ang = (i * Math.PI) / 2 + Math.PI / 4;
+    const fin = new THREE.Mesh(finGeom, brushedBrassMat);
+    fin.position.set(Math.cos(ang) * 2.2, 0.28, Math.sin(ang) * 2.2);
+    fin.rotation.y = -ang + Math.PI / 2;
+    fin.castShadow = true;
+    group.add(fin);
+    addExplode(fin, Math.cos(ang) * 0.95, 0, Math.sin(ang) * 0.95);
+  }
+
+  // 7–8) Twin swept support pylons
   const pylonGeom = new THREE.BoxGeometry(0.28, 2.35, 0.42);
   for (const s of [-1, 1]) {
     const pylon = new THREE.Mesh(pylonGeom, baseMat);
@@ -310,30 +461,48 @@ export function createShowcaseReactor(): ShowcaseHandle {
     pylon.rotation.z = s * 0.14;
     pylon.castShadow = true;
     group.add(pylon);
+    addExplode(pylon, s * 1.15, 0.15, 0);
   }
 
   const pivotY = 2.45;
 
-  const ringA = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.14, 16, 48), ringMatA);
+  // 9) Outer anisotropic cyan gimbal ring
+  const ringAGeom = ensureIndexedTangents(new THREE.TorusGeometry(1.75, 0.14, 16, 48));
+  const ringA = new THREE.Mesh(ringAGeom, ringMatA);
   ringA.position.y = pivotY;
   ringA.castShadow = true;
   group.add(ringA);
+  addExplode(ringA, 0, 0.55, 1.15);
 
+  // 10) Middle magenta gimbal ring
   const ringB = new THREE.Mesh(new THREE.TorusGeometry(1.32, 0.12, 16, 42), ringMatB);
   ringB.position.y = pivotY;
   ringB.rotation.x = Math.PI / 4;
   ringB.castShadow = true;
   group.add(ringB);
+  addExplode(ringB, 0, 0.85, -1.05);
 
-  const ringC = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.1, 14, 36), ringMatC);
+  // 11) Inner brushed gold gimbal ring
+  const ringCGeom = ensureIndexedTangents(new THREE.TorusGeometry(0.92, 0.1, 14, 36));
+  const ringC = new THREE.Mesh(ringCGeom, brushedBrassMat);
   ringC.position.y = pivotY;
   ringC.rotation.y = Math.PI / 3;
   group.add(ringC);
+  addExplode(ringC, 0, 1.15, 0);
 
-  const core = new THREE.Mesh(new THREE.TorusKnotGeometry(0.45, 0.14, 96, 16), coreMat);
+  // Optical glass containment dome around core (sorted after opaque rings)
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.76, 28, 20), domeMat);
+  dome.position.y = pivotY;
+  dome.renderOrder = 2;
+  group.add(dome);
+  addExplode(dome, 0, 1.55, 0);
+
+  // Plasma torus-knot core
+  const core = new THREE.Mesh(new THREE.TorusKnotGeometry(0.42, 0.13, 96, 16), coreMat);
   core.position.y = pivotY;
   core.castShadow = true;
   group.add(core);
+  addExplode(core, 0, 2.05, 0);
 
-  return { group, ringA, ringB, ringC, core };
+  return { group, ringA, ringB, ringC, core, dome, explodeParts };
 }

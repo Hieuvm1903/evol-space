@@ -23,6 +23,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type * as THREE from "three";
+import { useGLTF } from "@react-three/drei";
 import { useAuth } from "../../contexts/AuthContext";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { notify } from "../../lib/notify";
@@ -41,6 +42,7 @@ import {
   toLocalData,
 } from "../../lib/sceneMath";
 import type {
+  AiModelBlueprint,
   AssetTelemetry,
   CameraMode,
   CameraPreset,
@@ -63,6 +65,12 @@ import type {
   WorkspaceMode,
   ZoneDef,
 } from "../../lib/workTypes";
+import {
+  assembleAndExportGlb,
+  downloadBuiltAiAsset,
+  requestAiModelBlueprint,
+  type BuiltAiAsset,
+} from "./aiModelBuilder";
 import { extractZones, layoutToObjects } from "./layoutImport";
 import { Runtime } from "./runtime";
 import { TwinEngine } from "./twinEngine";
@@ -78,6 +86,7 @@ const LAST_SCENE_KEY = "evol_work_last_scene";
 const PREFS_KEY = "evol_work_prefs";
 const UI_KEY = "evol_work_ui";
 const OVERLAYS_KEY = "evol_work_twin_overlays";
+const AI_BLUEPRINTS_KEY = "evol_work_ai_blueprints";
 
 const DEFAULT_PREFS: ViewPrefs = {
   instancing: true,
@@ -187,6 +196,12 @@ export function WorkPage() {
   const [scenario, setScenario] = useState<TwinScenario>("nominal");
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("disconnected");
 
+  // --- AI generated 3D models (procedural GLB assets)
+  const [aiAssets, setAiAssets] = useState<Record<string, BuiltAiAsset>>({});
+  const aiAssetsRef = useRef<Record<string, BuiltAiAsset>>({});
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   const updatePrefs = useCallback((patch: Partial<ViewPrefs>) => {
     setPrefs((cur) => {
       const n = { ...cur, ...patch };
@@ -218,33 +233,81 @@ export function WorkPage() {
   const latestSet = useMemo(() => [...sets].sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null, [sets]);
   const activeSet = sets.find((s) => s.id === activeSetId) ?? null;
   const assets = useMemo(() => meshAssets(activeSet), [activeSet]);
-  const assetUrls = useMemo(
-    () => (activeSet ? Object.fromEntries(assets.map((a) => [a, fileUrl(activeSet, a)])) : {}) as Record<string, string>,
-    [assets, activeSet],
+  const assetUrls = useMemo(() => {
+    const urls: Record<string, string> = activeSet
+      ? Object.fromEntries(assets.map((a) => [a, fileUrl(activeSet, a)]))
+      : {};
+    for (const [id, item] of Object.entries(aiAssets)) {
+      urls[id] = item.url;
+    }
+    return urls;
+  }, [assets, activeSet, aiAssets]);
+  const aiAssetList = useMemo(
+    () => Object.values(aiAssets).sort((a, b) => b.blueprint.createdAt.localeCompare(a.blueprint.createdAt)),
+    [aiAssets],
   );
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
   const selectedTelemetry = useMemo(
     () => (selectedId ? allTelemetry.find((t) => t.id === selectedId) : undefined),
     [selectedId, allTelemetry],
   );
-  const missing = objects.filter((o) => o.kind === "model" && (!o.asset || !assets.includes(o.asset))).length;
+  const missing = objects.filter((o) => o.kind === "model" && (!o.asset || !assetUrls[o.asset])).length;
   const currentKey = useMemo(() => JSON.stringify([activeSet?.version ?? null, objects]), [activeSet, objects]);
   const dirty = sceneId !== null ? currentKey !== savedKey : objects.length > 0 && savedKey !== currentKey;
 
+  useEffect(() => {
+    aiAssetsRef.current = aiAssets;
+  }, [aiAssets]);
+
+  const persistAiBlueprints = useCallback((map: Record<string, BuiltAiAsset>) => {
+    const bps: Record<string, AiModelBlueprint> = {};
+    for (const [id, item] of Object.entries(map)) bps[id] = item.blueprint;
+    saveJson(AI_BLUEPRINTS_KEY, bps);
+  }, []);
+
   // ---------------------------------------------------------------- loading
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const rows = await listModelSets();
-        setSets(rows);
-        if (rows[0]) setActiveSetId(rows[0].id);
+        if (!cancelled) {
+          setSets(rows);
+          if (rows[0]) setActiveSetId(rows[0].id);
+        }
       } catch (e) {
-        notify.error("Couldn't load model sets", errMsg(e));
+        if (!cancelled) notify.error("Couldn't load model sets", errMsg(e));
       }
-      setLoadingSets(false);
+      if (!cancelled) setLoadingSets(false);
     })();
+
+    (async () => {
+      try {
+        const raw = localStorage.getItem(AI_BLUEPRINTS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as Record<string, AiModelBlueprint>;
+        const entries = Object.values(parsed ?? {});
+        if (!entries.length) return;
+        const builtEntries = await Promise.all(
+          entries.map(async (bp) => [bp.id, await assembleAndExportGlb(bp)] as const),
+        );
+        if (cancelled) {
+          for (const [, built] of builtEntries) URL.revokeObjectURL(built.url);
+          return;
+        }
+        setAiAssets((cur) => ({ ...Object.fromEntries(builtEntries), ...cur }));
+      } catch {
+        /* ignore corrupt cache */
+      }
+    })();
+
     return () => {
+      cancelled = true;
       twinEngine.disconnectStream();
+      for (const item of Object.values(aiAssetsRef.current)) {
+        useGLTF.clear(item.url);
+        URL.revokeObjectURL(item.url);
+      }
     };
   }, [twinEngine]);
 
@@ -352,6 +415,22 @@ export function WorkPage() {
     try {
       const row = await getScene(id);
       const objs = (row.data?.objects ?? []).map(normalizeObject);
+
+      const savedBlueprints = row.data?.aiBlueprints;
+      if (savedBlueprints && typeof savedBlueprints === "object") {
+        const toBuild = Object.values(savedBlueprints).filter((bp) => !aiAssetsRef.current[bp.id]);
+        if (toBuild.length > 0) {
+          const rebuilt = await Promise.all(
+            toBuild.map(async (bp) => [bp.id, await assembleAndExportGlb(bp)] as const),
+          );
+          setAiAssets((cur) => {
+            const next = { ...cur, ...Object.fromEntries(rebuilt) };
+            persistAiBlueprints(next);
+            return next;
+          });
+        }
+      }
+
       let set = sets.find((s) => s.name === row.model_set_name && s.version === row.model_set_version) ?? null;
       if (!set && row.model_set_name && row.model_set_version) {
         set = await getModelSet(row.model_set_name, row.model_set_version);
@@ -428,12 +507,22 @@ export function WorkPage() {
     setSaving(true);
     try {
       const keyNow = currentKey;
+      const aiBlueprints: Record<string, AiModelBlueprint> = {};
+      for (const o of objects) {
+        if (o.kind === "model" && o.asset && aiAssets[o.asset]) {
+          aiBlueprints[o.asset] = aiAssets[o.asset].blueprint;
+        }
+      }
       const row = await saveScene({
         id: asNew ? null : sceneId,
         userId: user.id,
         name: sceneName.trim() || "Untitled scene",
         set: activeSet,
-        doc: { version: 2, objects },
+        doc: {
+          version: 2,
+          objects,
+          ...(Object.keys(aiBlueprints).length > 0 ? { aiBlueprints } : {}),
+        },
       });
       setSceneId(row.id);
       setSceneName(row.name);
@@ -479,7 +568,13 @@ export function WorkPage() {
     const b = at ?? bridgeRef.current?.centerOnFloor() ?? [0, 0, 0];
     return snap ? [snap01(b[0]), 0, snap01(b[2])] : [b[0], 0, b[2]];
   };
-  const labelFor = (base: string) => `${base}-${objects.filter((o) => o.label.startsWith(`${base}-`)).length + 1}`;
+  const labelFor = (base: string) => {
+    const nice = aiAssets[base]?.blueprint.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || base;
+    return `${nice}-${objects.filter((o) => o.label.startsWith(`${nice}-`)).length + 1}`;
+  };
 
   function addObject(o: Partial<SceneObjectData> & { kind: SceneObjectData["kind"]; label: string }) {
     const obj: SceneObjectData = {
@@ -498,6 +593,73 @@ export function WorkPage() {
   }
   const addModel = (asset: string, at?: Vec3 | null) =>
     addObject({ kind: "model", asset, label: labelFor(asset), position: floorPoint(at) });
+
+  const handleGenerateAiModel = async (prompt: string, targetHeight: number, autoPlace: boolean) => {
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const blueprint = await requestAiModelBlueprint(prompt, targetHeight);
+      const built = await assembleAndExportGlb(blueprint);
+      setAiAssets((cur) => {
+        const next = { ...cur, [blueprint.id]: built };
+        persistAiBlueprints(next);
+        return next;
+      });
+      notify.added(`Generated "${built.blueprint.name}" (${built.partCount} parts).`);
+      if (autoPlace) {
+        const nice = blueprint.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "") || blueprint.id;
+        const label = `${nice}-${objects.filter((o) => o.label.startsWith(`${nice}-`)).length + 1}`;
+        addObject({ kind: "model", asset: blueprint.id, label, position: floorPoint() });
+      }
+      return true;
+    } catch (e) {
+      const msg = errMsg(e);
+      setAiError(msg);
+      notify.error("AI 3D generation failed", msg);
+      return false;
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleDownloadAiAsset = (assetId: string) => {
+    const item = aiAssets[assetId];
+    if (item) downloadBuiltAiAsset(item);
+  };
+
+  const handleDeleteAiAsset = async (assetId: string) => {
+    const item = aiAssets[assetId];
+    if (!item) return;
+    const usedInScene = objects.some((o) => o.asset === assetId);
+    if (
+      usedInScene &&
+      !(await confirmDialog({
+        title: `Remove "${item.blueprint.name}"?`,
+        description: "Instances of this AI model in the current scene will also be removed.",
+        confirmText: "Remove",
+        danger: true,
+      }))
+    ) {
+      return;
+    }
+    if (usedInScene) {
+      history.set((cur) => cur.filter((o) => o.asset !== assetId));
+      setSelectedId((s) => (s && objects.find((o) => o.id === s)?.asset === assetId ? null : s));
+    }
+    setAiAssets((cur) => {
+      const next = { ...cur };
+      delete next[assetId];
+      persistAiBlueprints(next);
+      return next;
+    });
+    useGLTF.clear(item.url);
+    URL.revokeObjectURL(item.url);
+    notify.deleted(`Removed "${item.blueprint.name}".`);
+  };
+
   const addGroup = () => addObject({ kind: "group", label: labelFor("group"), position: floorPoint() });
   const addLight = (type: LightType) => {
     const p = floorPoint();
@@ -763,6 +925,12 @@ export function WorkPage() {
                   onImportLayout={importLayout}
                   onAddGroup={addGroup}
                   onAddLight={addLight}
+                  aiAssets={aiAssetList}
+                  aiGenerating={aiGenerating}
+                  aiError={aiError}
+                  onGenerateAiModel={handleGenerateAiModel}
+                  onDownloadAiAsset={handleDownloadAiAsset}
+                  onDeleteAiAsset={handleDeleteAiAsset}
                   loggedIn={!!user}
                   scenes={scenes}
                   currentSceneId={sceneId}

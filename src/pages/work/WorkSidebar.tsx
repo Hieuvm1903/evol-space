@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Dropdown, Empty, Segmented, Select, Slider, Switch, Tabs, Tag, Tooltip } from "antd";
+import { Button, Dropdown, Empty, Input, Segmented, Select, Slider, Switch, Tabs, Tag, Tooltip } from "antd";
 import {
-  ArrowLeftRight, BatteryCharging, Bot, Box, Boxes, Building2, ChevronDown, ChevronRight, Container, Cpu, Download,
-  FilePlus, Folder, FolderPlus, Layers, Lightbulb, LogIn, Monitor, Package, Plane, Plus, Route, ShoppingBag, Trash2,
-  Truck, User, Zap,
+  AlertCircle, ArrowLeftRight, BatteryCharging, Bot, Box, Boxes, Building2, ChevronDown, ChevronRight, Container, Cpu,
+  Download, FilePlus, Folder, FolderPlus, Layers, Lightbulb, LogIn, Monitor, Package, Plane, Plus, Route, ShoppingBag,
+  Sparkles, Trash2, Truck, User, Zap,
 } from "lucide-react";
 import { childrenIndex } from "../../lib/sceneMath";
+import type { BuiltAiAsset } from "./aiModelBuilder";
 import type {
   AssetTelemetry,
   CameraMode,
@@ -43,9 +44,16 @@ const assetIcon = (asset: string | null, size = 18) => {
     case "humanoid": return <User size={size} />;
     case "drone": return <Plane size={size} />;
     case "truck": return <Truck size={size} />;
-    default: return <Box size={size} />;
+    default: return asset?.startsWith("ai_") ? <Sparkles size={size} /> : <Box size={size} />;
   }
 };
+
+const AI_QUICK_PROMPTS = [
+  { label: "Delivery Rover", prompt: "Autonomous warehouse delivery rover with 4 rugged wheels, cyan lidar dome, and cargo tray" },
+  { label: "Charging Kiosk", prompt: "Industrial EV robot charging station kiosk with glowing cyan status screen and power cable" },
+  { label: "Gantry Crane", prompt: "Yellow overhead gantry frame crane with trolley beam and hanging lifting hook" },
+  { label: "Control Desk", prompt: "Futuristic operator control desk with curved dual monitors and illuminated console" },
+];
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 
@@ -54,6 +62,13 @@ interface Props {
   sets: ModelSetRow[]; activeSet: ModelSetRow | null; latestSet: ModelSetRow | null; assets: string[]; hasLayout: boolean;
   onSelectSet: (id: number) => void; onAddAsset: (asset: string) => void; onImportLayout: () => void;
   onAddGroup: () => void; onAddLight: (t: LightType) => void;
+  // AI 3D generator
+  aiAssets: BuiltAiAsset[];
+  aiGenerating: boolean;
+  aiError: string | null;
+  onGenerateAiModel: (prompt: string, targetHeight: number, autoPlace: boolean) => Promise<boolean>;
+  onDownloadAiAsset: (assetId: string) => void;
+  onDeleteAiAsset: (assetId: string) => void;
   // scenes
   loggedIn: boolean; scenes: SceneSummary[]; currentSceneId: number | null;
   onNewScene: () => void; onOpenScene: (id: number) => void; onDeleteScene: (s: SceneSummary) => void;
@@ -121,9 +136,155 @@ export default function WorkSidebar(p: Props) {
 // ------------------------------------------------------------------ models
 function ModelsTab(p: Props) {
   const isLatest = !!p.activeSet && !!p.latestSet && p.activeSet.id === p.latestSet.id;
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [targetHeight, setTargetHeight] = useState<number>(1.5);
+  const [autoPlace, setAutoPlace] = useState(true);
+
+  const handleGenerate = async () => {
+    const clean = aiPrompt.trim();
+    if (!clean || p.aiGenerating) return;
+    await p.onGenerateAiModel(clean, targetHeight, autoPlace);
+  };
+
   return (
     <div className="work-side-body">
-      <div className="work-field-label">Model set (from Supabase)</div>
+      <div className="work-ai-box">
+        <div className="work-ai-head">
+          <span className="work-ai-title">
+            <Sparkles size={13} />
+            AI 3D Generator
+          </span>
+          <span className="work-ai-badge">GLB</span>
+        </div>
+
+        <Input.TextArea
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
+              e.preventDefault();
+              handleGenerate();
+            }
+          }}
+          placeholder="Describe a 3D model (e.g. forklift, solar kiosk, robotic arm)..."
+          autoSize={{ minRows: 2, maxRows: 4 }}
+          maxLength={600}
+          disabled={p.aiGenerating}
+        />
+
+        <div className="work-ai-presets">
+          {AI_QUICK_PROMPTS.map((q) => (
+            <button
+              key={q.label}
+              type="button"
+              className="work-ai-preset-btn"
+              disabled={p.aiGenerating}
+              onClick={() => setAiPrompt(q.prompt)}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="work-ai-controls">
+          <Select
+            size="small"
+            value={targetHeight}
+            onChange={setTargetHeight}
+            disabled={p.aiGenerating}
+            style={{ width: 92 }}
+            options={[
+              { value: 0, label: "Auto size" },
+              { value: 0.8, label: "0.8 m" },
+              { value: 1.5, label: "1.5 m" },
+              { value: 2.5, label: "2.5 m" },
+              { value: 4.0, label: "4.0 m" },
+            ]}
+          />
+          <label className="work-ai-autoplace" title="Automatically place generated model at floor center">
+            <Switch size="small" checked={autoPlace} onChange={setAutoPlace} disabled={p.aiGenerating} />
+            <span>Place</span>
+          </label>
+          <Button
+            size="small"
+            type="primary"
+            className="btn-glow"
+            icon={<Sparkles size={12} />}
+            loading={p.aiGenerating}
+            disabled={!aiPrompt.trim()}
+            onClick={handleGenerate}
+            style={{ marginLeft: "auto" }}
+          >
+            Generate
+          </Button>
+        </div>
+
+        {p.aiError && (
+          <div className="work-ai-error">
+            <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{p.aiError}</span>
+          </div>
+        )}
+      </div>
+
+      {p.aiAssets.length > 0 && (
+        <>
+          <div className="work-field-label" style={{ marginTop: 14 }}>
+            AI Models ({p.aiAssets.length})
+          </div>
+          <div className="work-asset-grid">
+            {p.aiAssets.map((item) => (
+              <div
+                key={item.blueprint.id}
+                className="work-asset-card work-ai-asset-card cursor-target"
+                draggable
+                title={item.blueprint.description}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(DRAG_MIME, item.blueprint.id);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+              >
+                <span className="work-asset-icon work-ai-asset-icon">
+                  <Sparkles size={17} />
+                </span>
+                <span className="work-asset-name work-ai-asset-name">{item.blueprint.name}</span>
+                <span className="work-ai-asset-meta">
+                  {item.partCount}p · {item.bounds[1]}m
+                </span>
+                <Tooltip title="Add to scene">
+                  <button
+                    type="button"
+                    className="work-asset-add"
+                    onClick={() => p.onAddAsset(item.blueprint.id)}
+                  >
+                    <Plus size={14} />
+                  </button>
+                </Tooltip>
+                <Tooltip title="Download .glb">
+                  <button
+                    type="button"
+                    className="work-ai-mini-btn work-ai-dl"
+                    onClick={() => p.onDownloadAiAsset(item.blueprint.id)}
+                  >
+                    <Download size={11} />
+                  </button>
+                </Tooltip>
+                <Tooltip title="Remove from palette">
+                  <button
+                    type="button"
+                    className="work-ai-mini-btn work-ai-del"
+                    onClick={() => p.onDeleteAiAsset(item.blueprint.id)}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="work-field-label" style={{ marginTop: 14 }}>Model set (from Supabase)</div>
       <Select
         style={{ width: "100%" }} value={p.activeSet?.id} onChange={p.onSelectSet} placeholder="No model sets found"
         options={p.sets.map((s) => ({ value: s.id, label: `${s.name} · ${s.version} · ${when(s.created_at)}` }))}

@@ -1,0 +1,8 @@
+{
+  "name": "EVOL Space",
+  "description": "Interactive 3D spatial workspace, digital twin author, and ASCII 3D showcase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -28,9 +28,44 @@ export interface SceneObjectData {
   script?: string;                // behaviour script, run in Play mode
 }
 
+export type AiPartShape =
+  | "box"
+  | "cylinder"
+  | "sphere"
+  | "cone"
+  | "torus"
+  | "capsule"
+  | "ring"
+  | "octahedron";
+
+export interface AiModelPart {
+  name: string;
+  shape: AiPartShape;
+  position: Vec3;
+  rotationDeg: Vec3;
+  scale: Vec3;
+  color: string;
+  roughness: number;
+  metalness: number;
+  emissive?: string;
+  emissiveIntensity?: number;
+  opacity?: number;
+}
+
+export interface AiModelBlueprint {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  targetHeightMeters: number;
+  parts: AiModelPart[];
+  createdAt: string;
+}
+
 export interface SceneDoc {
   version: 2;
   objects: SceneObjectData[];
+  aiBlueprints?: Record<string, AiModelBlueprint>;
 }
 
 export interface ModelSetRow {
@@ -48,7 +83,7 @@ export interface SceneRow {
   name: string;
   model_set_name: string | null;
   model_set_version: string | null;
-  data: { version: number; objects: unknown[] }; // v1 docs are migrated on load (see sceneMath.normalizeObject)
+  data: { version: number; objects: unknown[]; aiBlueprints?: Record<string, AiModelBlueprint> }; // v1 docs are migrated on load (see sceneMath.normalizeObject)
   created_at: string;
   updated_at: string;
 }

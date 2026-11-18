@@ -42,6 +42,45 @@
 .work-asset-add { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--evol-border); background: transparent; color: var(--evol-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .work-asset-add:hover { color: #fff; border-color: var(--evol-green); }
 
+/* ---------- AI 3D model generator ---------- */
+.work-ai-box {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
+  border-radius: 12px; border: 1px solid rgba(139,111,245,.36);
+  background: linear-gradient(160deg, rgba(139,111,245,.1), rgba(34,211,238,.05));
+}
+.work-ai-head { display: flex; align-items: center; justify-content: space-between; }
+.work-ai-title { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 600; color: var(--evol-text); letter-spacing: .02em; }
+.work-ai-title svg { color: #22d3ee; }
+.work-ai-badge { font-size: .64rem; font-weight: 700; color: #22d3ee; letter-spacing: .06em; }
+.work-ai-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.work-ai-preset-btn {
+  padding: 2px 7px; border-radius: 6px; border: 1px solid var(--evol-border);
+  background: rgba(255,255,255,.03); color: var(--evol-muted); font-size: .7rem;
+  cursor: pointer; transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.work-ai-preset-btn:hover:not(:disabled) { border-color: rgba(34,211,238,.6); color: #fff; background: rgba(34,211,238,.1); }
+.work-ai-preset-btn:disabled { opacity: .5; cursor: not-allowed; }
+.work-ai-controls { display: flex; align-items: center; gap: 8px; }
+.work-ai-autoplace { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; color: var(--evol-muted); cursor: pointer; }
+.work-ai-error {
+  display: flex; align-items: flex-start; gap: 6px; padding: 7px 8px; border-radius: 8px;
+  border: 1px solid rgba(248,113,113,.45); background: rgba(239,68,68,.12);
+  color: #fecaca; font-size: .72rem; line-height: 1.35;
+}
+.work-ai-asset-card { padding-bottom: 8px; border-color: rgba(34,211,238,.28); }
+.work-ai-asset-icon { background: linear-gradient(135deg, #22d3ee, #8b6ff5); }
+.work-ai-asset-name { width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.work-ai-asset-meta { font-size: .66rem; color: var(--evol-muted); margin-top: -3px; }
+.work-ai-mini-btn {
+  position: absolute; top: 6px; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--evol-border); background: rgba(10,10,18,.6); color: var(--evol-muted);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.work-ai-dl { left: 6px; }
+.work-ai-dl:hover { color: #22d3ee; border-color: #22d3ee; }
+.work-ai-del { left: 29px; }
+.work-ai-del:hover { color: #f87171; border-color: #f87171; }
+
 .work-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .work-list-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; cursor: pointer; border: 1px solid var(--evol-border); background: rgba(255,255,255,.02); }
 .work-list-row:hover { border-color: rgba(139,111,245,.5); }
