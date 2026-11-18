@@ -118,8 +118,6 @@ export interface ViewPrefs {
   space: "world" | "local"; // transform-gizmo space
   focusSelection: boolean;  // orbit around the selected object
   forceWebGL: boolean;      // skip WebGPU and use the WebGL2 backend (troubleshooting)
-  autoTransparentOccluding: boolean; // auto-fade objects blocking camera line-of-sight
-  occlusionOpacity: number; // opacity applied to view-blocking objects (0.08..0.6)
   cameraMode: CameraMode;   // perspective (depth) vs orthographic (parallel projection)
 }
 

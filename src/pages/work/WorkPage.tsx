@@ -102,8 +102,6 @@ const DEFAULT_PREFS: ViewPrefs = {
   cameraMode: "perspective",
   focusSelection: true,
   forceWebGL: false,
-  autoTransparentOccluding: true,
-  occlusionOpacity: 0.22,
 };
 const DEFAULT_UI = { all: true, side: true, toolbar: true, inspector: true, log: true };
 const DEFAULT_OVERLAYS: TwinOverlayPrefs = {
@@ -1236,8 +1234,6 @@ export function WorkPage() {
               onCameraPreset={handleCameraPreset}
               overlays={overlays}
               onOverlays={updateOverlays}
-              xRayOccluding={prefs.autoTransparentOccluding}
-              onToggleXRay={() => updatePrefs({ autoTransparentOccluding: !prefs.autoTransparentOccluding })}
               hasSelection={!!selected}
               replayFrames={replayFrames}
               replayIndex={replayIndex}

@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   Camera,
   Crosshair,
-  Eye,
   History,
   Layers,
   MapPin,
@@ -107,8 +106,6 @@ interface ControlsBarProps {
   onCameraPreset: (preset: CameraPreset) => void;
   overlays: TwinOverlayPrefs;
   onOverlays: (patch: Partial<TwinOverlayPrefs>) => void;
-  xRayOccluding: boolean;
-  onToggleXRay: () => void;
   hasSelection: boolean;
   replayFrames: ReplayFrame[];
   replayIndex: number | null;
@@ -130,8 +127,6 @@ export function TwinControlsBar({
   onCameraPreset,
   overlays,
   onOverlays,
-  xRayOccluding,
-  onToggleXRay,
   hasSelection,
   replayFrames,
   replayIndex,
@@ -223,14 +218,6 @@ export function TwinControlsBar({
             title="Toggle floating 3D asset telemetry badges"
           >
             <TagIcon size={12} /> Labels
-          </button>
-          <button
-            type="button"
-            className={`twin-dock-btn${xRayOccluding ? " active" : ""}`}
-            onClick={onToggleXRay}
-            title="Auto-fade objects blocking camera line of sight"
-          >
-            <Eye size={12} /> X-Ray
           </button>
         </div>
       </div>

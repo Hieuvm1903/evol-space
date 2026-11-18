@@ -1,20 +1,13 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { JointDef, LightProps, SceneObjectData, Vec3, ViewPrefs } from "../../lib/workTypes";
 import { useAssetInfo, type AssetInfo } from "./assetInfo";
 import type { LodPart } from "./lodCompute";
-import {
-  installOcclusionShader,
-  stepOcclusionMaterial,
-  type OcclusionShaderHandle,
-} from "./occlusionShader";
 import { applyJoint, buildRig } from "./rig";
 import type { Runtime } from "./runtime";
 
 const D2R = Math.PI / 180;
-const FLOOR_NAME_RE = /floor|lane|track|ground|slab|apron/i;
 
 /** Per-model handles used by the visibility system (distance culling + calculated 3-tier LOD swap). */
 export interface VisEntry {
@@ -41,7 +34,6 @@ export interface NodeCtx {
   prefs: ViewPrefs;
   epoch: number;
   vis: React.MutableRefObject<Map<string, VisEntry>>;
-  occludedIds: React.MutableRefObject<Set<string>>;
   onJointDefs: (asset: string, defs: JointDef[]) => void;
 }
 
@@ -75,8 +67,6 @@ export function DynNode({ id, root, ctx }: { id: string; root: boolean; ctx: Nod
       {...(tf as any)}
       onClick={(e) => {
         if (e.delta > 4) return;
-        // Let clicks pass through dynamically occluded blockers to objects behind them
-        if (ctx.occludedIds.current.has(id) && !selected) return;
         e.stopPropagation();
         ctx.onSelect(id);
       }}
@@ -98,8 +88,8 @@ export function DynNode({ id, root, ctx }: { id: string; root: boolean; ctx: Nod
 }
 
 // ---------------------------------------------------------------------------
-// A model: clones the Supabase glTF tree, builds calculated LOD1/LOD2 groups,
-// and manages smooth manual + occlusion opacity transitions.
+// A model: clones the glTF tree, builds calculated LOD1/LOD2 groups,
+// and manages manual per-object opacity.
 // ---------------------------------------------------------------------------
 interface ModelProps {
   o: SceneObjectData; url: string; ctx: NodeCtx; selected: boolean;
@@ -114,23 +104,25 @@ function ModelContent(props: ModelProps) {
 
 interface ClonedMatEntry {
   mat: THREE.Material;
-  handle: OcclusionShaderHandle;
-  isFloor: boolean;
+  baseOpacity: number;
+  baseTransparent: boolean;
+  baseDepthWrite: boolean;
 }
 
-function cloneObjectMaterials(root: THREE.Object3D, objId: string, assetName: string | null): ClonedMatEntry[] {
+function cloneObjectMaterials(root: THREE.Object3D): ClonedMatEntry[] {
   const entries: ClonedMatEntry[] = [];
   root.traverse((x) => {
     const m = x as THREE.Mesh;
     if (!m.isMesh) return;
-    const isFloor = FLOOR_NAME_RE.test(m.name || "") || FLOOR_NAME_RE.test(assetName || "");
-    m.userData.twinObjId = objId;
-    m.userData.isFloor = isFloor;
     const srcMats = Array.isArray(m.material) ? m.material : [m.material];
     const cloned = srcMats.map((src) => {
       const c = src.clone();
-      const handle = installOcclusionShader(c);
-      entries.push({ mat: c, handle, isFloor });
+      entries.push({
+        mat: c,
+        baseOpacity: c.opacity,
+        baseTransparent: c.transparent,
+        baseDepthWrite: c.depthWrite,
+      });
       return c;
     });
     m.material = Array.isArray(m.material) ? cloned : cloned[0];
@@ -140,8 +132,6 @@ function cloneObjectMaterials(root: THREE.Object3D, objId: string, assetName: st
 
 function buildLodGroup(
   parts: LodPart[],
-  objId: string,
-  assetName: string | null,
   castShadow: boolean,
   entries: ClonedMatEntry[],
 ): THREE.Group {
@@ -149,16 +139,17 @@ function buildLodGroup(
   group.visible = false;
   for (const p of parts) {
     const mat = p.material.clone();
-    const isFloor = p.isFloor || FLOOR_NAME_RE.test(assetName || "");
-    const handle = installOcclusionShader(mat);
-    entries.push({ mat, handle, isFloor });
+    entries.push({
+      mat,
+      baseOpacity: mat.opacity,
+      baseTransparent: mat.transparent,
+      baseDepthWrite: mat.depthWrite,
+    });
     const mesh = new THREE.Mesh(p.geometry, mat);
     mesh.matrixAutoUpdate = false;
     mesh.matrix.copy(p.matrix);
     mesh.castShadow = castShadow;
     mesh.receiveShadow = true;
-    mesh.userData.twinObjId = objId;
-    mesh.userData.isFloor = isFloor;
     group.add(mesh);
   }
   return group;
@@ -169,16 +160,16 @@ function ModelRigRenderer({ o, ctx, selected, groupRef, contentRef, scene, info 
   const rig = useMemo(() => buildRig(clone), [clone]);
 
   const { lod1Group, lod2Group, matEntries } = useMemo(() => {
-    const entries = cloneObjectMaterials(clone, o.id, o.asset);
+    const entries = cloneObjectMaterials(clone);
     const l1Parts = info.lod1.parts.length > 0 ? info.lod1.parts : info.parts;
     const l2Parts = info.lod2.parts.length > 0 ? info.lod2.parts : l1Parts;
-    const l1 = buildLodGroup(l1Parts, o.id, o.asset, true, entries);
-    const l2 = buildLodGroup(l2Parts, o.id, o.asset, false, entries);
+    const l1 = buildLodGroup(l1Parts, true, entries);
+    const l2 = buildLodGroup(l2Parts, false, entries);
     return { lod1Group: l1, lod2Group: l2, matEntries: entries };
-  }, [clone, info, o.id, o.asset]);
+  }, [clone, info]);
 
   const helper = useMemo(() => new THREE.Box3Helper(info.bbox, 0x22d3ee), [info]);
-  const { runtime, vis, occludedIds, onJointDefs, prefs } = ctx;
+  const { runtime, vis, onJointDefs, prefs } = ctx;
 
   // Dispose only the cloned materials (geometries belong to cached AssetInfo / GLTF)
   useEffect(() => () => {
@@ -226,22 +217,22 @@ function ModelRigRenderer({ o, ctx, selected, groupRef, contentRef, scene, info 
     };
   }, [o.id, rig, clone, lod1Group, lod2Group, info, runtime, vis, groupRef, contentRef]);
 
-  // Smoothly interpolate GLSL occlusion alpha-blending shader + manual object opacity
+  // Apply manual per-object opacity from inspector slider
   const manualOpacity = o.opacity ?? 1;
-  useFrame((_, dt) => {
-    const blocked = prefs.autoTransparentOccluding && occludedIds.current.has(o.id);
+  useEffect(() => {
+    const mult = THREE.MathUtils.clamp(manualOpacity, 0, 1);
+    const isTranslucent = mult < 0.995;
     for (let i = 0; i < matEntries.length; i++) {
-      const entry = matEntries[i];
-      stepOcclusionMaterial(
-        entry.mat,
-        entry.handle,
-        blocked && !entry.isFloor,
-        prefs.occlusionOpacity,
-        manualOpacity,
-        dt,
-      );
+      const e = matEntries[i];
+      const nextTransparent = e.baseTransparent || isTranslucent;
+      if (e.mat.transparent !== nextTransparent) {
+        e.mat.transparent = nextTransparent;
+        e.mat.needsUpdate = true;
+      }
+      e.mat.opacity = e.baseOpacity * mult;
+      e.mat.depthWrite = isTranslucent ? false : e.baseDepthWrite;
     }
-  });
+  }, [matEntries, manualOpacity]);
 
   return (
     <>

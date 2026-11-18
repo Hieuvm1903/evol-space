@@ -528,19 +528,6 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
           ]}
         />
       </div>
-      {sw("Transparent if blocking view", "autoTransparentOccluding", "Automatically fades walls & racks between camera and focus point")}
-      {prefs.autoTransparentOccluding && (
-        <div className="work-pref-slider">
-          <span>{Math.round(prefs.occlusionOpacity * 100)}%</span>
-          <Slider
-            min={8}
-            max={60}
-            step={2}
-            value={Math.round(prefs.occlusionOpacity * 100)}
-            onChange={(v) => onPrefs({ occlusionOpacity: v / 100 })}
-          />
-        </div>
-      )}
       {sw("Show gizmos", "showGizmos", "View cube, light icons, group axes, selection box")}
       {sw("Editor lighting", "defaultLight", "Turn off to see only the lights you added")}
       {sw("Orbit around selection", "focusSelection")}

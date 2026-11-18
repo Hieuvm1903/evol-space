@@ -81,6 +81,7 @@ html, body {
 
 #root {
   height: 100vh;       /* was min-height — must be a hard cap, not a floor */
+  height: 100dvh;
   overflow: hidden;     /* stop growth from ever reaching <body> */
   display: flex;
   flex-direction: column;
@@ -93,6 +94,9 @@ html, body {
   overflow-y: auto;     /* normal pages (History, Music, etc.) scroll HERE now, not <body> */
   display: flex;
   flex-direction: column;
+}
+.app-content:has(> .work-page-shell) {
+  overflow: hidden;
 }
 ::selection { background: rgba(139, 111, 245, 0.4); color: #fff; }
 .navbar-logo-o {
