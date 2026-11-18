@@ -18,6 +18,7 @@ import GalaxyBackground from "./components/GalaxyBackground";
 import { MapPage } from "./pages/map/MapPage";
 import { PhotoboothPage } from "./pages/PhotoboothPage";
 import { WorkPage } from "./pages/work/WorkPage";
+import { AsciiPage } from "./pages/ascii/AsciiPage";
 import { SharedPlacesPage } from "./pages/SharedPlacesPage";
 import { SharedAlbumPage } from "./pages/SharedAlbumPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -44,7 +45,7 @@ const evolAntdTheme = {
 };
 function AppBody() {
   const location = useLocation();
-  const hideGalaxy = location.pathname === "/work";
+  const hideGalaxy = location.pathname === "/work" || location.pathname === "/ascii";
   return (
     <>
       {!hideGalaxy && <GalaxyBackground />}
@@ -62,6 +63,7 @@ function AppBody() {
           <Route path="/blank" element={<BlankPage />} />
           <Route path="/photobooth" element={<PhotoboothPage />} />
           <Route path="/work" element={<WorkPage />} />
+          <Route path="/ascii" element={<AsciiPage />} />
           <Route path="/share/album/:token" element={<SharedAlbumPage />} />
 <Route path="/share/places/:token" element={<SharedPlacesPage />} />
         </Routes>

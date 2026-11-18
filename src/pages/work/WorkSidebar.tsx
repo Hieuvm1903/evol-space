@@ -288,6 +288,28 @@ function ScenesTab(p: Props) {
 
 // ------------------------------------------------------------------ view / performance
 function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
+  const [webgpuStatus, setWebgpuStatus] = useState<string>("checking…");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const nav = navigator as Navigator & { gpu?: { requestAdapter?: () => Promise<unknown | null> } };
+      if (!nav.gpu?.requestAdapter) {
+        if (!cancelled) setWebgpuStatus("Not supported");
+        return;
+      }
+      try {
+        const adapter = await nav.gpu.requestAdapter();
+        if (!cancelled) setWebgpuStatus(adapter ? "Available" : "No adapter");
+      } catch {
+        if (!cancelled) setWebgpuStatus("Unavailable");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const sw = (label: string, key: keyof ViewPrefs, hint?: string) => (
     <div className="work-pref-row" title={hint}>
       <span>{label}</span>
@@ -298,10 +320,20 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
     <div className="work-side-body">
       <div className="work-field-label">Renderer</div>
       <div className="work-pref-row">
-        <span>Backend</span>
-        <Tag color={backend === "WebGPU" ? "green" : backend.startsWith("error") ? "red" : "gold"} style={{ marginRight: 0 }}>{backend || "starting…"}</Tag>
+        <span>Active backend</span>
+        <Tag color={backend.startsWith("error") ? "red" : backend ? "green" : "gold"} style={{ marginRight: 0 }}>
+          {backend || "starting…"}
+        </Tag>
       </div>
-      {sw("Force WebGL2 backend", "forceWebGL", "Skip WebGPU — for troubleshooting")}
+      <div className="work-pref-row">
+        <span>Browser WebGPU</span>
+        <Tag color={webgpuStatus === "Available" ? "cyan" : "default"} style={{ marginRight: 0 }}>
+          {webgpuStatus}
+        </Tag>
+      </div>
+      <div className="work-hint">
+        3D viewport uses WebGL2 so PBR, shadows, and GLSL shaders run across all browsers even when WebGPU is unavailable.
+      </div>
 
       <div className="work-field-label" style={{ marginTop: 12 }}>Performance</div>
       {sw("Instance static objects", "instancing", "Static objects share a few draw calls via InstancedMesh")}

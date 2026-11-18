@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound, type LucideIcon, Hammer, UserRound } from "lucide-react";
+import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound, type LucideIcon, Hammer, Terminal, UserRound } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import GalaxyRing from "./ImperfectCircle";
 
@@ -11,6 +11,7 @@ const NAV_ITEMS: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Photobooth", path: "/photobooth", icon: Camera },
   { label: "Blank", path: "/blank", icon: KeyRound },
   { label: "Work", path: "/work", icon: Hammer },
+  { label: "ASCII 3D", path: "/ascii", icon: Terminal },
 ];
 
 export function NavBar() {

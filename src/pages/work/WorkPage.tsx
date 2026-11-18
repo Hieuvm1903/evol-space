@@ -193,10 +193,6 @@ export function WorkPage() {
       saveJson(PREFS_KEY, n);
       return n;
     });
-    if ("forceWebGL" in patch) {
-      setBackend("");
-      setStats(null);
-    }
   }, []);
 
   const updateUi = useCallback((patch: Partial<typeof DEFAULT_UI>) => {

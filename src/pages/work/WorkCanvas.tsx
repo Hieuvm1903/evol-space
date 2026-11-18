@@ -654,12 +654,18 @@ function WorkCanvasInner(p: WorkCanvasProps) {
       camera={{ position: [14.5, 11.5, 17.5], fov: 42, near: 0.05, far: 300 }}
       gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onCreated={({ gl }) => {
+        const ctx = gl.getContext();
+        const label =
+          typeof WebGL2RenderingContext !== "undefined" && ctx instanceof WebGL2RenderingContext
+            ? "WebGL2"
+            : "WebGL1";
+        onBackend(label);
         gl.domElement.addEventListener("webglcontextlost", (e) => {
           e.preventDefault();
           onBackend("error: context lost");
         });
         gl.domElement.addEventListener("webglcontextrestored", () => {
-          onBackend("WebGL2");
+          onBackend(label);
         });
       }}
       // Clicking the transform gizmo counts as "clicking nothing" to r3f — ignore that.
