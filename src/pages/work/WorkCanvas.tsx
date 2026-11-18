@@ -16,6 +16,8 @@ import type {
   WorkspaceMode,
   ZoneDef,
 } from "../../lib/workTypes";
+import { computeLodTier } from "./lodCompute";
+import { updateOcclusionShaderUniforms } from "./occlusionShader";
 import type { Runtime } from "./runtime";
 import StaticBatches, { type LiveDrag, type PerfCounters } from "./StaticBatches";
 import { DynNode, StaticProxy, type NodeCtx, type VisEntry } from "./SceneNodes";
@@ -125,7 +127,209 @@ function FocusController({ selectedId, enabled, getObject, home }: {
   return null;
 }
 
-/** Distance culling + LOD swap for dynamic (non-instanced) models. */
+function setsEqual(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+/**
+ * Multi-ray camera-to-focus occlusion detector (~15 Hz, with 180 ms hysteresis).
+ * Flags static/dynamic objects and individual single-instance structural parts (walls, trusses)
+ * that sit directly between the camera and the focus point, leaving floors/lanes solid.
+ */
+function OcclusionController({
+  enabled,
+  selectedId,
+  worlds,
+  vis,
+  runtime,
+  occludedIds,
+  occludedParts,
+  occlusionSeq,
+}: {
+  enabled: boolean;
+  selectedId: string | null;
+  worlds: Map<string, THREE.Matrix4>;
+  vis: React.MutableRefObject<Map<string, VisEntry>>;
+  runtime: Runtime;
+  occludedIds: React.MutableRefObject<Set<string>>;
+  occludedParts: React.MutableRefObject<Set<string>>;
+  occlusionSeq: React.MutableRefObject<number>;
+}) {
+  const scene = useThree((s) => s.scene);
+  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3 } | null;
+
+  const accum = useRef(0);
+  const clockRef = useRef(0);
+  const expiryIds = useRef(new Map<string, number>());
+  const expiryParts = useRef(new Map<string, number>());
+
+  const scratch = useMemo(() => ({
+    ray: new THREE.Raycaster(),
+    targetPos: new THREE.Vector3(),
+    dir: new THREE.Vector3(),
+    up: new THREE.Vector3(0, 1, 0),
+    right: new THREE.Vector3(),
+    orthoUp: new THREE.Vector3(),
+    samplePts: [
+      new THREE.Vector3(),
+      new THREE.Vector3(),
+      new THREE.Vector3(),
+      new THREE.Vector3(),
+      new THREE.Vector3(),
+    ],
+    hits: [] as THREE.Intersection[],
+    seenIds: new Set<string>(),
+    seenParts: new Set<string>(),
+    nextIds: new Set<string>(),
+    nextParts: new Set<string>(),
+  }), []);
+
+  useEffect(() => {
+    if (!enabled && (occludedIds.current.size > 0 || occludedParts.current.size > 0)) {
+      expiryIds.current.clear();
+      expiryParts.current.clear();
+      occludedIds.current = new Set();
+      occludedParts.current = new Set();
+      occlusionSeq.current++;
+    }
+  }, [enabled, occludedIds, occludedParts, occlusionSeq]);
+
+  useFrame(({ camera }, dt) => {
+    if (!enabled) return;
+    clockRef.current += dt;
+
+    // Resolve view target: selected entity/object if any, else orbit target
+    const s = scratch;
+    let hasTarget = false;
+    if (selectedId) {
+      const ent = runtime.byId.get(selectedId);
+      const visEntry = vis.current.get(selectedId);
+      if (ent) {
+        s.targetPos.copy(ent.pos);
+        s.targetPos.y = Math.max(s.targetPos.y + 0.55, 0.55);
+        hasTarget = true;
+      } else if (visEntry) {
+        s.targetPos.copy(visEntry.center).applyMatrix4(visEntry.group.matrixWorld);
+        hasTarget = true;
+      } else {
+        const wm = worlds.get(selectedId);
+        if (wm) {
+          s.targetPos.setFromMatrixPosition(wm);
+          s.targetPos.y = Math.max(s.targetPos.y + 0.65, 0.65);
+          hasTarget = true;
+        }
+      }
+    }
+    if (!hasTarget) {
+      if (controls) {
+        s.targetPos.copy(controls.target);
+        s.targetPos.y = Math.max(s.targetPos.y, 0.55);
+      } else {
+        s.targetPos.set(0, 0.8, 2.2);
+      }
+    }
+
+    // Update shared GLSL sightline corridor uniforms at full frame rate
+    updateOcclusionShaderUniforms(camera.position, s.targetPos, selectedId ? 2.2 : 2.8);
+
+    accum.current += dt;
+    if (accum.current < 0.05) return;
+    accum.current = 0;
+
+    s.dir.subVectors(s.targetPos, camera.position);
+    const dist = s.dir.length();
+    if (dist < 1.2) return;
+    s.dir.multiplyScalar(1 / dist);
+
+    // Orthonormal basis perpendicular to view ray for 5-point diamond sampling
+    s.right.crossVectors(s.dir, s.up);
+    if (s.right.lengthSq() < 1e-4) s.right.set(1, 0, 0);
+    else s.right.normalize();
+    s.orthoUp.crossVectors(s.right, s.dir).normalize();
+
+    s.samplePts[0].copy(s.targetPos);
+    s.samplePts[1].copy(s.targetPos).addScaledVector(s.right, 0.48);
+    s.samplePts[2].copy(s.targetPos).addScaledVector(s.right, -0.48);
+    s.samplePts[3].copy(s.targetPos).addScaledVector(s.orthoUp, 0.36);
+    s.samplePts[4].copy(s.targetPos).addScaledVector(s.orthoUp, -0.36);
+
+    s.seenIds.clear();
+    s.seenParts.clear();
+
+    const maxFar = Math.max(0.25, dist - 0.45);
+    s.ray.near = 0.05;
+
+    for (let i = 0; i < s.samplePts.length; i++) {
+      const pt = s.samplePts[i];
+      s.dir.subVectors(pt, camera.position);
+      const rayDist = s.dir.length();
+      if (rayDist < 0.4) continue;
+      s.dir.multiplyScalar(1 / rayDist);
+      s.ray.far = Math.min(maxFar, rayDist - 0.38);
+      s.ray.set(camera.position, s.dir);
+
+      s.hits.length = 0;
+      s.ray.intersectObjects(scene.children, true, s.hits);
+
+      for (let h = 0; h < s.hits.length; h++) {
+        const hit = s.hits[h];
+        const obj = hit.object;
+        if (!obj.visible) continue;
+        if (obj.userData?.isFloor || obj.userData?.isGhost) continue;
+
+        if (obj.userData?.twinBatch) {
+          const idsRef = obj.userData.instanceIdsRef as React.MutableRefObject<string[]> | undefined;
+          const hitId = hit.instanceId !== undefined ? idsRef?.current[hit.instanceId] : undefined;
+          if (!hitId || hitId === selectedId) continue;
+
+          if (idsRef && idsRef.current.length === 1) {
+            if (obj.userData.isLod0) {
+              s.seenParts.add(`${obj.userData.twinAsset}:${obj.userData.partIndex}`);
+            } else {
+              s.seenIds.add(hitId);
+            }
+          } else {
+            s.seenIds.add(hitId);
+          }
+        } else if (obj.userData?.twinObjId) {
+          const hitId = obj.userData.twinObjId as string;
+          if (hitId && hitId !== selectedId) {
+            s.seenIds.add(hitId);
+          }
+        }
+      }
+    }
+
+    const now = clockRef.current;
+    const hold = 0.18;
+    for (const id of s.seenIds) expiryIds.current.set(id, now + hold);
+    for (const part of s.seenParts) expiryParts.current.set(part, now + hold);
+
+    s.nextIds.clear();
+    for (const [id, exp] of expiryIds.current.entries()) {
+      if (exp >= now && id !== selectedId) s.nextIds.add(id);
+      else expiryIds.current.delete(id);
+    }
+
+    s.nextParts.clear();
+    for (const [part, exp] of expiryParts.current.entries()) {
+      if (exp >= now) s.nextParts.add(part);
+      else expiryParts.current.delete(part);
+    }
+
+    if (!setsEqual(s.nextIds, occludedIds.current) || !setsEqual(s.nextParts, occludedParts.current)) {
+      occludedIds.current = new Set(s.nextIds);
+      occludedParts.current = new Set(s.nextParts);
+      occlusionSeq.current++;
+    }
+  });
+
+  return null;
+}
+
+/** Distance culling + calculated multi-tier LOD swap for dynamic (non-instanced) models. */
 function DynamicVisibility({ vis, prefs, selectedId }: {
   vis: React.MutableRefObject<Map<string, VisEntry>>; prefs: ViewPrefs; selectedId: string | null;
 }) {
@@ -134,15 +338,17 @@ function DynamicVisibility({ vis, prefs, selectedId }: {
   useFrame(({ camera }) => {
     if (++n.current % 3) return;
     tmp.cam.setFromMatrixPosition(camera.matrixWorld);
+    const fov = (camera as THREE.PerspectiveCamera).fov ?? 42;
     for (const e of vis.current.values()) {
       const wm = e.group.matrixWorld;
       tmp.c.copy(e.center).applyMatrix4(wm);
       const r = e.radius * wm.getMaxScaleOnAxis();
       const d = tmp.c.distanceTo(tmp.cam);
-      const far = prefs.lod && d > prefs.lodDistance && e.id !== selectedId;
+      const tier = prefs.lod && e.id !== selectedId ? computeLodTier(d, r, prefs.lodDistance, fov) : 0;
       e.content.visible = !(prefs.distanceCull && d - r > prefs.cullDistance);
-      e.detail.visible = !far;
-      e.proxy.visible = far;
+      e.detail.visible = tier === 0;
+      e.lod1.visible = tier === 1;
+      e.lod2.visible = tier === 2;
     }
   });
   return null;
@@ -182,11 +388,23 @@ function StatsProbe({ perf, vis, onStats }: {
     t.current += dt;
     if (t.current < 0.5) return;
     t.current = 0;
-    let instNear = 0, instFar = 0, instCulled = 0, instTotal = 0;
-    for (const v of Object.values(perf.current)) { instNear += v.near; instFar += v.far; instCulled += v.culled; instTotal += v.total; }
+    let instNear = 0, instMid = 0, instFar = 0, instCulled = 0, instTotal = 0;
+    for (const v of Object.values(perf.current)) {
+      instNear += v.near;
+      instMid += v.mid;
+      instFar += v.far;
+      instCulled += v.culled;
+      instTotal += v.total;
+    }
     onStats({
-      calls: gl.info?.render?.calls ?? 0, triangles: gl.info?.render?.triangles ?? 0,
-      instNear, instFar, instCulled, instTotal, dynamic: vis.current.size,
+      calls: gl.info?.render?.calls ?? 0,
+      triangles: gl.info?.render?.triangles ?? 0,
+      instNear,
+      instMid,
+      instFar,
+      instCulled,
+      instTotal,
+      dynamic: vis.current.size,
     });
   });
   return null;
@@ -242,6 +460,9 @@ function WorkCanvasInner(p: WorkCanvasProps) {
   const perf = useRef<PerfCounters>({});
   const live = useRef<LiveDrag | null>(null);
   const dirty = useRef(0);
+  const occludedIds = useRef<Set<string>>(new Set());
+  const occludedParts = useRef<Set<string>>(new Set());
+  const occlusionSeq = useRef(0);
 
   useEffect(() => { onBackend("WebGL2"); }, [onBackend]);
 
@@ -255,24 +476,30 @@ function WorkCanvasInner(p: WorkCanvasProps) {
     setSelGroup(selectedId ? groups.current.get(selectedId) ?? null : null);
   }, [selectedId]);
 
-  // --- which objects are drawn as nodes, which are instanced
+  // --- Route dynamic objects (non-static, runtime-forced, or manually transparent) to DynNode
   const byId = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects]);
   const children = useMemo(() => childrenIndex(objects), [objects]);
   const dyn = useMemo(() => {
     const s = new Set<string>();
-    for (const o of objects) if (!staticIds.has(o.id) || forced.has(o.id)) s.add(o.id);
+    for (const o of objects) {
+      const hasCustomOpacity = o.opacity !== undefined && o.opacity < 0.99;
+      if (!staticIds.has(o.id) || forced.has(o.id) || hasCustomOpacity) s.add(o.id);
+    }
     return s;
   }, [objects, staticIds, forced]);
   const roots = useMemo(() => objects.filter((o) => dyn.has(o.id) && !(o.parentId && dyn.has(o.parentId))), [objects, dyn]);
-  const statics = useMemo(() => objects.filter((o) => staticIds.has(o.id)), [objects, staticIds]);
+  const statics = useMemo(
+    () => objects.filter((o) => staticIds.has(o.id) && !(o.opacity !== undefined && o.opacity < 0.99)),
+    [objects, staticIds],
+  );
 
   const ctx: NodeCtx = useMemo(() => ({
     byId, children, dyn, worlds, assetUrls: p.assetUrls, selectedId, onSelect: p.onSelect, register,
-    runtime: p.runtime, prefs, epoch: p.epoch, vis, onJointDefs: p.onJointDefs,
+    runtime: p.runtime, prefs, epoch: p.epoch, vis, occludedIds, onJointDefs: p.onJointDefs,
   }), [byId, children, dyn, worlds, p.assetUrls, selectedId, p.onSelect, register, p.runtime, prefs, p.epoch, p.onJointDefs]);
 
   const sel = selectedId ? byId.get(selectedId) ?? null : null;
-  const selIsStatic = !!sel && staticIds.has(sel.id) && !forced.has(sel.id);
+  const selIsStatic = !!sel && staticIds.has(sel.id) && !dyn.has(sel.id);
 
   // --- batches: culling / LOD settings (Infinity switches a stage off)
   const cfg = useMemo(() => ({
@@ -324,8 +551,20 @@ function WorkCanvasInner(p: WorkCanvasProps) {
       {prefs.showGizmos && p.workspaceMode === "author" && <axesHelper args={[1.2]} />}
 
       <StaticBatches
-        statics={statics} worlds={worlds} assetUrls={p.assetUrls} hidden={forced} cfg={cfg}
-        live={live} dirty={dirty} perf={perf} onSelect={p.onSelect}
+        statics={statics}
+        byId={byId}
+        worlds={worlds}
+        assetUrls={p.assetUrls}
+        hidden={forced}
+        cfg={cfg}
+        live={live}
+        dirty={dirty}
+        perf={perf}
+        occludedIds={occludedIds}
+        occludedParts={occludedParts}
+        occlusionSeq={occlusionSeq}
+        occlusionOpacity={prefs.occlusionOpacity}
+        onSelect={p.onSelect}
       />
 
       {roots.map((o) => <DynNode key={`${o.id}:${p.epoch}`} id={o.id} root ctx={ctx} />)}
@@ -396,6 +635,16 @@ function WorkCanvasInner(p: WorkCanvasProps) {
         </GizmoHelper>
       )}
 
+      <OcclusionController
+        enabled={prefs.autoTransparentOccluding}
+        selectedId={selectedId}
+        worlds={worlds}
+        vis={vis}
+        runtime={p.runtime}
+        occludedIds={occludedIds}
+        occludedParts={occludedParts}
+        occlusionSeq={occlusionSeq}
+      />
       <DynamicVisibility vis={vis} prefs={prefs} selectedId={selectedId} />
       <RuntimeDriver
         runtime={p.runtime}

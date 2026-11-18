@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Input, Button, Popconfirm, Empty, Skeleton, Tooltip, Dropdown, message } from "antd";
+import { App, Input, Button, Popconfirm, Empty, Skeleton, Tooltip, Dropdown } from "antd";
 import {
   Plus, Search, Play, Shuffle, Repeat, Trash2, Check,
   Download, FileJson, FileText, ArrowUpDown,
@@ -47,6 +47,7 @@ export default function PlaylistPane({
   onShareChanged: (playlistId: number, token: string | null) => void;
 
 }) {
+  const { message } = App.useApp();
   const [shareOpen, setShareOpen] = useState(false);
   const shareToken = playlist.share_token ?? null;
   const [renameValue, setRenameValue] = useState(playlist.name);

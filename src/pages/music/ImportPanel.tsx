@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Button, Input, message } from "antd";
+import { App, Button, Input } from "antd";
 import { Upload } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import SpotlightCard from "../../components/SpotlightCard";
 
 export default function ImportPanel({ userId, onImported }: { userId: string; onImported: () => void }) {
+  const { message } = App.useApp();
   const [raw, setRaw] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);

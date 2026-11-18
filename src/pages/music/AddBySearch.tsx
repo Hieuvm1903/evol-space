@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Input, InputNumber, Skeleton, Tooltip, message } from "antd";
+import { App, Button, Input, InputNumber, Skeleton, Tooltip } from "antd";
 import { Search, Music2, Plus, Play, ExternalLink } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import { searchSongs, SearchSongResult } from "../../lib/youtube";
@@ -8,6 +8,7 @@ import VideoPreviewModal from "../../components/VideoPreviewModal";
 const MAX_RESULTS_CAP = 30;
 
 export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlistId: number; addedBy: string; onAdded: () => void }) {
+  const { message } = App.useApp();
   const [query, setQuery] = useState("");
   const [maxResults, setMaxResults] = useState(8);
   const [results, setResults] = useState<SearchSongResult[]>([]);

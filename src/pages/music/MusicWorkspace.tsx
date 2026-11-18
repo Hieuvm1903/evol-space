@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Empty, message } from "antd";
+import { App, Empty } from "antd";
 import { Sparkles } from "lucide-react";
 import { usePlayer } from "../../features/player/PlayerProvider";
 import * as musicService from "../../lib/musicService";
@@ -11,6 +11,7 @@ import AlbumPickerPane from "./AlbumPickerPane";
 import PlaylistPane from "./PlaylistPane";
 
 export default function MusicWorkspace({ userId }: { userId: string }) {
+  const { message } = App.useApp();
   const player = usePlayer();
 
   const [playlists, setPlaylists] = useState<musicService.Playlist[]>([]);

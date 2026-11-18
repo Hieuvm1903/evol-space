@@ -62,7 +62,6 @@ import type {
   ZoneDef,
 } from "../../lib/workTypes";
 import { extractZones, layoutToObjects } from "./layoutImport";
-import { DEMO_LAYOUT } from "./proceduralTwin";
 import { Runtime } from "./runtime";
 import { TwinEngine } from "./twinEngine";
 import { useUndoable } from "./useUndoable";
@@ -91,6 +90,8 @@ const DEFAULT_PREFS: ViewPrefs = {
   space: "world",
   focusSelection: true,
   forceWebGL: false,
+  autoTransparentOccluding: true,
+  occlusionOpacity: 0.22,
 };
 const DEFAULT_UI = { all: true, side: true, toolbar: true, inspector: true, log: true };
 const DEFAULT_OVERLAYS: TwinOverlayPrefs = {
@@ -150,7 +151,7 @@ export function WorkPage() {
   const [overlays, setOverlays] = useState<TwinOverlayPrefs>(() => loadJson(OVERLAYS_KEY, DEFAULT_OVERLAYS));
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraPresetSeq, setCameraPresetSeq] = useState(0);
-  const [zones, setZones] = useState<ZoneDef[]>(() => extractZones(DEMO_LAYOUT));
+  const [zones, setZones] = useState<ZoneDef[]>([]);
   const [jointDefs, setJointDefs] = useState<Record<string, JointDef[]>>({});
   const [stats, setStats] = useState<PerfStats | null>(null);
   const [backend, setBackend] = useState("");
@@ -1018,6 +1019,7 @@ export function WorkPage() {
               following={overlays.followSelected}
               onToggleCollapsed={() => updateUi({ inspector: !ui.inspector })}
               onToggleFollow={() => updateOverlays({ followSelected: !overlays.followSelected })}
+              onOpacityChange={(op) => updateObject(selected.id, { opacity: op }, `opacity:${selected.id}`)}
               onSpeedScale={(sc) => handleSpeedScale(selected.id, sc)}
               onInjectFault={(k) => handleInjectFault(selected.id, k)}
               onClearFault={() => handleClearFault(selected.id)}
@@ -1035,6 +1037,8 @@ export function WorkPage() {
               onCameraPreset={handleCameraPreset}
               overlays={overlays}
               onOverlays={updateOverlays}
+              xRayOccluding={prefs.autoTransparentOccluding}
+              onToggleXRay={() => updatePrefs({ autoTransparentOccluding: !prefs.autoTransparentOccluding })}
               hasSelection={!!selected}
               replayFrames={replayFrames}
               replayIndex={replayIndex}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Input, message } from "antd";
+import { App, Button, Input } from "antd";
 import { Link2, Play, ExternalLink, ListMusic } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import { isPlaylistLink as isPlaylistUrl, extractVideoId, normalizeUrl, fetchMetadata, VideoMeta } from "../../lib/youtube";
@@ -8,6 +8,7 @@ import VideoPreviewModal from "../../components/VideoPreviewModal";
 import PlaylistDetailModal from "./PlaylistDetailModal";
 
 export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId: number; addedBy: string; onAdded: () => void }) {
+  const { message } = App.useApp();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);

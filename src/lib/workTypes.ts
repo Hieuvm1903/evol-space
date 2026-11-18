@@ -23,6 +23,7 @@ export interface SceneObjectData {
   scale: number;                  // uniform
   joints: Record<string, number>; // radians (revolute/continuous) or metres (prismatic)
   static: boolean;                // true = drawn through GPU instancing (and never moves)
+  opacity?: number;               // 0.05..1.0 transparency (1 = solid opaque)
   light?: LightProps;
   script?: string;                // behaviour script, run in Play mode
 }
@@ -80,12 +81,15 @@ export interface ViewPrefs {
   space: "world" | "local"; // transform-gizmo space
   focusSelection: boolean;  // orbit around the selected object
   forceWebGL: boolean;      // skip WebGPU and use the WebGL2 backend (troubleshooting)
+  autoTransparentOccluding: boolean; // auto-fade objects blocking camera line-of-sight
+  occlusionOpacity: number; // opacity applied to view-blocking objects (0.08..0.6)
 }
 
 export interface PerfStats {
   calls: number;
   triangles: number;
   instNear: number;
+  instMid: number;
   instFar: number;
   instCulled: number;
   instTotal: number;

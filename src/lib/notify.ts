@@ -1,5 +1,7 @@
 import React from "react";
-import { notification } from "antd";
+import { notification as staticNotification } from "antd";
+import type { NotificationInstance } from "antd/es/notification/interface";
+import type { MessageInstance } from "antd/es/message/interface";
 import { CheckCircle2, XCircle, Info } from "lucide-react";
 import "./notify.css";
 
@@ -17,8 +19,25 @@ const ICONS: Record<NotifyKind, React.ReactNode> = {
   info: React.createElement(Info, { size: 18 }),
 };
 
+let boundNotification: NotificationInstance | null = null;
+let boundMessage: MessageInstance | null = null;
+
+/** Called once by AntdFeedbackBridge inside antd's <App> provider so imperative notifications inherit ConfigProvider theme context. */
+export function bindAntdFeedback(notif: NotificationInstance, msg: MessageInstance) {
+  boundNotification = notif;
+  boundMessage = msg;
+}
+
+export function getNotificationApi(): NotificationInstance {
+  return boundNotification ?? staticNotification;
+}
+
+export function getMessageApi(): MessageInstance | null {
+  return boundMessage;
+}
+
 function push(kind: NotifyKind, message: string, opts: NotifyOpts = {}) {
-  notification.open({
+  getNotificationApi().open({
     key: opts.key,
     message,
     description: opts.description,
@@ -31,16 +50,7 @@ function push(kind: NotifyKind, message: string, opts: NotifyOpts = {}) {
 
 /**
  * Small bottom-right notification service, styled to match the app's
- * glass theme (same corner/look as the playlist-import progress toast in
- * pages/music/useImportNotification.tsx). Call these directly from any
- * add/edit/delete handler — antd's notification portal is already
- * mounted globally, no extra wiring needed.
- *
- * Usage:
- *   notify.added(`"${name}" added.`);
- *   notify.updated(`"${name}" saved.`);
- *   notify.deleted("Place removed.");
- *   notify.error("Couldn't save", "Check your connection and try again.");
+ * glass theme and backed by Ant Design's context-aware App.useApp() instance.
  */
 export const notify = {
   success: (message: string, description?: string, duration?: number, key?: string) =>

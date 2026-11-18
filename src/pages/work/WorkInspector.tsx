@@ -90,12 +90,28 @@ export default function WorkInspector(p: Props) {
     </>
   );
 
+  const opacityVal = Math.round((o.opacity ?? 1) * 100);
   const flags = o.kind !== "light" && (
     <>
       <div className="work-pref-row" title="Static objects are drawn with GPU instancing and never move. A static object only counts if its parents are static too.">
         <span>Static (instanced)</span>
         <Switch size="small" checked={o.static} onChange={(v) => p.onChange({ static: v }, `static:${o.id}`)} />
       </div>
+      {o.kind === "model" && (
+        <>
+          <div className="work-joint-label" style={{ marginTop: 6 }}>
+            <span>Opacity</span>
+            <em>{opacityVal}%</em>
+          </div>
+          <Slider
+            min={10}
+            max={100}
+            step={5}
+            value={opacityVal}
+            onChange={(v) => p.onChange({ opacity: v / 100 }, `opacity:${o.id}`)}
+          />
+        </>
+      )}
       {hasKids && (
         <div className="work-btn-row" style={{ marginTop: 6 }}>
           <Button size="small" onClick={() => p.onStaticSubtree(true)}>Static: all children</Button>
@@ -184,7 +200,7 @@ export default function WorkInspector(p: Props) {
     <div className="work-inspector evol-glass-card">
       {header}
       <div className="work-inspector-sub">{o.kind}{o.asset ? ` · ${o.asset}` : ""}</div>
-      <Collapse ghost size="small" className="work-collapse" defaultActiveKey={["t", "l", "j", "b"]} items={items} />
+      <Collapse ghost size="small" className="work-collapse" defaultActiveKey={["t", "f", "l", "j", "b"]} items={items} />
     </div>
   );
 }

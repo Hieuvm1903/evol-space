@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Input, message, Empty } from "antd";
+import { App, Button, Input, Empty } from "antd";
 import { Wind, Send } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -17,6 +17,7 @@ function formatTime(iso: string): string {
 }
 
 export function RelaxPage() {
+  const { message } = App.useApp();
   const [text, setText] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);

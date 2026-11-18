@@ -165,6 +165,7 @@ export function normalizeObject(raw: any): SceneObjectData {
     scale: raw.scale ?? 1,
     joints: raw.joints ?? {},
     static: !!raw.static,
+    opacity: typeof raw.opacity === "number" ? Math.min(1, Math.max(0.05, raw.opacity)) : 1,
     light: kind === "light" ? { ...DEFAULT_LIGHT, ...(raw.light ?? {}) } : undefined,
     script: raw.script,
   };

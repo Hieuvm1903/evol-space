@@ -1,9 +1,10 @@
-import React from "react";
-import { ConfigProvider, theme as antdTheme } from "antd";
+import React, { useEffect } from "react";
+import { App as AntdApp, ConfigProvider, theme as antdTheme } from "antd";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PlayerProvider } from "./features/player/PlayerProvider";
 import { ConfirmProvider } from "./components/ConfirmDialog";
+import { bindAntdFeedback } from "./lib/notify";
 import { NavBar } from "./components/NavBar";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -68,28 +69,36 @@ function AppBody() {
     </>
   );
 }
+function AntdFeedbackBridge() {
+  const { notification, message } = AntdApp.useApp();
+  useEffect(() => {
+    bindAntdFeedback(notification, message);
+  }, [notification, message]);
+  return null;
+}
+
 export default function App() {
-  
   return (
     <ConfigProvider theme={evolAntdTheme}>
-      {/* ConfirmProvider wraps everything so useConfirm() works from any
-          page — it replaces window.confirm() with a themed dialog. See
-          components/ConfirmDialog.tsx. */}
-      <ConfirmProvider>
-        <AuthProvider>
-          {/* PlayerProvider wraps everything (like app.py's top-level
-              render_now_playing_drawer() call) so the widget floats over
-              whatever page is showing, and any page can call usePlayer().loadQueue(...)
-              once the Music page is ported. */}
-          <PlayerProvider>
-            <BrowserRouter>
-
-            <AppBody />
-
-            </BrowserRouter>
-          </PlayerProvider>
-        </AuthProvider>
-      </ConfirmProvider>
+      <AntdApp>
+        <AntdFeedbackBridge />
+        {/* ConfirmProvider wraps everything so useConfirm() works from any
+            page — it replaces window.confirm() with a themed dialog. See
+            components/ConfirmDialog.tsx. */}
+        <ConfirmProvider>
+          <AuthProvider>
+            {/* PlayerProvider wraps everything (like app.py's top-level
+                render_now_playing_drawer() call) so the widget floats over
+                whatever page is showing, and any page can call usePlayer().loadQueue(...)
+                once the Music page is ported. */}
+            <PlayerProvider>
+              <BrowserRouter>
+                <AppBody />
+              </BrowserRouter>
+            </PlayerProvider>
+          </AuthProvider>
+        </ConfirmProvider>
+      </AntdApp>
     </ConfigProvider>
   );
 }

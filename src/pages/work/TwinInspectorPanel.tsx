@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Segmented } from "antd";
+import { Button, Segmented, Slider } from "antd";
 import {
   AlertOctagon,
   BatteryCharging,
@@ -21,6 +21,7 @@ interface Props {
   following: boolean;
   onToggleCollapsed: () => void;
   onToggleFollow: () => void;
+  onOpacityChange: (opacity: number) => void;
   onSpeedScale: (scale: number) => void;
   onInjectFault: (kind: FaultKind) => void;
   onClearFault: () => void;
@@ -65,6 +66,7 @@ export default function TwinInspectorPanel({
   following,
   onToggleCollapsed,
   onToggleFollow,
+  onOpacityChange,
   onSpeedScale,
   onInjectFault,
   onClearFault,
@@ -187,6 +189,22 @@ export default function TwinInspectorPanel({
               { value: 1.5, label: "1.5×" },
               { value: 2, label: "2.0×" },
             ]}
+          />
+        </div>
+      )}
+
+      {object.kind === "model" && (
+        <div className="twin-ctrl-block">
+          <div className="work-joint-label">
+            <span>Object Opacity</span>
+            <em>{Math.round((object.opacity ?? 1) * 100)}%</em>
+          </div>
+          <Slider
+            min={10}
+            max={100}
+            step={5}
+            value={Math.round((object.opacity ?? 1) * 100)}
+            onChange={(v) => onOpacityChange(v / 100)}
           />
         </div>
       )}

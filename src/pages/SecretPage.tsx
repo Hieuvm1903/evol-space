@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Input, message } from "antd";
+import { App, Button, Input } from "antd";
 import { KeyRound, Send } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -25,6 +25,7 @@ function formatTime(iso: string): string {
 }
 
 export function SecretPage() {
+  const { message } = App.useApp();
   const [keyInput, setKeyInput] = useState("/Evolut??n"); // same hint-default as the original
   const [text, setText] = useState("");
   const [posts, setPosts] = useState<Post[]>([]);

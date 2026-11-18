@@ -1,18 +1,17 @@
-import { notification } from "antd";
 import type { ImportProgressItem } from "../../lib/musicService";
+import { getNotificationApi } from "../../lib/notify";
 import ImportProgress from "./ImportProgress";
 
 const NOTIF_KEY = "playlist-import-progress";
 
-// Lives in antd's notification portal (mounted at document.body), fully
-// independent of whatever panel triggered the import. So even if the
-// person clicks away and the AddTrackPanel that started this unmounts,
-// this keeps updating until the import actually finishes.
+// Lives in antd's <App> notification portal, fully independent of whatever
+// panel triggered the import. So even if the user clicks away and the
+// AddTrackPanel that started this unmounts, this keeps updating until done.
 export function openImportNotification(label: string) {
   let items: ImportProgressItem[] = [];
 
   function render(done: number, total: number) {
-    notification.open({
+    getNotificationApi().open({
       key: NOTIF_KEY,
       message: `Importing ${label}`,
       description: <ImportProgress done={done} total={total} items={items} />,
@@ -28,7 +27,7 @@ export function openImportNotification(label: string) {
       render(done, total);
     },
     finish(finalMessage: string) {
-      notification.open({
+      getNotificationApi().open({
         key: NOTIF_KEY,
         message: "Import finished",
         description: finalMessage,

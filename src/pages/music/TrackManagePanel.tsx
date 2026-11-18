@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Input, message } from "antd";
+import { App, Button, Input } from "antd";
 import { Pencil, Music2, Link2 } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 
@@ -8,6 +8,7 @@ export default function TrackManagePanel({ playlistId, track, onChanged }: {
   track: musicService.PlaylistTrack;
   onChanged: () => void;
 }) {
+  const { message } = App.useApp();
   const [customTitle, setCustomTitle] = useState(track.title !== track.original_title ? track.title : track.original_title);
   const [artist, setArtist] = useState(track.artist ?? "");
   const [lyricsUrl, setLyricsUrl] = useState(track.lyrics_url ?? "");

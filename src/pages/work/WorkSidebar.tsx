@@ -312,7 +312,7 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
           <Slider min={10} max={200} value={prefs.cullDistance} onChange={(v) => onPrefs({ cullDistance: v })} />
         </div>
       )}
-      {sw("Level of detail", "lod", "Beyond the distance, a coloured box stands in for the model")}
+      {sw("Level of detail", "lod", "Calculates mid/coarse GLTF meshes by perspective distance")}
       {prefs.lod && (
         <div className="work-pref-slider">
           <span>{prefs.lodDistance} m</span>
@@ -322,6 +322,19 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
       {sw("Shadows", "shadows")}
 
       <div className="work-field-label" style={{ marginTop: 12 }}>Viewport</div>
+      {sw("Transparent if blocking view", "autoTransparentOccluding", "Automatically fades walls & racks between camera and focus point")}
+      {prefs.autoTransparentOccluding && (
+        <div className="work-pref-slider">
+          <span>{Math.round(prefs.occlusionOpacity * 100)}%</span>
+          <Slider
+            min={8}
+            max={60}
+            step={2}
+            value={Math.round(prefs.occlusionOpacity * 100)}
+            onChange={(v) => onPrefs({ occlusionOpacity: v / 100 })}
+          />
+        </div>
+      )}
       {sw("Show gizmos", "showGizmos", "View cube, light icons, group axes, selection box")}
       {sw("Editor lighting", "defaultLight", "Turn off to see only the lights you added")}
       {sw("Orbit around selection", "focusSelection")}
@@ -337,8 +350,9 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
           <span>Draw calls</span><b>{stats.calls}</b>
           <span>Triangles</span><b>{stats.triangles.toLocaleString()}</b>
           <span>Instances</span><b>{stats.instTotal}</b>
-          <span>· drawn full</span><b>{stats.instNear}</b>
-          <span>· drawn as LOD box</span><b>{stats.instFar}</b>
+          <span>· LOD 0 (full)</span><b>{stats.instNear}</b>
+          <span>· LOD 1 (calc mid)</span><b>{stats.instMid}</b>
+          <span>· LOD 2 (calc far)</span><b>{stats.instFar}</b>
           <span>· culled</span><b>{stats.instCulled}</b>
           <span>Dynamic nodes</span><b>{stats.dynamic}</b>
         </div>
