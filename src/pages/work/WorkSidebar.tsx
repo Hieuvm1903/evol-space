@@ -8,6 +8,7 @@ import {
 import { childrenIndex } from "../../lib/sceneMath";
 import type {
   AssetTelemetry,
+  CameraMode,
   LightType,
   ModelSetRow,
   PerfStats,
@@ -322,6 +323,18 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
       {sw("Shadows", "shadows")}
 
       <div className="work-field-label" style={{ marginTop: 12 }}>Viewport</div>
+      <div className="work-pref-row">
+        <span>Camera projection</span>
+        <Segmented
+          size="small"
+          value={prefs.cameraMode}
+          onChange={(v) => onPrefs({ cameraMode: v as CameraMode })}
+          options={[
+            { value: "perspective", label: "Perspective" },
+            { value: "orthographic", label: "Orthogonal" },
+          ]}
+        />
+      </div>
       {sw("Transparent if blocking view", "autoTransparentOccluding", "Automatically fades walls & racks between camera and focus point")}
       {prefs.autoTransparentOccluding && (
         <div className="work-pref-slider">

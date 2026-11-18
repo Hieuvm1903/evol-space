@@ -1,5 +1,5 @@
 // Non-destructive photo editing model + canvas renderer.
-// All positions/sizes are NORMALIZED (0..1 of width/height) so the same edit
+// All positions/sizes are NORMALIZED (0..1 of output width/height) so the same edit
 // renders identically for a 900px preview and the full-res export.
 
 export const FILTER_PRESETS = [
@@ -18,6 +18,15 @@ export const FRAME_OPTIONS: { id: FrameId; label: string }[] = [
   { id: "galaxy", label: "Galaxy glow" },
 ];
 
+export type AspectRatioId = "original" | "1:1" | "4:3" | "3:4" | "16:9";
+export const ASPECT_OPTIONS: { id: AspectRatioId; label: string; ratio: number | null }[] = [
+  { id: "original", label: "Original", ratio: null },
+  { id: "1:1", label: "1:1", ratio: 1 },
+  { id: "4:3", label: "4:3", ratio: 4 / 3 },
+  { id: "3:4", label: "3:4", ratio: 3 / 4 },
+  { id: "16:9", label: "16:9", ratio: 16 / 9 },
+];
+
 export interface Adjustments {
   brightness: number; // % (100 = unchanged)
   contrast: number;   // %
@@ -28,6 +37,18 @@ export interface Adjustments {
 }
 export const DEFAULT_ADJ: Adjustments = {
   brightness: 100, contrast: 100, saturation: 100, hue: 0, blur: 0, vignette: 0,
+};
+
+export interface TransformState {
+  rotate: 0 | 90 | 180 | 270;
+  flipH: boolean;
+  aspect: AspectRatioId;
+}
+
+export const DEFAULT_TRANSFORM: TransformState = {
+  rotate: 0,
+  flipH: false,
+  aspect: "original",
 };
 
 export interface Stroke { id: string; color: string; width: number; points: [number, number][] }
@@ -45,6 +66,7 @@ export interface EditState {
   v: 1;
   filter: FilterPreset;
   adj: Adjustments;
+  transform: TransformState;
   frame: { id: FrameId; color: string };
   strokes: Stroke[];
   stickers: Sticker[];
@@ -52,8 +74,13 @@ export interface EditState {
 
 export function defaultEdit(): EditState {
   return {
-    v: 1, filter: "None", adj: { ...DEFAULT_ADJ },
-    frame: { id: "none", color: "#ffffff" }, strokes: [], stickers: [],
+    v: 1,
+    filter: "None",
+    adj: { ...DEFAULT_ADJ },
+    transform: { ...DEFAULT_TRANSFORM },
+    frame: { id: "none", color: "#ffffff" },
+    strokes: [],
+    stickers: [],
   };
 }
 
@@ -61,17 +88,25 @@ export function defaultEdit(): EditState {
 export function normalizeEdit(raw: any): EditState {
   const d = defaultEdit();
   if (!raw || typeof raw !== "object") return d;
+  const rawTransform = raw.transform ?? {};
+  const rotate = ([0, 90, 180, 270].includes(rawTransform.rotate) ? rawTransform.rotate : 0) as 0 | 90 | 180 | 270;
+  const aspect = (ASPECT_OPTIONS.some((a) => a.id === rawTransform.aspect) ? rawTransform.aspect : "original") as AspectRatioId;
   return {
     v: 1,
     filter: FILTER_PRESETS.includes(raw.filter) ? raw.filter : d.filter,
     adj: { ...d.adj, ...(raw.adj ?? {}) },
+    transform: {
+      rotate,
+      flipH: Boolean(rawTransform.flipH),
+      aspect,
+    },
     frame: { ...d.frame, ...(raw.frame ?? {}) },
     strokes: Array.isArray(raw.strokes) ? raw.strokes : [],
     stickers: Array.isArray(raw.stickers) ? raw.stickers : [],
   };
 }
 
-function presetCss(name: FilterPreset, k: number): string {
+export function filterCssPreview(name: FilterPreset, k = 1): string {
   switch (name) {
     case "Grayscale": return "grayscale(1)";
     case "Sepia": return "sepia(1)";
@@ -177,12 +212,50 @@ function drawFrame(ctx: CanvasRenderingContext2D, w: number, h: number, id: Fram
   ctx.restore();
 }
 
+let workCanvas: HTMLCanvasElement | null = null;
+
+/** Computes rotated & cropped dimensions for an input canvas + transform state. */
+function buildTransformedBase(base: HTMLCanvasElement, transform: TransformState): HTMLCanvasElement {
+  const { rotate, flipH, aspect } = transform;
+  if (rotate === 0 && !flipH && aspect === "original") return base;
+
+  const swapped = rotate === 90 || rotate === 270;
+  const rotW = swapped ? base.height : base.width;
+  const rotH = swapped ? base.width : base.height;
+
+  const targetRatio = ASPECT_OPTIONS.find((a) => a.id === aspect)?.ratio ?? null;
+  let outW = rotW;
+  let outH = rotH;
+  if (targetRatio) {
+    const curRatio = rotW / rotH;
+    if (curRatio > targetRatio) {
+      outW = Math.round(rotH * targetRatio);
+    } else {
+      outH = Math.round(rotW / targetRatio);
+    }
+  }
+
+  if (!workCanvas) workCanvas = document.createElement("canvas");
+  workCanvas.width = outW;
+  workCanvas.height = outH;
+  const ctx = workCanvas.getContext("2d")!;
+  ctx.save();
+  ctx.translate(outW / 2, outH / 2);
+  if (flipH) ctx.scale(-1, 1);
+  if (rotate !== 0) ctx.rotate((rotate * Math.PI) / 180);
+  ctx.drawImage(base, -base.width / 2, -base.height / 2);
+  ctx.restore();
+  return workCanvas;
+}
+
 /** Draws the full edit onto a canvas (new one, or `target` to reuse). */
 export function renderEdit(
-  base: HTMLCanvasElement, state: EditState, outW: number = base.width, target?: HTMLCanvasElement,
+  base: HTMLCanvasElement, state: EditState, outW?: number, target?: HTMLCanvasElement,
 ): HTMLCanvasElement {
-  const w = Math.round(outW);
-  const h = Math.round((outW * base.height) / base.width);
+  const transformed = buildTransformedBase(base, state.transform ?? DEFAULT_TRANSFORM);
+  const resolvedOutW = outW ?? transformed.width;
+  const w = Math.max(1, Math.round(resolvedOutW));
+  const h = Math.max(1, Math.round((w * transformed.height) / transformed.width));
   const canvas = target ?? document.createElement("canvas");
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext("2d")!;
@@ -191,13 +264,13 @@ export function renderEdit(
 
   // 1. photo + filter + adjustments (CSS filter functions on the 2D context)
   const parts = [
-    presetCss(state.filter, k),
+    filterCssPreview(state.filter, k),
     `brightness(${adj.brightness}%)`, `contrast(${adj.contrast}%)`,
     `saturate(${adj.saturation}%)`, `hue-rotate(${adj.hue}deg)`,
     adj.blur > 0 ? `blur(${adj.blur * k}px)` : "",
   ];
   ctx.filter = parts.filter(Boolean).join(" ");
-  ctx.drawImage(base, 0, 0, w, h);
+  ctx.drawImage(transformed, 0, 0, w, h);
   ctx.filter = "none";
 
   // 2. vignette
@@ -246,6 +319,46 @@ export function renderEdit(
 
   // 5. frame (on top of everything)
   if (state.frame.id !== "none") drawFrame(ctx, w, h, state.frame.id, state.frame.color);
+  return canvas;
+}
+
+/** Stitches 4 captured frames into a crisp 2x2 or 1x4 photobooth strip canvas. */
+export function buildPhotoStripCanvas(
+  frames: HTMLCanvasElement[],
+  layout: "strip" | "grid" = "strip",
+): HTMLCanvasElement {
+  const first = frames[0];
+  const cellW = 720;
+  const cellH = Math.round((cellW * first.height) / first.width);
+  const pad = 28;
+  const gap = 18;
+  const footer = 52;
+
+  const cols = layout === "grid" ? 2 : 1;
+  const rows = Math.ceil(frames.length / cols);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = pad * 2 + cols * cellW + (cols - 1) * gap;
+  canvas.height = pad * 2 + rows * cellH + (rows - 1) * gap + footer;
+  const ctx = canvas.getContext("2d")!;
+
+  ctx.fillStyle = "#11101b";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  frames.forEach((frame, idx) => {
+    const c = idx % cols;
+    const r = Math.floor(idx / cols);
+    const x = pad + c * (cellW + gap);
+    const y = pad + r * (cellH + gap);
+    ctx.drawImage(frame, x, y, cellW, cellH);
+  });
+
+  ctx.fillStyle = "rgba(232, 230, 245, 0.72)";
+  ctx.font = `600 18px ${TEXT_FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const stamp = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  ctx.fillText(`EVOL PHOTOBOOTH · ${stamp}`, canvas.width / 2, canvas.height - footer / 2 - 4);
   return canvas;
 }
 

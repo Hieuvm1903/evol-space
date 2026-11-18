@@ -33,6 +33,24 @@ export function triangleCount(geom: THREE.BufferGeometry): number {
   return Math.floor((geom.index ? geom.index.count : pos.count) / 3);
 }
 
+export const BASE_PERSP_FOV = 42;
+export const BASE_ORTHO_SPAN = 20;
+
+/** Returns equivalent perspective distance + fov for either PerspectiveCamera or OrthographicCamera. */
+export function cameraLodParams(
+  camera: THREE.Camera,
+  distanceToObj: number,
+): { effDistance: number; fovDeg: number } {
+  if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
+    const ortho = camera as THREE.OrthographicCamera;
+    const visH = Math.abs(ortho.top - ortho.bottom) / Math.max(0.01, ortho.zoom);
+    const equivDist = visH / (2 * Math.tan((BASE_PERSP_FOV * Math.PI) / 360));
+    return { effDistance: equivDist, fovDeg: BASE_PERSP_FOV };
+  }
+  const persp = camera as THREE.PerspectiveCamera;
+  return { effDistance: distanceToObj, fovDeg: persp.fov ?? BASE_PERSP_FOV };
+}
+
 /**
  * Computes perspective-normalized LOD tier:
  *   0 = full detail (LOD0)

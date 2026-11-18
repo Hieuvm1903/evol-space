@@ -14,6 +14,7 @@ import type {
   ZoneDef,
 } from "../../lib/workTypes";
 import type { Runtime } from "./runtime";
+import { BASE_ORTHO_SPAN, BASE_PERSP_FOV } from "./lodCompute";
 
 const STATUS_COLORS: Record<HealthStatus, string> = {
   nominal: "#22d3ee",
@@ -108,6 +109,7 @@ export function TwinCameraController({
 
   const animPos = useRef<THREE.Vector3 | null>(null);
   const animTarget = useRef<THREE.Vector3 | null>(null);
+  const animZoom = useRef<number | null>(null);
   const prevFollowPos = useRef<THREE.Vector3 | null>(null);
   const tmpV = useMemo(() => new THREE.Vector3(), []);
   const tmpM = useMemo(() => new THREE.Matrix4(), []);
@@ -115,9 +117,24 @@ export function TwinCameraController({
   useEffect(() => {
     if (presetSeq === 0) return;
     const cfg = CAMERA_PRESETS[preset];
-    animPos.current = new THREE.Vector3(...cfg.pos);
-    animTarget.current = new THREE.Vector3(...cfg.target);
-  }, [preset, presetSeq]);
+    const targetV = new THREE.Vector3(...cfg.target);
+    const posV = new THREE.Vector3(...cfg.pos);
+
+    if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
+      const dir = posV.clone().sub(targetV);
+      const dist = Math.max(0.5, dir.length());
+      dir.normalize();
+      const visH = 2 * dist * Math.tan(THREE.MathUtils.degToRad(BASE_PERSP_FOV) / 2);
+      animZoom.current = THREE.MathUtils.clamp(BASE_ORTHO_SPAN / visH, 0.15, 25);
+      // Keep orthographic camera safely outside geometry along the preset viewing ray
+      animPos.current = targetV.clone().addScaledVector(dir, Math.max(dist, 32));
+      animTarget.current = targetV;
+    } else {
+      animZoom.current = null;
+      animPos.current = posV;
+      animTarget.current = targetV;
+    }
+  }, [preset, presetSeq, camera]);
 
   useEffect(() => {
     prevFollowPos.current = null;
@@ -128,6 +145,7 @@ export function TwinCameraController({
     const cancel = () => {
       animPos.current = null;
       animTarget.current = null;
+      animZoom.current = null;
     };
     controls.addEventListener("start", cancel);
     return () => controls.removeEventListener("start", cancel);
@@ -143,13 +161,24 @@ export function TwinCameraController({
       controls.target.x = THREE.MathUtils.damp(controls.target.x, animTarget.current.x, lambda, dt);
       controls.target.y = THREE.MathUtils.damp(controls.target.y, animTarget.current.y, lambda, dt);
       controls.target.z = THREE.MathUtils.damp(controls.target.z, animTarget.current.z, lambda, dt);
+
+      let zoomDone = true;
+      if (animZoom.current !== null && (camera as THREE.OrthographicCamera).isOrthographicCamera) {
+        const ortho = camera as THREE.OrthographicCamera;
+        ortho.zoom = THREE.MathUtils.damp(ortho.zoom, animZoom.current, lambda, dt);
+        ortho.updateProjectionMatrix();
+        zoomDone = Math.abs(ortho.zoom - animZoom.current) < 0.01;
+      }
+
       controls.update();
       if (
+        zoomDone &&
         camera.position.distanceTo(animPos.current) < 0.04 &&
         controls.target.distanceTo(animTarget.current) < 0.04
       ) {
         animPos.current = null;
         animTarget.current = null;
+        animZoom.current = null;
       }
       return;
     }

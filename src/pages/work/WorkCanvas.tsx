@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewcube, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import { childrenIndex, descendantsOf } from "../../lib/sceneMath";
 import type {
   AssetTelemetry,
+  CameraMode,
   CameraPreset,
   CanvasBridge,
   JointDef,
@@ -16,7 +17,7 @@ import type {
   WorkspaceMode,
   ZoneDef,
 } from "../../lib/workTypes";
-import { computeLodTier } from "./lodCompute";
+import { BASE_ORTHO_SPAN, BASE_PERSP_FOV, cameraLodParams, computeLodTier } from "./lodCompute";
 import { updateOcclusionShaderUniforms } from "./occlusionShader";
 import type { Runtime } from "./runtime";
 import StaticBatches, { type LiveDrag, type PerfCounters } from "./StaticBatches";
@@ -169,6 +170,8 @@ function OcclusionController({
     ray: new THREE.Raycaster(),
     targetPos: new THREE.Vector3(),
     dir: new THREE.Vector3(),
+    rayOrigin: new THREE.Vector3(),
+    effCamPos: new THREE.Vector3(),
     up: new THREE.Vector3(0, 1, 0),
     right: new THREE.Vector3(),
     orthoUp: new THREE.Vector3(),
@@ -231,17 +234,29 @@ function OcclusionController({
       }
     }
 
+    const isOrtho = !!(camera as THREE.OrthographicCamera).isOrthographicCamera;
+    let orthoStandOff = 32;
+    if (isOrtho) {
+      camera.getWorldDirection(s.dir);
+      orthoStandOff = Math.max(32, s.targetPos.distanceTo(camera.position));
+      s.effCamPos.copy(s.targetPos).addScaledVector(s.dir, -orthoStandOff);
+    } else {
+      s.effCamPos.copy(camera.position);
+    }
+
     // Update shared GLSL sightline corridor uniforms at full frame rate
-    updateOcclusionShaderUniforms(camera.position, s.targetPos, selectedId ? 2.2 : 2.8);
+    updateOcclusionShaderUniforms(s.effCamPos, s.targetPos, selectedId ? 2.2 : 2.8);
 
     accum.current += dt;
     if (accum.current < 0.05) return;
     accum.current = 0;
 
-    s.dir.subVectors(s.targetPos, camera.position);
-    const dist = s.dir.length();
-    if (dist < 1.2) return;
-    s.dir.multiplyScalar(1 / dist);
+    if (!isOrtho) {
+      s.dir.subVectors(s.targetPos, camera.position);
+      const dist = s.dir.length();
+      if (dist < 1.2) return;
+      s.dir.multiplyScalar(1 / dist);
+    }
 
     // Orthonormal basis perpendicular to view ray for 5-point diamond sampling
     s.right.crossVectors(s.dir, s.up);
@@ -258,17 +273,24 @@ function OcclusionController({
     s.seenIds.clear();
     s.seenParts.clear();
 
-    const maxFar = Math.max(0.25, dist - 0.45);
+    const perspDist = isOrtho ? orthoStandOff : s.targetPos.distanceTo(camera.position);
+    const maxFar = Math.max(0.25, perspDist - 0.45);
     s.ray.near = 0.05;
 
     for (let i = 0; i < s.samplePts.length; i++) {
       const pt = s.samplePts[i];
-      s.dir.subVectors(pt, camera.position);
-      const rayDist = s.dir.length();
-      if (rayDist < 0.4) continue;
-      s.dir.multiplyScalar(1 / rayDist);
-      s.ray.far = Math.min(maxFar, rayDist - 0.38);
-      s.ray.set(camera.position, s.dir);
+      if (isOrtho) {
+        s.rayOrigin.copy(pt).addScaledVector(s.dir, -orthoStandOff);
+        s.ray.far = Math.max(0.25, orthoStandOff - 0.38);
+        s.ray.set(s.rayOrigin, s.dir);
+      } else {
+        s.dir.subVectors(pt, camera.position);
+        const rayDist = s.dir.length();
+        if (rayDist < 0.4) continue;
+        s.dir.multiplyScalar(1 / rayDist);
+        s.ray.far = Math.min(maxFar, rayDist - 0.38);
+        s.ray.set(camera.position, s.dir);
+      }
 
       s.hits.length = 0;
       s.ray.intersectObjects(scene.children, true, s.hits);
@@ -338,19 +360,130 @@ function DynamicVisibility({ vis, prefs, selectedId }: {
   useFrame(({ camera }) => {
     if (++n.current % 3) return;
     tmp.cam.setFromMatrixPosition(camera.matrixWorld);
-    const fov = (camera as THREE.PerspectiveCamera).fov ?? 42;
     for (const e of vis.current.values()) {
       const wm = e.group.matrixWorld;
       tmp.c.copy(e.center).applyMatrix4(wm);
       const r = e.radius * wm.getMaxScaleOnAxis();
       const d = tmp.c.distanceTo(tmp.cam);
-      const tier = prefs.lod && e.id !== selectedId ? computeLodTier(d, r, prefs.lodDistance, fov) : 0;
-      e.content.visible = !(prefs.distanceCull && d - r > prefs.cullDistance);
+      const { effDistance, fovDeg } = cameraLodParams(camera, d);
+      const tier = prefs.lod && e.id !== selectedId ? computeLodTier(effDistance, r, prefs.lodDistance, fovDeg) : 0;
+      e.content.visible = !(prefs.distanceCull && effDistance - r > prefs.cullDistance);
       e.detail.visible = tier === 0;
       e.lod1.visible = tier === 1;
       e.lod2.visible = tier === 2;
     }
   });
+  return null;
+}
+
+/**
+ * Maintains persistent Perspective and Orthographic camera instances in R3F and performs
+ * lossless framing conversion (zoom <-> distance) on projection switch without remounting the canvas.
+ */
+function CameraRig({ cameraMode }: { cameraMode: CameraMode }) {
+  const camera = useThree((s) => s.camera);
+  const set = useThree((s) => s.set);
+  const size = useThree((s) => s.size);
+  const controls = useThree((s) => s.controls) as unknown as {
+    object: THREE.Camera;
+    target: THREE.Vector3;
+    update: () => void;
+  } | null;
+
+  const perspRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const orthoRef = useRef<THREE.OrthographicCamera | null>(null);
+  const activeModeRef = useRef<CameraMode>("perspective");
+
+  if (!perspRef.current && !(camera as THREE.OrthographicCamera).isOrthographicCamera) {
+    perspRef.current = camera as THREE.PerspectiveCamera;
+  }
+  if (!orthoRef.current) {
+    const aspect = size.width / Math.max(1, size.height);
+    const halfH = BASE_ORTHO_SPAN / 2;
+    const ortho = new THREE.OrthographicCamera(-halfH * aspect, halfH * aspect, halfH, -halfH, 0.05, 400);
+    ortho.position.set(14.5, 11.5, 17.5);
+    ortho.lookAt(HOME);
+    orthoRef.current = ortho;
+  }
+
+  // Keep both camera frustums synchronized when the viewport resizes
+  useLayoutEffect(() => {
+    const aspect = size.width / Math.max(1, size.height);
+    const halfH = BASE_ORTHO_SPAN / 2;
+    const ortho = orthoRef.current;
+    if (ortho) {
+      ortho.left = -halfH * aspect;
+      ortho.right = halfH * aspect;
+      ortho.top = halfH;
+      ortho.bottom = -halfH;
+      ortho.updateProjectionMatrix();
+    }
+    const persp = perspRef.current;
+    if (persp) {
+      persp.aspect = aspect;
+      persp.updateProjectionMatrix();
+    }
+  }, [size.width, size.height]);
+
+  // Ensure OrbitControls tracks the currently active camera when mounted/switched
+  useLayoutEffect(() => {
+    if (controls && controls.object !== camera) {
+      controls.object = camera;
+      controls.update();
+    }
+  }, [controls, camera]);
+
+  // Convert camera pose <-> orthographic zoom losslessly when mode changes
+  useLayoutEffect(() => {
+    const persp = perspRef.current;
+    const ortho = orthoRef.current;
+    if (!persp || !ortho || activeModeRef.current === cameraMode) return;
+
+    const target = controls ? controls.target : HOME;
+    const halfFovRad = THREE.MathUtils.degToRad(persp.fov || BASE_PERSP_FOV) / 2;
+    const tanHalfFov = Math.tan(halfFovRad);
+
+    if (cameraMode === "orthographic") {
+      const dir = persp.position.clone().sub(target);
+      const dist = Math.max(0.5, dir.length());
+      if (dir.lengthSq() < 1e-6) dir.set(14.5, 10.5, 15.3);
+      dir.normalize();
+      const visH = 2 * dist * tanHalfFov;
+      ortho.zoom = THREE.MathUtils.clamp(BASE_ORTHO_SPAN / Math.max(0.1, visH), 0.15, 25);
+      // Park ortho camera >= 32m along the ray so near-plane never clips foreground warehouse walls
+      ortho.position.copy(target).addScaledVector(dir, Math.max(dist, 32));
+      ortho.up.copy(persp.up);
+      ortho.lookAt(target);
+      ortho.updateProjectionMatrix();
+      ortho.updateMatrixWorld();
+
+      activeModeRef.current = "orthographic";
+      set({ camera: ortho });
+      if (controls) {
+        controls.object = ortho;
+        controls.update();
+      }
+    } else {
+      const dir = ortho.position.clone().sub(target);
+      if (dir.lengthSq() < 1e-6) dir.set(14.5, 10.5, 15.3);
+      dir.normalize();
+      const visH = BASE_ORTHO_SPAN / Math.max(0.01, ortho.zoom);
+      const newDist = THREE.MathUtils.clamp(visH / (2 * tanHalfFov), 1.5, 80);
+      persp.position.copy(target).addScaledVector(dir, newDist);
+      persp.up.copy(ortho.up);
+      persp.lookAt(target);
+      persp.updateProjectionMatrix();
+      persp.updateMatrixWorld();
+
+      activeModeRef.current = "perspective";
+      set({ camera: persp });
+      if (controls) {
+        controls.object = persp;
+        controls.update();
+      }
+    }
+  }, [cameraMode, controls, set]);
+
   return null;
 }
 
@@ -440,7 +573,8 @@ export interface WorkCanvasProps {
   onBackend: (label: string) => void;
 }
 
-const HOME = new THREE.Vector3(0.0, 1.0, 2.2);
+const HOME_ARR: [number, number, number] = [0.0, 1.0, 2.2];
+const HOME = new THREE.Vector3(...HOME_ARR);
 
 export default function WorkCanvas(p: WorkCanvasProps) {
   return (
@@ -613,7 +747,17 @@ function WorkCanvasInner(p: WorkCanvasProps) {
         />
       )}
 
-      <OrbitControls makeDefault enableDamping target={HOME.toArray()} minDistance={1.2} maxDistance={80} maxPolarAngle={Math.PI / 2 - 0.02} />
+      <OrbitControls
+        makeDefault
+        enableDamping
+        target={HOME_ARR}
+        minDistance={1.2}
+        maxDistance={80}
+        minZoom={0.15}
+        maxZoom={25}
+        maxPolarAngle={Math.PI / 2 - 0.02}
+      />
+      <CameraRig cameraMode={prefs.cameraMode} />
       <FocusController
         selectedId={selectedId}
         enabled={prefs.focusSelection && !(p.workspaceMode === "twin" && p.overlays.followSelected)}

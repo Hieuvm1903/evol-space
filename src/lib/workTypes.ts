@@ -68,6 +68,8 @@ export interface CanvasBridge {
 }
 
 /** Editor/view preferences (stored in localStorage, not in the scene). */
+export type CameraMode = "perspective" | "orthographic";
+
 export interface ViewPrefs {
   instancing: boolean;      // draw static objects through InstancedMesh
   frustumCull: boolean;     // per-instance (static) / per-mesh (dynamic) frustum culling
@@ -83,6 +85,7 @@ export interface ViewPrefs {
   forceWebGL: boolean;      // skip WebGPU and use the WebGL2 backend (troubleshooting)
   autoTransparentOccluding: boolean; // auto-fade objects blocking camera line-of-sight
   occlusionOpacity: number; // opacity applied to view-blocking objects (0.08..0.6)
+  cameraMode: CameraMode;   // perspective (depth) vs orthographic (parallel projection)
 }
 
 export interface PerfStats {

@@ -1,15 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Input, Slider, Segmented } from "antd";
-import { Sliders, Wand2, Frame, Sticker as StickerIcon, Pencil, Trash2, Undo2, Type } from "lucide-react";
+import { Button, Input, Slider, Segmented, Tooltip } from "antd";
 import {
-  DEFAULT_ADJ, FILTER_PRESETS, FRAME_OPTIONS, defaultEdit, drawSelection, hitSticker, renderEdit,
+  Sliders, Wand2, Frame, Sticker as StickerIcon, Pencil, Trash2, Undo2, Type,
+  Crop, RotateCw, FlipHorizontal2, Eye, RotateCcw,
+} from "lucide-react";
+import {
+  ASPECT_OPTIONS, DEFAULT_ADJ, DEFAULT_TRANSFORM, FILTER_PRESETS, FRAME_OPTIONS,
+  defaultEdit, drawSelection, hitSticker, renderEdit,
   type Adjustments, type EditState, type FrameId, type Sticker,
 } from "../lib/photoEditor";
 import "./PhotoEditor.css";
 
-type Tab = "adjust" | "filter" | "frame" | "stickers" | "draw";
+type Tab = "adjust" | "filter" | "crop" | "frame" | "stickers" | "draw";
 
-const EMOJIS = ["😀","😎","🥰","😂","🤩","😜","🔥","✨","💖","⭐","🌈","🎉",
+const EMOJIS = ["😀","😎","🥰","😂","🤩","😜","🔥","💖","⭐","🌈","🎉","✨",
   "👑","🕶️","🎀","🌸","🦋","🌙","☁️","💥","🎧","🍕","🐱","👻"];
 
 interface Props {
@@ -42,6 +46,7 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
   const [penWidth, setPenWidth] = useState(0.008);
   const [textInput, setTextInput] = useState("");
   const [textColor, setTextColor] = useState("#ffffff");
+  const [comparingOriginal, setComparingOriginal] = useState(false);
 
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const drawingRef = useRef(false);
@@ -52,9 +57,28 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
-    renderEdit(base, state, Math.min(base.width, 900), c);
-    if (tab === "stickers" && selected) drawSelection(c, selected);
-  }, [base, state, selected, tab]);
+    const renderState = comparingOriginal
+      ? { ...defaultEdit(), transform: state.transform }
+      : state;
+    renderEdit(base, renderState, Math.min(base.width, 900), c);
+    if (!comparingOriginal && tab === "stickers" && selected) drawSelection(c, selected);
+  }, [base, state, selected, tab, comparingOriginal]);
+
+  // Delete selected sticker with Delete / Backspace when not focused inside text input.
+  useEffect(() => {
+    if (!selectedId || tab !== "stickers") return;
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        patch({ stickers: stateRef.current.stickers.filter((s) => s.id !== selectedId) });
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedId, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (p: Partial<EditState>) => onChange({ ...stateRef.current, ...p });
   const setAdj = (k: keyof Adjustments, v: number) => patch({ adj: { ...stateRef.current.adj, [k]: v } });
@@ -84,6 +108,7 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
   }
 
   function onDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (comparingOriginal) return;
     const { nx, ny } = pt(e);
     const s = stateRef.current;
     if (tab === "draw") {
@@ -115,22 +140,44 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
 
   function onUp() { drawingRef.current = false; dragRef.current = null; }
 
+  const transform = state.transform ?? DEFAULT_TRANSFORM;
+
   return (
     <div className="pe-root">
-      <canvas
-        ref={canvasRef}
-        className={`pe-canvas${tab === "draw" ? " pe-canvas-draw" : ""}`}
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-      />
+      <div className="pe-canvas-stage">
+        <canvas
+          ref={canvasRef}
+          className={`pe-canvas${tab === "draw" ? " pe-canvas-draw" : ""}`}
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+        />
+        <div className="pe-stage-toolbar">
+          <button
+            type="button"
+            className={`pe-compare-btn${comparingOriginal ? " active" : ""}`}
+            onPointerDown={() => setComparingOriginal(true)}
+            onPointerUp={() => setComparingOriginal(false)}
+            onPointerLeave={() => setComparingOriginal(false)}
+            onPointerCancel={() => setComparingOriginal(false)}
+            title="Hold to compare with original"
+          >
+            <Eye size={13} />
+            <span>{comparingOriginal ? "Original" : "Hold to compare"}</span>
+          </button>
+          <span className="pe-dims-label">
+            {base.width}×{base.height}
+          </span>
+        </div>
+      </div>
 
       <Segmented
         block value={tab} onChange={(v) => setTab(v as Tab)}
         options={[
-          { value: "adjust", label: <span title="Adjust"><Sliders size={14} /></span> },
-          { value: "filter", label: <span title="Filter"><Wand2 size={14} /></span> },
-          { value: "frame", label: <span title="Frame"><Frame size={14} /></span> },
-          { value: "stickers", label: <span title="Stickers & text"><StickerIcon size={14} /></span> },
-          { value: "draw", label: <span title="Draw"><Pencil size={14} /></span> },
+          { value: "adjust", label: <Tooltip title="Adjust"><span className="pe-seg-ic"><Sliders size={14} /></span></Tooltip> },
+          { value: "filter", label: <Tooltip title="Filters"><span className="pe-seg-ic"><Wand2 size={14} /></span></Tooltip> },
+          { value: "crop", label: <Tooltip title="Rotate & Crop"><span className="pe-seg-ic"><Crop size={14} /></span></Tooltip> },
+          { value: "frame", label: <Tooltip title="Frame"><span className="pe-seg-ic"><Frame size={14} /></span></Tooltip> },
+          { value: "stickers", label: <Tooltip title="Stickers & Text"><span className="pe-seg-ic"><StickerIcon size={14} /></span></Tooltip> },
+          { value: "draw", label: <Tooltip title="Draw"><span className="pe-seg-ic"><Pencil size={14} /></span></Tooltip> },
         ]}
       />
 
@@ -143,7 +190,11 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
             <Row label="Hue" value={state.adj.hue} min={-180} max={180} onChange={(v) => setAdj("hue", v)} unit="°" />
             <Row label="Blur" value={state.adj.blur} min={0} max={12} step={0.5} onChange={(v) => setAdj("blur", v)} unit="px" />
             <Row label="Vignette" value={state.adj.vignette} min={0} max={100} onChange={(v) => setAdj("vignette", v)} />
-            <Button size="small" onClick={() => patch({ adj: { ...DEFAULT_ADJ } })}>Reset adjustments</Button>
+            <div className="pe-chip-grid">
+              <Button size="small" icon={<RotateCcw size={12} />} onClick={() => patch({ adj: { ...DEFAULT_ADJ } })}>
+                Reset adjustments
+              </Button>
+            </div>
           </>
         )}
 
@@ -155,6 +206,46 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
               </Button>
             ))}
           </div>
+        )}
+
+        {tab === "crop" && (
+          <>
+            <div className="pe-chip-grid">
+              <Button
+                size="small"
+                icon={<RotateCw size={13} />}
+                onClick={() => patch({ transform: { ...transform, rotate: ((transform.rotate + 90) % 360) as 0 | 90 | 180 | 270 } })}
+              >
+                Rotate 90° ({transform.rotate}°)
+              </Button>
+              <Button
+                size="small"
+                type={transform.flipH ? "primary" : "default"}
+                icon={<FlipHorizontal2 size={13} />}
+                onClick={() => patch({ transform: { ...transform, flipH: !transform.flipH } })}
+              >
+                Flip horizontal
+              </Button>
+            </div>
+            <div className="pe-hint" style={{ marginTop: 4 }}>Aspect ratio</div>
+            <div className="pe-chip-grid">
+              {ASPECT_OPTIONS.map((a) => (
+                <Button
+                  key={a.id}
+                  size="small"
+                  type={transform.aspect === a.id ? "primary" : "default"}
+                  onClick={() => patch({ transform: { ...transform, aspect: a.id } })}
+                >
+                  {a.label}
+                </Button>
+              ))}
+            </div>
+            <div className="pe-chip-grid" style={{ marginTop: 4 }}>
+              <Button size="small" icon={<RotateCcw size={12} />} onClick={() => patch({ transform: { ...DEFAULT_TRANSFORM } })}>
+                Reset transform
+              </Button>
+            </div>
+          </>
         )}
 
         {tab === "frame" && (
@@ -205,7 +296,7 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
                 <Button size="small" danger icon={<Trash2 size={13} />} onClick={removeSelected}>Delete sticker</Button>
               </>
             ) : (
-              <p className="pe-hint">Tap a sticker on the photo to move, resize or rotate it.</p>
+              <p className="pe-hint">Tap a sticker on the photo to move, resize or rotate it. Press Delete to remove.</p>
             )}
           </>
         )}

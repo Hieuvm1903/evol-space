@@ -1,4 +1,3 @@
-// PlaceMarkers.tsx
 import React from "react";
 import { Marker, Popup } from "react-leaflet";
 import type { Place } from "../../lib/placesService";
@@ -23,20 +22,32 @@ function PlaceMarkersImpl({ places, selectedId, onSelect }: Props) {
             icon={glowDivIcon(name, color, 1, p.id === selectedId)}
             eventHandlers={{ click: () => onSelect(p.id) }}
           >
-            <Popup> <strong>{p.name}</strong>
-              {p.description && <div>{p.description}</div>}
-              <br />
-              <a href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`} target="_blank" rel="noreferrer">
-                Directions ↗
-              </a>
-              {" · "}
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}&query_place_id=`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Find ↗
-              </a></Popup>
+            <Popup>
+              <div className="map-popup-body">
+                <strong className="map-popup-title">{p.name}</strong>
+                {p.description && <div className="map-popup-desc">{p.description}</div>}
+                <div className="map-popup-coords">
+                  {p.lat.toFixed(5)}, {p.lon.toFixed(5)}
+                </div>
+                <div className="map-popup-links">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Directions ↗
+                  </a>
+                  <span>·</span>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}+${p.lat},${p.lon}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Google Maps ↗
+                  </a>
+                </div>
+              </div>
+            </Popup>
           </Marker>
         );
       })}

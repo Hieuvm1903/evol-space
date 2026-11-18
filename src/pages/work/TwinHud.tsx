@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import type {
+  CameraMode,
   CameraPreset,
   FacilityKpis,
   ReplayFrame,
@@ -100,6 +101,8 @@ export function TwinKpiStrip({
 }
 
 interface ControlsBarProps {
+  cameraMode: CameraMode;
+  onCameraMode: (mode: CameraMode) => void;
   cameraPreset: CameraPreset;
   onCameraPreset: (preset: CameraPreset) => void;
   overlays: TwinOverlayPrefs;
@@ -121,6 +124,8 @@ const PRESETS: { id: CameraPreset; label: string }[] = [
 ];
 
 export function TwinControlsBar({
+  cameraMode,
+  onCameraMode,
   cameraPreset,
   onCameraPreset,
   overlays,
@@ -161,6 +166,25 @@ export function TwinControlsBar({
               onClick={() => onOverlays({ followSelected: !overlays.followSelected })}
             >
               <Crosshair size={12} /> Follow
+            </button>
+          </Tooltip>
+          <span className="work-toolbar-sep" />
+          <Tooltip title="Perspective projection — natural depth perception (V)">
+            <button
+              type="button"
+              className={`twin-dock-btn${cameraMode === "perspective" ? " active" : ""}`}
+              onClick={() => onCameraMode("perspective")}
+            >
+              Perspective
+            </button>
+          </Tooltip>
+          <Tooltip title="Orthogonal projection — parallel CAD view (V)">
+            <button
+              type="button"
+              className={`twin-dock-btn${cameraMode === "orthographic" ? " active" : ""}`}
+              onClick={() => onCameraMode("orthographic")}
+            >
+              Orthogonal
             </button>
           </Tooltip>
         </div>

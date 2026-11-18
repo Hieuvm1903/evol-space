@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button, Input, Segmented, Select, Switch, Tag, Tooltip } from "antd";
 import {
   Activity,
+  Box,
   Briefcase,
   ChevronsDown,
   ChevronsUp,
@@ -41,6 +42,7 @@ import {
 } from "../../lib/sceneMath";
 import type {
   AssetTelemetry,
+  CameraMode,
   CameraPreset,
   CanvasBridge,
   FacilityKpis,
@@ -88,6 +90,7 @@ const DEFAULT_PREFS: ViewPrefs = {
   defaultLight: true,
   shadows: true,
   space: "world",
+  cameraMode: "perspective",
   focusSelection: true,
   forceWebGL: false,
   autoTransparentOccluding: true,
@@ -667,6 +670,10 @@ export function WorkPage() {
         updateUi({ all: !ui.all });
         return;
       }
+      if (!mod && k === "v") {
+        updatePrefs({ cameraMode: prefs.cameraMode === "perspective" ? "orthographic" : "perspective" });
+        return;
+      }
       if (playing || workspaceMode === "twin") return;
       if (mod && k === "z") {
         e.preventDefault();
@@ -739,8 +746,8 @@ export function WorkPage() {
         </h2>
         <p className="evol-card-meta">
           {workspaceMode === "twin"
-            ? "Live warehouse telemetry, fault injection, camera presets & 60s replay · H hide panels"
-            : "W move · E rotate · G snap · Ctrl+Z undo · Ctrl+S save · Ctrl+D duplicate · Del delete · H hide panels"}
+            ? "Live warehouse telemetry, fault injection, camera presets & 60s replay · V camera projection · H hide panels"
+            : "W move · E rotate · G snap · V camera projection · Ctrl+Z undo · Ctrl+S save · Ctrl+D duplicate · Del delete · H hide panels"}
         </p>
       </div>
 
@@ -877,6 +884,32 @@ export function WorkPage() {
 
                 {ui.toolbar && (
                   <>
+                    <span className="work-toolbar-sep" />
+                    <Tooltip title="Camera projection (V)">
+                      <Segmented
+                        size="small"
+                        value={prefs.cameraMode}
+                        onChange={(v) => updatePrefs({ cameraMode: v as CameraMode })}
+                        options={[
+                          {
+                            value: "perspective",
+                            label: (
+                              <span className="work-mode-pill">
+                                <Eye size={12} /> Perspective
+                              </span>
+                            ),
+                          },
+                          {
+                            value: "orthographic",
+                            label: (
+                              <span className="work-mode-pill">
+                                <Box size={12} /> Orthogonal
+                              </span>
+                            ),
+                          },
+                        ]}
+                      />
+                    </Tooltip>
                     <span className="work-toolbar-sep" />
                     <Input
                       size="small"
@@ -1033,6 +1066,8 @@ export function WorkPage() {
 
           {showUi && workspaceMode === "twin" && (
             <TwinControlsBar
+              cameraMode={prefs.cameraMode}
+              onCameraMode={(m) => updatePrefs({ cameraMode: m })}
               cameraPreset={cameraPreset}
               onCameraPreset={handleCameraPreset}
               overlays={overlays}

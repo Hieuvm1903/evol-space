@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Place } from "../../lib/placesService";
 import * as placesService from "../../lib/placesService";
 import { splitIcon } from "../../content/placeIcons";
+import { notify } from "../../lib/notify";
 import type { SortOption } from "./types";
 
 export function usePlaceFilters(places: Place[]) {
@@ -60,16 +61,28 @@ export function usePlaceFilters(places: Place[]) {
   }, [places, nameFilter, iconFilter, tagFilter, distCenter, radiusKm, sortBy]);
 
   function fillDistanceFromMyLocation() {
-    if (!navigator.geolocation) { alert("Geolocation not available in this browser."); return; }
+    if (!navigator.geolocation) {
+      notify.error("Geolocation unavailable", "Geolocation is not supported in this browser.");
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => setDistCenter(`${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`),
-      (err) => alert(`Couldn't get your location: ${err.message}`),
+      (err) => notify.error("Couldn't get your location", err.message),
     );
+  }
+
+  function clearFilters() {
+    setNameFilter("");
+    setTagFilter([]);
+    setIconFilter([]);
+    setDistCenter("");
+    setRadiusKm(0);
+    setSortBy("newest");
   }
 
   return {
     nameFilter, setNameFilter, tagFilter, setTagFilter, iconFilter, setIconFilter,
     distCenter, setDistCenter, radiusKm, setRadiusKm, sortBy, setSortBy,
-    allTags, result, radiusCircle, fillDistanceFromMyLocation,
+    allTags, result, radiusCircle, fillDistanceFromMyLocation, clearFilters,
   };
 }

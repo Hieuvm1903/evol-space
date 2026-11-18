@@ -1,144 +1,356 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Sparkles, Camera, Download, Save, Timer, MousePointerClick, Trash2, LogIn,
+  Camera, Download, Save, Timer, MousePointerClick, Trash2, LogIn,
   Image as ImageIcon, Images, Pencil, X, Maximize2, Minimize2,
+  FlipHorizontal2, Grid3x3, Upload, RefreshCw, Columns2, LayoutGrid,
+  Search, ChevronLeft, ChevronRight, CheckSquare,
 } from "lucide-react";
-import { Button, Select, Input, InputNumber, Segmented, Empty } from "antd";
+import { Button, Select, Input, InputNumber, Segmented, Empty, Tooltip } from "antd";
 import { useAuth } from "../contexts/AuthContext";
 import { canvasToBlob } from "../lib/imageFilters";
-import { defaultEdit, normalizeEdit, renderEdit, type EditState } from "../lib/photoEditor";
+import {
+  buildPhotoStripCanvas, defaultEdit, FILTER_PRESETS, filterCssPreview,
+  normalizeEdit, renderEdit, type EditState, type FilterPreset,
+} from "../lib/photoEditor";
 import * as photosService from "../lib/photosService";
 import { Photo } from "../lib/photosService";
 import PhotoEditor from "../components/PhotoEditor";
 import { useConfirm } from "../components/ConfirmDialog";
 import { notify } from "../lib/notify";
+import { useLongPressSelect } from "../hooks/useLongPressSelect";
+import LongPressRing from "../components/LongPressRing";
+import SelectCheckbox from "../components/SelectCheckbox";
+import SelectionToolbar from "../components/SelectionToolbar";
 import "./music/MusicPage.css";
 import "./PhotoboothPage.css";
 
-// NOT PORTED from photobooth.py: gesture capture (needs @mediapipe/tasks-vision).
-
 const TIMER_PRESETS = [3, 5, 10, 15, 30];
+
+type PhotoWithUrl = Photo & { url: string | null };
+
+function GalleryThumb({
+  url,
+  alt,
+  onClick,
+}: {
+  url: string | null;
+  alt: string;
+  onClick?: () => void;
+}) {
+  const [broken, setBroken] = useState(false);
+
+  if (!url || broken) {
+    return (
+      <div className="pb-gallery-img pb-gallery-broken" onClick={onClick}>
+        <Camera size={22} />
+        <span>Image unavailable</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      className="pb-gallery-img"
+      onError={() => setBroken(true)}
+      onClick={onClick}
+    />
+  );
+}
 
 export function PhotoboothPage() {
   const { user } = useAuth();
   const confirmDialog = useConfirm();
-const videoElRef = useRef<HTMLVideoElement | null>(null);
-const streamRef = useRef<MediaStream | null>(null);
-const cancelRef = useRef(false);
-const [expanded, setExpanded] = useState(false);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cancelRef = useRef(false);
 
-const setVideoEl = useCallback((el: HTMLVideoElement | null) => {
-  videoElRef.current = el;
-  if (el && streamRef.current) {
-    el.srcObject = streamRef.current;
-    el.play().catch(() => {});
-  }
-}, []); 
-
+  const [expanded, setExpanded] = useState(false);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [cameraAttempt, setCameraAttempt] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const [mirrored, setMirrored] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
+  const [liveFilter, setLiveFilter] = useState<FilterPreset>("None");
+  const [flashActive, setFlashActive] = useState(false);
+
+  const [shotType, setShotType] = useState<"single" | "strip">("single");
+  const [stripLayout, setStripLayout] = useState<"strip" | "grid">("strip");
+  const [stripProgress, setStripProgress] = useState<{ current: number; total: number } | null>(null);
+
   const [mode, setMode] = useState<"click" | "timer">("click");
   const [timerSeconds, setTimerSeconds] = useState(3);
   const [countdown, setCountdown] = useState<number | null>(null);
 
   const [tab, setTab] = useState<"edit" | "gallery">("edit");
-  const [base, setBase] = useState<HTMLCanvasElement | null>(null);   // untouched image
-  const [edit, setEdit] = useState<EditState>(defaultEdit());         // all layers
-  const [editing, setEditing] = useState<Photo | null>(null);         // gallery photo being re-edited
+  const [base, setBase] = useState<HTMLCanvasElement | null>(null);
+  const [edit, setEdit] = useState<EditState>(defaultEdit());
+  const [editing, setEditing] = useState<Photo | null>(null);
   const [caption, setCaption] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
-  const [photos, setPhotos] = useState<(Photo & { url: string | null })[]>([]);
+  const [photos, setPhotos] = useState<PhotoWithUrl[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
-useEffect(() => {
-  if (!expanded) return;
-  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
-  window.addEventListener("keydown", onKey);
-  return () => window.removeEventListener("keydown", onKey);
-}, [expanded]);
+  const [galleryQuery, setGalleryQuery] = useState("");
+  const [galleryFilterTag, setGalleryFilterTag] = useState<string>("All");
+  const [lightboxId, setLightboxId] = useState<number | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const longPress = useLongPressSelect<number>();
+
+  const setVideoEl = useCallback((el: HTMLVideoElement | null) => {
+    videoElRef.current = el;
+    if (el && streamRef.current) {
+      el.srcObject = streamRef.current;
+      el.play().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
+
   useEffect(() => {
     let cancelled = false;
+    setCameraReady(false);
+    setCameraError(null);
+
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("Camera isn't available in this browser (needs HTTPS or localhost).");
+      setCameraError("Camera isn't available in this browser — you can upload a photo on the right to edit.");
       return;
     }
+
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    const constraints: MediaStreamConstraints = {
+      video: selectedDeviceId
+        ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        : { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: "user" },
+      audio: false,
+    };
+
     navigator.mediaDevices
-  .getUserMedia({
-    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: "user" },
-    audio: false,
-  })
-  .then((stream) => {
-    if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-    streamRef.current = stream;
-    if (videoElRef.current) { videoElRef.current.srcObject = stream; videoElRef.current.play().catch(() => {}); }
-    setCameraReady(true);
-  })
-      .catch((err) => setCameraError(err.message || "Couldn't access the camera."));
+      .getUserMedia(constraints)
+      .then(async (stream) => {
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoElRef.current) {
+          videoElRef.current.srcObject = stream;
+          videoElRef.current.play().catch(() => {});
+        }
+        setCameraReady(true);
+
+        try {
+          const all = await navigator.mediaDevices.enumerateDevices();
+          if (!cancelled) {
+            const cams = all.filter((d) => d.kind === "videoinput");
+            setDevices(cams);
+            if (!selectedDeviceId && cams.length > 0) {
+              const activeId = stream.getVideoTracks()[0]?.getSettings().deviceId ?? cams[0].deviceId;
+              setSelectedDeviceId(activeId);
+            }
+          }
+        } catch {
+          // enumerateDevices optional
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setCameraError(err?.message || "Couldn't access the camera. Upload a photo instead or retry.");
+        }
+      });
 
     return () => {
       cancelled = true;
-      cancelRef.current = true; // stop any running countdown
+      cancelRef.current = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [selectedDeviceId, cameraAttempt]);
 
-  async function loadGallery() {
+  const loadGallery = useCallback(async () => {
     if (!user) return;
     setGalleryLoading(true);
-    const rows = await photosService.getPhotos(user.id);
-    const withUrls = await Promise.all(
-      rows.map(async (p) => ({ ...p, url: await photosService.getPhotoUrl(p.filename) })),
-    );
-    setPhotos(withUrls);
-    setGalleryLoading(false);
+    try {
+      const rows = await photosService.getPhotos(user.id);
+      const withUrls = await Promise.all(
+        rows.map(async (p) => ({ ...p, url: await photosService.getPhotoUrl(p.filename) })),
+      );
+      setPhotos(withUrls);
+    } catch {
+      notify.error("Couldn't load your gallery", "Please try refreshing.");
+    } finally {
+      setGalleryLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadGallery();
+  }, [loadGallery]);
+
+  function triggerFlash() {
+    setFlashActive(true);
+    window.setTimeout(() => setFlashActive(false), 220);
   }
-  useEffect(() => { loadGallery(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function grabVideoCanvas(): HTMLCanvasElement | null {
+    const video = videoElRef.current;
+    if (!video || video.videoWidth === 0) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d")!;
+    if (mirrored) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0);
+    return canvas;
+  }
 
   function resetEditor() {
-    setBase(null); setEdit(defaultEdit()); setEditing(null); setCaption("");
+    setBase(null);
+    setEdit(defaultEdit());
+    setEditing(null);
+    setCaption("");
   }
 
- function captureFrame() {
-  const video = videoElRef.current;
-  if (!video || video.videoWidth === 0) return;
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext("2d")!.drawImage(video, 0, 0);
-  setBase(canvas);
-  setEdit(defaultEdit());
-  setEditing(null);
-  setCaption("");
-  setExpanded(false);   // <-- new
-  setTab("edit");
-}
+  function loadCanvasIntoEditor(canvas: HTMLCanvasElement, initialFilter: FilterPreset = "None") {
+    const nextEdit = defaultEdit();
+    nextEdit.filter = initialFilter;
+    setBase(canvas);
+    setEdit(nextEdit);
+    setEditing(null);
+    setCaption("");
+    setExpanded(false);
+    setTab("edit");
+  }
 
-  async function startTimerCapture() {
-    cancelRef.current = false;
-    for (let remaining = timerSeconds; remaining > 0; remaining--) {
-      if (cancelRef.current) { setCountdown(null); return; }
+  function captureSingleFrame() {
+    const canvas = grabVideoCanvas();
+    if (!canvas) return;
+    triggerFlash();
+    loadCanvasIntoEditor(canvas, liveFilter);
+  }
+
+  async function runCountdown(seconds: number): Promise<boolean> {
+    for (let remaining = seconds; remaining > 0; remaining--) {
+      if (cancelRef.current) {
+        setCountdown(null);
+        return false;
+      }
       setCountdown(remaining);
       await new Promise((r) => setTimeout(r, 1000));
     }
-    if (cancelRef.current) { setCountdown(null); return; }
     setCountdown(null);
-    captureFrame();
+    return !cancelRef.current;
   }
-  function cancelCountdown() { cancelRef.current = true; setCountdown(null); }
+
+  async function startCaptureFlow() {
+    if (!cameraReady) return;
+    cancelRef.current = false;
+
+    if (shotType === "single") {
+      if (mode === "click") {
+        captureSingleFrame();
+        return;
+      }
+      const ok = await runCountdown(timerSeconds);
+      if (ok) captureSingleFrame();
+      return;
+    }
+
+    // 4-Cut Photobooth Strip flow
+    const total = 4;
+    const stepDelay = mode === "timer" ? Math.max(1, timerSeconds) : 2;
+    const frames: HTMLCanvasElement[] = [];
+
+    for (let i = 1; i <= total; i++) {
+      setStripProgress({ current: i, total });
+      const ok = await runCountdown(i === 1 && mode === "click" ? 2 : stepDelay);
+      if (!ok) {
+        setStripProgress(null);
+        return;
+      }
+      const frame = grabVideoCanvas();
+      if (!frame) {
+        setStripProgress(null);
+        return;
+      }
+      triggerFlash();
+      frames.push(frame);
+      if (i < total) await new Promise((r) => setTimeout(r, 320));
+    }
+
+    setStripProgress(null);
+    const composed = buildPhotoStripCanvas(frames, stripLayout);
+    loadCanvasIntoEditor(composed, liveFilter);
+    notify.added("4-cut booth strip captured!");
+  }
+
+  function cancelCountdown() {
+    cancelRef.current = true;
+    setCountdown(null);
+    setStripProgress(null);
+  }
+
+  // Spacebar shortcut to trigger capture when camera ready and not typing
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.code !== "Space" || e.repeat) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (!cameraReady || countdown !== null || stripProgress !== null) return;
+      e.preventDefault();
+      startCaptureFlow();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }); // intentional latest closure for current mode/timer state
+
+  async function handleFileUpload(file: File | null | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      notify.error("Unsupported file", "Please choose an image file (JPG, PNG, or WEBP).");
+      return;
+    }
+    try {
+      const bmp = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = bmp.width;
+      canvas.height = bmp.height;
+      canvas.getContext("2d")!.drawImage(bmp, 0, 0);
+      loadCanvasIntoEditor(canvas);
+    } catch {
+      notify.error("Couldn't open that image", "Please try a different file.");
+    }
+  }
 
   async function handleEditPhoto(p: Photo) {
     try {
-      // Original if we have it; otherwise the flattened image (older photos).
       const blob = await photosService.downloadImage(p.original_filename ?? p.filename);
       const bmp = await createImageBitmap(blob);
       const canvas = document.createElement("canvas");
-      canvas.width = bmp.width; canvas.height = bmp.height;
+      canvas.width = bmp.width;
+      canvas.height = bmp.height;
       canvas.getContext("2d")!.drawImage(bmp, 0, 0);
       setBase(canvas);
       setEdit(p.original_filename ? normalizeEdit(p.edit) : defaultEdit());
       setEditing(p);
       setCaption(p.caption);
+      setLightboxId(null);
       setTab("edit");
     } catch {
       notify.error("Couldn't open that photo", "Please try again.");
@@ -147,13 +359,27 @@ useEffect(() => {
 
   async function handleDownload() {
     if (!base) return;
-    const blob = await canvasToBlob(renderEdit(base, edit));
-    const url = URL.createObjectURL(blob);
+    try {
+      const blob = await canvasToBlob(renderEdit(base, edit));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `evol-photobooth-${Date.now().toString(36)}.jpg`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify.error("Couldn't export photo", "Please try again.");
+    }
+  }
+
+  function handleDownloadGalleryItem(p: PhotoWithUrl) {
+    if (!p.url) return;
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `evol-photobooth-${Date.now().toString(36)}.jpg`;
+    a.href = p.url;
+    a.download = `evol-photo-${p.id}.jpg`;
+    a.target = "_blank";
+    a.rel = "noreferrer";
     a.click();
-    URL.revokeObjectURL(url);
   }
 
   async function handleSaveToGallery() {
@@ -182,103 +408,334 @@ useEffect(() => {
   async function handleDeletePhoto(p: Photo) {
     if (!user) return;
     const ok = await confirmDialog({
-      title: "Delete this photo?", description: "This can't be undone.", confirmText: "Delete", danger: true,
+      title: "Delete this photo?",
+      description: "This can't be undone.",
+      confirmText: "Delete",
+      danger: true,
     });
     if (!ok) return;
-    await photosService.deletePhoto(p, user.id);
-    if (editing?.id === p.id) resetEditor();
-    notify.deleted("Photo removed.");
-    loadGallery();
+    try {
+      await photosService.deletePhoto(p, user.id);
+      if (editing?.id === p.id) resetEditor();
+      if (lightboxId === p.id) setLightboxId(null);
+      notify.deleted("Photo removed.");
+      loadGallery();
+    } catch {
+      notify.error("Couldn't delete the photo", "Please try again.");
+    }
   }
-const cameraView = (
-  <div className={`pb-video-wrap${expanded ? " pb-video-expanded" : ""}`}>
-    <video ref={setVideoEl} autoPlay playsInline muted />
-    {countdown !== null && <div className="pb-countdown">{countdown}</div>}
 
-    <button
-      type="button" className="pb-expand-btn"
-      onClick={() => setExpanded((v) => !v)}
-      title={expanded ? "Exit expanded view (Esc)" : "Expand camera"}
-    >
-      {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-    </button>
+  async function handleBulkDelete() {
+    if (!user) return;
+    const ids = Array.from(longPress.selectedIds);
+    if (!ids.length) return;
+    const ok = await confirmDialog({
+      title: `Delete ${ids.length} photo${ids.length === 1 ? "" : "s"}?`,
+      description: "This can't be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
 
-    {expanded && (
-      <div className="pb-expanded-controls">
-        <Segmented
-          value={mode} onChange={(v) => setMode(v as "click" | "timer")}
-          disabled={countdown !== null}
-          options={[
-            { label: <MousePointerClick size={14} style={{ verticalAlign: -2 }} />, value: "click" },
-            { label: <Timer size={14} style={{ verticalAlign: -2 }} />, value: "timer" },
-          ]}
-        />
-        {mode === "timer" && (
-          <InputNumber
-            min={1} max={60} precision={0} value={timerSeconds} suffix="s"
-            onChange={(v) => setTimerSeconds(v ?? 3)}
-            disabled={countdown !== null} style={{ width: 100 }}
-          />
-        )}
-        {countdown !== null ? (
-          <Button danger size="large" icon={<X size={16} />} onClick={cancelCountdown}>Cancel</Button>
-        ) : (
-          <Button
-            type="primary" size="large" className="btn-glow"
-            icon={mode === "click" ? <Camera size={16} /> : <Timer size={16} />}
-            disabled={!cameraReady}
-            onClick={mode === "click" ? captureFrame : startTimerCapture}
+    setBulkDeleting(true);
+    try {
+      const map = new Map(photos.map((p) => [p.id, p]));
+      for (const id of ids) {
+        const target = map.get(id);
+        if (target) await photosService.deletePhoto(target, user.id);
+      }
+      if (editing && ids.includes(editing.id)) resetEditor();
+      notify.deleted(`${ids.length} photo${ids.length === 1 ? "" : "s"} removed.`);
+      longPress.exitSelectMode();
+      await loadGallery();
+    } catch {
+      notify.error("Some photos couldn't be deleted", "Please try again.");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  const galleryFilterOptions = useMemo(() => {
+    const used = new Set(photos.map((p) => p.filter).filter(Boolean));
+    return ["All", ...Array.from(used)];
+  }, [photos]);
+
+  const filteredPhotos = useMemo(() => {
+    const q = galleryQuery.trim().toLowerCase();
+    return photos.filter((p) => {
+      if (galleryFilterTag !== "All" && p.filter !== galleryFilterTag) return false;
+      if (q && !(p.caption || "").toLowerCase().includes(q) && !p.filter.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [photos, galleryQuery, galleryFilterTag]);
+
+  const lightboxIndex = useMemo(
+    () => (lightboxId === null ? -1 : filteredPhotos.findIndex((p) => p.id === lightboxId)),
+    [filteredPhotos, lightboxId],
+  );
+  const lightboxPhoto = lightboxIndex >= 0 ? filteredPhotos[lightboxIndex] : null;
+
+  useEffect(() => {
+    if (!lightboxPhoto) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightboxId(null);
+      else if (e.key === "ArrowLeft" && lightboxIndex > 0) setLightboxId(filteredPhotos[lightboxIndex - 1].id);
+      else if (e.key === "ArrowRight" && lightboxIndex < filteredPhotos.length - 1) setLightboxId(filteredPhotos[lightboxIndex + 1].id);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxPhoto, lightboxIndex, filteredPhotos]);
+
+  const busyCapturing = countdown !== null || stripProgress !== null;
+
+  const liveVideoStyle: React.CSSProperties = {
+    transform: mirrored ? "scaleX(-1)" : undefined,
+    filter: filterCssPreview(liveFilter, 1) || undefined,
+  };
+
+  const cameraView = (
+    <div className={`pb-video-wrap${expanded ? " pb-video-expanded" : ""}`}>
+      <video ref={setVideoEl} autoPlay playsInline muted style={liveVideoStyle} />
+
+      {showGrid && (
+        <div className="pb-grid-overlay" aria-hidden>
+          <span /><span /><span /><span />
+        </div>
+      )}
+
+      {flashActive && <div className="pb-shutter-flash" aria-hidden />}
+
+      {stripProgress && (
+        <div className="pb-strip-badge">
+          Shot {stripProgress.current} / {stripProgress.total}
+        </div>
+      )}
+
+      {countdown !== null && <div className="pb-countdown">{countdown}</div>}
+
+      <div className="pb-viewfinder-top-actions">
+        <Tooltip title={mirrored ? "Mirror preview: On" : "Mirror preview: Off"}>
+          <button
+            type="button"
+            className={`pb-vf-btn${mirrored ? " active" : ""}`}
+            onClick={() => setMirrored((v) => !v)}
           >
-            {mode === "click" ? "Capture" : "Start countdown"}
-          </Button>
-        )}
+            <FlipHorizontal2 size={15} />
+          </button>
+        </Tooltip>
+        <Tooltip title={showGrid ? "Hide grid" : "Rule-of-thirds grid"}>
+          <button
+            type="button"
+            className={`pb-vf-btn${showGrid ? " active" : ""}`}
+            onClick={() => setShowGrid((v) => !v)}
+          >
+            <Grid3x3 size={15} />
+          </button>
+        </Tooltip>
+        <Tooltip title={expanded ? "Exit expanded view (Esc)" : "Expand camera"}>
+          <button
+            type="button"
+            className="pb-vf-btn"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+        </Tooltip>
       </div>
-    )}
-  </div>
-);
+
+      {expanded && (
+        <div className="pb-expanded-controls">
+          <Segmented
+            value={shotType}
+            onChange={(v) => setShotType(v as "single" | "strip")}
+            disabled={busyCapturing}
+            options={[
+              { label: "Single", value: "single" },
+              { label: "4-Cut Strip", value: "strip" },
+            ]}
+          />
+          <Segmented
+            value={mode}
+            onChange={(v) => setMode(v as "click" | "timer")}
+            disabled={busyCapturing}
+            options={[
+              { label: <MousePointerClick size={14} style={{ verticalAlign: -2 }} />, value: "click" },
+              { label: <Timer size={14} style={{ verticalAlign: -2 }} />, value: "timer" },
+            ]}
+          />
+          {mode === "timer" && (
+            <InputNumber
+              min={1} max={60} precision={0} value={timerSeconds} suffix="s"
+              onChange={(v) => setTimerSeconds(v ?? 3)}
+              disabled={busyCapturing} style={{ width: 92 }}
+            />
+          )}
+          {busyCapturing ? (
+            <Button danger size="large" icon={<X size={16} />} onClick={cancelCountdown}>Cancel</Button>
+          ) : (
+            <Button
+              type="primary" size="large" className="btn-glow"
+              icon={mode === "click" && shotType === "single" ? <Camera size={16} /> : <Timer size={16} />}
+              disabled={!cameraReady}
+              onClick={startCaptureFlow}
+            >
+              {shotType === "strip" ? "Start 4-cut strip" : mode === "click" ? "Capture (Space)" : "Start countdown"}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="page photobooth-page-shell">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          handleFileUpload(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+
       <div className="music-shell-header fade-in-up">
-        <h2 className="music-title"><Sparkles size={20} className="music-title-icon" /> Photobooth</h2>
-        <p className="music-subtitle">
-          {user
-            ? "Snap a pic, edit it like a photo app, then download it or save it — you can re-edit saved photos anytime."
-            : "Snap a pic, edit it and download it. Log in to save editable photos to a personal gallery."}
-        </p>
+        <div className="pb-header-row">
+          <div>
+            <h2 className="music-title"><Camera size={20} className="music-title-icon" /> Photobooth</h2>
+            <p className="music-subtitle">
+              {user
+                ? "Snap a pic, compose a 4-cut strip, or upload an image — non-destructive layers stay editable anytime."
+                : "Snap a pic, edit layers, and export in full quality. Log in to save editable photos to your gallery."}
+            </p>
+          </div>
+          <Button
+            icon={<Upload size={14} />}
+            onClick={() => fileInputRef.current?.click()}
+            className="pb-upload-header-btn"
+          >
+            Upload photo
+          </Button>
+        </div>
       </div>
 
       <div className="pb-workspace">
         {/* ---------------- Left: camera + capture ---------------- */}
         <div className="music-pane pb-pane fade-in-up">
           <div className="pb-pane-body">
-           {expanded ? createPortal(cameraView, document.body) : cameraView}
-            {cameraError && <p className="error" style={{ margin: 0 }}>{cameraError}</p>}
+            {expanded ? createPortal(cameraView, document.body) : cameraView}
+
+            {cameraError && (
+              <div className="pb-camera-fallback">
+                <p className="error" style={{ margin: 0 }}>{cameraError}</p>
+                <div className="pb-fallback-actions">
+                  <Button size="small" icon={<RefreshCw size={13} />} onClick={() => setCameraAttempt((n) => n + 1)}>
+                    Retry camera
+                  </Button>
+                  <Button size="small" type="primary" icon={<Upload size={13} />} onClick={() => fileInputRef.current?.click()}>
+                    Upload image
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {devices.length > 1 && (
+              <Select
+                size="small"
+                value={selectedDeviceId || undefined}
+                onChange={(id) => setSelectedDeviceId(id)}
+                disabled={busyCapturing}
+                options={devices.map((d, idx) => ({
+                  value: d.deviceId,
+                  label: d.label || `Camera ${idx + 1}`,
+                }))}
+                placeholder="Select camera"
+              />
+            )}
+
+            <div className="pb-control-group">
+              <Segmented
+                block
+                value={shotType}
+                disabled={busyCapturing}
+                onChange={(v) => setShotType(v as "single" | "strip")}
+                options={[
+                  { label: <span className="pb-seg-label"><Camera size={13} />Single shot</span>, value: "single" },
+                  { label: <span className="pb-seg-label"><Columns2 size={13} />4-Cut strip</span>, value: "strip" },
+                ]}
+              />
+
+              {shotType === "strip" && (
+                <div className="pb-strip-layout-row">
+                  <span className="pb-strip-layout-label">Strip layout</span>
+                  <Segmented
+                    size="small"
+                    value={stripLayout}
+                    disabled={busyCapturing}
+                    onChange={(v) => setStripLayout(v as "strip" | "grid")}
+                    options={[
+                      { label: <span className="pb-seg-label"><Columns2 size={12} />1×4</span>, value: "strip" },
+                      { label: <span className="pb-seg-label"><LayoutGrid size={12} />2×2</span>, value: "grid" },
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="pb-live-filter-row">
+              <span className="pb-strip-layout-label">Live look</span>
+              <Select
+                size="small"
+                value={liveFilter}
+                onChange={(v) => setLiveFilter(v)}
+                style={{ flex: 1 }}
+                options={FILTER_PRESETS.map((f) => ({ value: f, label: f }))}
+              />
+            </div>
 
             <Segmented
-              block value={mode} onChange={(v) => setMode(v as "click" | "timer")}
+              block
+              value={mode}
+              disabled={busyCapturing}
+              onChange={(v) => setMode(v as "click" | "timer")}
               options={[
-                { label: <span><MousePointerClick size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Click</span>, value: "click" },
-                { label: <span><Timer size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Timer</span>, value: "timer" },
+                { label: <span className="pb-seg-label"><MousePointerClick size={14} />Instant</span>, value: "click" },
+                { label: <span className="pb-seg-label"><Timer size={14} />Timer</span>, value: "timer" },
               ]}
             />
 
             {mode === "click" ? (
-              <Button type="primary" icon={<Camera size={15} />} className="btn-glow"
-                onClick={captureFrame} disabled={!cameraReady} block>
-                Capture
-              </Button>
+              busyCapturing ? (
+                <Button danger icon={<X size={15} />} onClick={cancelCountdown} block>
+                  Cancel strip ({stripProgress?.current ?? 0}/4)
+                </Button>
+              ) : (
+                <Button
+                  type="primary"
+                  icon={<Camera size={15} />}
+                  className="btn-glow"
+                  onClick={startCaptureFlow}
+                  disabled={!cameraReady}
+                  block
+                >
+                  {shotType === "strip" ? "Capture 4-cut strip" : "Capture (Space)"}
+                </Button>
+              )
             ) : (
               <>
                 <div className="pb-timer-row">
                   <InputNumber
                     min={1} max={60} precision={0} value={timerSeconds} suffix="s"
                     onChange={(v) => setTimerSeconds(v ?? 3)}
-                    disabled={countdown !== null} style={{ width: 110 }}
+                    disabled={busyCapturing} style={{ width: 98 }}
                   />
-                  {countdown === null ? (
-                    <Button type="primary" icon={<Timer size={15} />} className="btn-glow"
-                      onClick={startTimerCapture} disabled={!cameraReady} style={{ flex: 1 }}>
-                      Start countdown
+                  {!busyCapturing ? (
+                    <Button
+                      type="primary" icon={<Timer size={15} />} className="btn-glow"
+                      onClick={startCaptureFlow} disabled={!cameraReady} style={{ flex: 1 }}
+                    >
+                      {shotType === "strip" ? "Start 4-cut timer" : "Start countdown"}
                     </Button>
                   ) : (
                     <Button danger icon={<X size={15} />} onClick={cancelCountdown} style={{ flex: 1 }}>
@@ -288,8 +745,13 @@ const cameraView = (
                 </div>
                 <div className="pb-chip-row">
                   {TIMER_PRESETS.map((s) => (
-                    <Button key={s} size="small" type={timerSeconds === s ? "primary" : "default"}
-                      disabled={countdown !== null} onClick={() => setTimerSeconds(s)}>
+                    <Button
+                      key={s}
+                      size="small"
+                      type={timerSeconds === s ? "primary" : "default"}
+                      disabled={busyCapturing}
+                      onClick={() => setTimerSeconds(s)}
+                    >
                       {s}s
                     </Button>
                   ))}
@@ -303,13 +765,18 @@ const cameraView = (
         <div className="music-pane pb-pane fade-in-up">
           <div className="pb-pane-body">
             <Segmented
-              block value={tab} onChange={(v) => setTab(v as "edit" | "gallery")}
+              block
+              value={tab}
+              onChange={(v) => {
+                if (v !== "gallery") longPress.exitSelectMode();
+                setTab(v as "edit" | "gallery");
+              }}
               options={[
-                { label: <span><ImageIcon size={14} style={{ verticalAlign: -2, marginRight: 6 }} />{editing ? "Editing" : "Edit"}</span>, value: "edit" },
+                { label: <span className="pb-seg-label"><ImageIcon size={14} />{editing ? "Editing" : "Editor"}</span>, value: "edit" },
                 {
                   label: (
-                    <span>
-                      <Images size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+                    <span className="pb-seg-label">
+                      <Images size={14} />
                       Gallery{user && photos.length > 0 ? ` (${photos.length})` : ""}
                     </span>
                   ),
@@ -323,26 +790,58 @@ const cameraView = (
                 {base ? (
                   <>
                     <PhotoEditor base={base} state={edit} onChange={setEdit} />
-                    <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption (optional)" />
+                    <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption (optional)" allowClear />
                     <div className="pb-actions-row">
                       <Button icon={<Download size={14} />} onClick={handleDownload}>Download</Button>
                       {user ? (
-                        <Button type="primary" icon={<Save size={14} />} className="btn-glow"
-                          onClick={handleSaveToGallery} loading={saving} style={{ flex: 1 }}>
+                        <Button
+                          type="primary"
+                          icon={<Save size={14} />}
+                          className="btn-glow"
+                          onClick={handleSaveToGallery}
+                          loading={saving}
+                          style={{ flex: 1 }}
+                        >
                           {editing ? "Save changes" : "Save to gallery"}
                         </Button>
                       ) : (
-                        <Button disabled icon={<LogIn size={14} />} style={{ flex: 1 }}
-                          title="Log in to save photos to a personal gallery">
+                        <Button
+                          disabled
+                          icon={<LogIn size={14} />}
+                          style={{ flex: 1 }}
+                          title="Log in to save photos to a personal gallery"
+                        >
                           Log in to save
                         </Button>
                       )}
-                      <Button icon={<X size={14} />} onClick={resetEditor} title="Discard" />
+                      <Tooltip title="Discard current edit">
+                        <Button icon={<X size={14} />} onClick={resetEditor} />
+                      </Tooltip>
                     </div>
                   </>
                 ) : (
-                  <div className="pb-preview-frame">
-                    <p className="placeholder-note">Capture a photo to start editing it here.</p>
+                  <div
+                    className={`pb-preview-frame${dragOver ? " drag-over" : ""}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      handleFileUpload(e.dataTransfer.files?.[0]);
+                    }}
+                  >
+                    <Upload size={26} style={{ color: "#8b6ff5", marginBottom: 8 }} />
+                    <p className="placeholder-note">
+                      Capture from the camera, or drop an image here to start editing.
+                    </p>
+                    <Button
+                      size="small"
+                      icon={<Upload size={13} />}
+                      style={{ marginTop: 12 }}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Choose image file
+                    </Button>
                   </div>
                 )}
               </div>
@@ -351,37 +850,208 @@ const cameraView = (
             {tab === "gallery" && (
               <div className="pb-tab-content fade-in" key="gallery">
                 {!user ? (
-                  <div className="pb-empty-center"><p className="placeholder-note">Log in to see and manage a personal photo gallery.</p></div>
+                  <div className="pb-empty-center">
+                    <p className="placeholder-note">Log in to view and manage your personal photo gallery.</p>
+                  </div>
                 ) : galleryLoading ? (
-                  <div className="pb-empty-center"><p className="placeholder-note">Loading…</p></div>
+                  <div className="pb-empty-center">
+                    <p className="placeholder-note">Loading gallery…</p>
+                  </div>
                 ) : photos.length === 0 ? (
                   <div className="pb-empty-center">
-                    <Empty className="fade-in" image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={<span style={{ color: "#9c97b8" }}>No photos yet. Take one and save it!</span>} />
+                    <Empty
+                      className="fade-in"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description={<span style={{ color: "#9c97b8" }}>No photos yet. Take or upload one and save it!</span>}
+                    />
                   </div>
                 ) : (
-                  <div className="pb-gallery-scroll">
-                    <div className="pb-gallery-grid">
-                      {photos.map((p, i) => (
-                        <div className="evol-card pb-gallery-card stagger-item"
-                          style={{ animationDelay: `${Math.min(i, 14) * 30}ms` }} key={p.id}>
-                          {p.url ? <img src={p.url} alt="" className="pb-gallery-img" /> : <p className="error">Photo missing.</p>}
-                          <div className="evol-card-meta">{new Date(p.time).toLocaleString()} · {p.filter}</div>
-                          {p.caption && <div className="evol-card-body">{p.caption}</div>}
-                          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                            <Button size="small" icon={<Pencil size={13} />} onClick={() => handleEditPhoto(p)}>Edit</Button>
-                            <Button danger size="small" icon={<Trash2 size={13} />} onClick={() => handleDeletePhoto(p)}>Delete</Button>
-                          </div>
-                        </div>
-                      ))}
+                  <>
+                    <div className="pb-gallery-toolbar">
+                      <Input
+                        size="small"
+                        prefix={<Search size={13} color="#9c97b8" />}
+                        value={galleryQuery}
+                        onChange={(e) => setGalleryQuery(e.target.value)}
+                        placeholder="Search captions or filters…"
+                        allowClear
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+                      <Select
+                        size="small"
+                        value={galleryFilterTag}
+                        onChange={setGalleryFilterTag}
+                        style={{ width: 120 }}
+                        options={galleryFilterOptions.map((f) => ({ value: f, label: f }))}
+                      />
+                      <Tooltip title={longPress.selectMode ? "Exit selection" : "Select multiple"}>
+                        <Button
+                          size="small"
+                          type={longPress.selectMode ? "primary" : "default"}
+                          icon={<CheckSquare size={13} />}
+                          onClick={() =>
+                            longPress.selectMode
+                              ? longPress.exitSelectMode()
+                              : longPress.enterSelectMode()
+                          }
+                        />
+                      </Tooltip>
                     </div>
-                  </div>
+
+                    {filteredPhotos.length === 0 ? (
+                      <div className="pb-empty-center">
+                        <Empty
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          description={<span style={{ color: "#9c97b8" }}>No matching photos.</span>}
+                        />
+                      </div>
+                    ) : (
+                      <div className="pb-gallery-scroll">
+                        <div className="pb-gallery-grid">
+                          {filteredPhotos.map((p, i) => {
+                            const selecting = longPress.selectMode;
+                            const checked = longPress.isSelected(p.id);
+                            const pressing = longPress.isPressing(p.id);
+                            const lp = longPress.bind(p.id);
+                            return (
+                              <div
+                                className={`evol-card pb-gallery-card stagger-item${checked ? " bulk-selected" : ""}${pressing ? " pressing" : ""}`}
+                                style={{ animationDelay: `${Math.min(i, 14) * 30}ms` }}
+                                key={p.id}
+                                {...lp}
+                                onClick={(e) => {
+                                  lp.onClick(e);
+                                  if (!selecting && !e.defaultPrevented) setLightboxId(p.id);
+                                }}
+                              >
+                                <div className="pb-gallery-thumb-wrap">
+                                  <GalleryThumb url={p.url} alt={p.caption || "Saved photo"} />
+                                  {selecting && (
+                                    <div className="pb-gallery-check">
+                                      <SelectCheckbox checked={checked} />
+                                    </div>
+                                  )}
+                                  {pressing && (
+                                    <div className="pb-gallery-check">
+                                      <LongPressRing />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="evol-card-meta pb-gallery-meta">
+                                  <span>{new Date(p.time).toLocaleDateString()}</span>
+                                  <span>· {p.filter}</span>
+                                </div>
+                                {p.caption && <div className="evol-card-body pb-gallery-caption">{p.caption}</div>}
+                                {!selecting && (
+                                  <div className="pb-gallery-card-actions" onClick={(e) => e.stopPropagation()}>
+                                    <Tooltip title="Edit layers">
+                                      <Button size="small" icon={<Pencil size={13} />} onClick={() => handleEditPhoto(p)} />
+                                    </Tooltip>
+                                    <Tooltip title="Download">
+                                      <Button size="small" icon={<Download size={13} />} disabled={!p.url} onClick={() => handleDownloadGalleryItem(p)} />
+                                    </Tooltip>
+                                    <Tooltip title="Delete">
+                                      <Button danger size="small" icon={<Trash2 size={13} />} onClick={() => handleDeletePhoto(p)} />
+                                    </Tooltip>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {tab === "gallery" && longPress.selectMode && (
+        <SelectionToolbar
+          count={longPress.selectedCount}
+          total={filteredPhotos.length}
+          itemLabel="photo"
+          deleting={bulkDeleting}
+          onSelectAll={() => longPress.selectAll(filteredPhotos.map((p) => p.id))}
+          onClearSelection={longPress.clearSelection}
+          onCancel={longPress.exitSelectMode}
+          onDelete={handleBulkDelete}
+        />
+      )}
+
+      {lightboxPhoto && createPortal(
+        <div className="pb-lightbox" onClick={() => setLightboxId(null)}>
+          <div className="pb-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="pb-lightbox-top">
+              <div className="pb-lightbox-meta">
+                <strong>{lightboxPhoto.caption || "Untitled capture"}</strong>
+                <span>
+                  {new Date(lightboxPhoto.time).toLocaleString()} · {lightboxPhoto.filter}
+                </span>
+              </div>
+              <div className="pb-lightbox-actions">
+                <Button size="small" icon={<Pencil size={13} />} onClick={() => handleEditPhoto(lightboxPhoto)}>
+                  Edit
+                </Button>
+                <Button
+                  size="small"
+                  icon={<Download size={13} />}
+                  disabled={!lightboxPhoto.url}
+                  onClick={() => handleDownloadGalleryItem(lightboxPhoto)}
+                >
+                  Download
+                </Button>
+                <Button size="small" danger icon={<Trash2 size={13} />} onClick={() => handleDeletePhoto(lightboxPhoto)}>
+                  Delete
+                </Button>
+                <Button size="small" icon={<X size={14} />} onClick={() => setLightboxId(null)} />
+              </div>
+            </div>
+
+            <div className="pb-lightbox-stage">
+              {lightboxIndex > 0 && (
+                <button
+                  type="button"
+                  className="pb-lightbox-nav pb-lightbox-prev"
+                  onClick={() => setLightboxId(filteredPhotos[lightboxIndex - 1].id)}
+                  aria-label="Previous photo"
+                >
+                  <ChevronLeft size={22} />
+                </button>
+              )}
+
+              {lightboxPhoto.url ? (
+                <img
+                  src={lightboxPhoto.url}
+                  alt={lightboxPhoto.caption || "Photo preview"}
+                  referrerPolicy="no-referrer"
+                  className="pb-lightbox-img"
+                />
+              ) : (
+                <div className="pb-gallery-broken pb-lightbox-broken">
+                  <Camera size={34} />
+                  <span>Image unavailable</span>
+                </div>
+              )}
+
+              {lightboxIndex < filteredPhotos.length - 1 && (
+                <button
+                  type="button"
+                  className="pb-lightbox-nav pb-lightbox-next"
+                  onClick={() => setLightboxId(filteredPhotos[lightboxIndex + 1].id)}
+                  aria-label="Next photo"
+                >
+                  <ChevronRight size={22} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

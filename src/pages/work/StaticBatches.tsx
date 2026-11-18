@@ -2,7 +2,7 @@ import React, { Suspense, useEffect, useMemo, useRef } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAssetInfo, type AssetInfo } from "./assetInfo";
-import { computeLodTier, type LodPart } from "./lodCompute";
+import { cameraLodParams, computeLodTier, type LodPart } from "./lodCompute";
 import {
   installOcclusionShader,
   stepOcclusionMaterial,
@@ -217,7 +217,6 @@ function StaticBatchRenderer({
     t.pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     t.frustum.setFromProjectionMatrix(t.pv);
     t.cam.setFromMatrixPosition(camera.matrixWorld);
-    const camFov = (camera as THREE.PerspectiveCamera).fov ?? 42;
 
     const drag = live.current;
     const near = nearIds.current;
@@ -249,8 +248,9 @@ function StaticBatchRenderer({
       t.c.copy(info.center).applyMatrix4(m);
       const r = info.radius * m.getMaxScaleOnAxis();
       const d = t.c.distanceTo(t.cam);
+      const { effDistance, fovDeg: camFov } = cameraLodParams(camera, d);
 
-      if (d - r > cfg.cullDist) {
+      if (effDistance - r > cfg.cullDist) {
         culled++;
         continue;
       }
@@ -272,7 +272,7 @@ function StaticBatchRenderer({
         continue;
       }
 
-      const tier = cfg.lodDist < Infinity ? computeLodTier(d, r, cfg.lodDist, camFov) : 0;
+      const tier = cfg.lodDist < Infinity ? computeLodTier(effDistance, r, cfg.lodDist, camFov) : 0;
       if (tier === 0) {
         const k = near.length;
         for (let i = 0; i < lod0Meshes.length; i++) {

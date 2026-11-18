@@ -40,6 +40,7 @@ export function SharedPlacesPage() {
   const [data, setData] = useState<SharedPlaceList | null | undefined>(undefined);
   const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<"browse" | "config">("browse");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [mapMode, setMapMode] = useState<MapMode>(readMapMode);
   const [activeTools, setActiveTools] = useState<MapTool[]>(readMapTools);
@@ -51,7 +52,6 @@ export function SharedPlacesPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
 
-  // Unused in read-only mode, but BrowseTab expects the hook instance.
   const longPress = useLongPressSelect<number>();
 
   useEffect(() => {
@@ -59,7 +59,6 @@ export function SharedPlacesPage() {
     fetchSharedPlaceList(token).then(setData).catch(() => setData(null));
   }, [token]);
 
-  // Give shared places synthetic ids so the Browse/Map components (keyed by id) work unchanged.
   const places: Place[] = useMemo(
     () => (data?.places ?? []).map((p, i) => ({
       id: i + 1, user_id: "", name: p.name, lat: p.lat, lon: p.lon,
@@ -70,20 +69,25 @@ export function SharedPlacesPage() {
   const points = useMemo(() => places.map((p) => [p.lat, p.lon] as [number, number]), [places]);
   const filters = usePlaceFilters(places);
   const blankForm = useMemo(() => emptyForm(), []);
+  const selectedPlace = useMemo(
+    () => (selectedId === null ? null : places.find((p) => p.id === selectedId) ?? null),
+    [places, selectedId],
+  );
 
   const measuredDistanceKm = useMemo(() => {
     let total = 0;
     for (let i = 1; i < measurePoints.length; i++) {
       total += placesService.haversineKm(
-        measurePoints[i - 1][0], measurePoints[i - 1][1], measurePoints[i][0], measurePoints[i][1]);
+        measurePoints[i - 1][0], measurePoints[i - 1][1], measurePoints[i][0], measurePoints[i][1],
+      );
     }
     return total;
   }, [measurePoints]);
 
   useEffect(() => {
-    const id = setTimeout(() => mapRef.current?.invalidateSize(), 220);
+    const id = setTimeout(() => mapRef.current?.invalidateSize(), 240);
     return () => clearTimeout(id);
-  }, [fullscreen]);
+  }, [fullscreen, sidebarOpen]);
 
   function updateMapMode(mode: MapMode) {
     setMapMode(mode);
@@ -107,10 +111,13 @@ export function SharedPlacesPage() {
   }, [fullscreen, activeTools]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function withLocation(cb: (lat: number, lng: number) => void) {
-    if (!navigator.geolocation) { alert("Geolocation not available in this browser."); return; }
+    if (!navigator.geolocation) {
+      notify.error("Geolocation unavailable", "Geolocation is not supported in this browser.");
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => cb(pos.coords.latitude, pos.coords.longitude),
-      (err) => alert(`Couldn't get your location: ${err.message}`),
+      (err) => notify.error("Couldn't get your location", err.message),
     );
   }
   const addMeasurePoint = (lat: number, lng: number) => setMeasurePoints((pts) => [...pts, [lat, lng]]);
@@ -121,6 +128,12 @@ export function SharedPlacesPage() {
       if (line && line.length > 1) setSketchLines((all) => [...all, line]);
       return null;
     });
+  }
+
+  function fitAll() {
+    if (!filters.result.length) return;
+    const pts = filters.result.map((p) => [p.lat, p.lon] as [number, number]);
+    mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [54, 54], maxZoom: 15 });
   }
 
   function selectAndFly(p: Place) {
@@ -144,8 +157,10 @@ export function SharedPlacesPage() {
   if (data === null) {
     return (
       <div className="page">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="This list link is invalid or sharing was turned off." />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="This list link is invalid or sharing was turned off."
+        />
       </div>
     );
   }
@@ -160,71 +175,83 @@ export function SharedPlacesPage() {
           {data.name}
         </Title>
         {user ? (
-          <Button type="primary" className="btn-glow" icon={<Download size={14} />}
-            loading={importing} onClick={handleImport}>
+          <Button
+            type="primary"
+            className="btn-glow"
+            icon={<Download size={14} />}
+            loading={importing}
+            onClick={handleImport}
+          >
             Save all to my places
           </Button>
         ) : (
           <Link to="/login"><Button icon={<LogIn size={14} />}>Log in to save a copy</Button></Link>
         )}
       </div>
-      <p className="map-page-sub">
+      <p className="map-page-sub" style={{ marginBottom: 12 }}>
         {data.owner ? `Shared by ${data.owner} · ` : ""}
         {places.length} place{places.length === 1 ? "" : "s"}
         {data.description ? ` · ${data.description}` : ""}
       </p>
 
-      <div className="map-layout">
-        <div className="map-sidebar">
-          <Tabs
-            className="map-sidebar-tabs"
-            activeKey={tab}
-            onChange={(k) => setTab(k as "browse" | "config")}
-            items={[
-              { key: "browse", label: "Browse" },
-              { key: "config", label: "Map settings" },
-            ]}
-          />
-
-          {tab === "browse" && (
-            <BrowseTab
-              readOnly
-              loading={false}
-              places={filters.result}
-              nameFilter={filters.nameFilter}
-              onNameFilterChange={filters.setNameFilter}
-              iconFilter={filters.iconFilter}
-              onIconFilterChange={filters.setIconFilter}
-              sortBy={filters.sortBy}
-              onSortByChange={filters.setSortBy}
-              distCenter={filters.distCenter}
-              onDistCenterChange={filters.setDistCenter}
-              onUseMyLocationForDistance={filters.fillDistanceFromMyLocation}
-              radiusKm={filters.radiusKm}
-              onRadiusKmChange={filters.setRadiusKm}
-              allTags={filters.allTags}
-              tagFilter={filters.tagFilter}
-              onTagFilterChange={filters.setTagFilter}
-              selectedId={selectedId}
-              onSelectAndFly={selectAndFly}
-              longPress={longPress}
+      <div className={`map-layout${sidebarOpen ? "" : " sidebar-collapsed"}`}>
+        {sidebarOpen && (
+          <div className="map-sidebar">
+            <Tabs
+              className="map-sidebar-tabs"
+              activeKey={tab}
+              onChange={(k) => setTab(k as "browse" | "config")}
+              items={[
+                { key: "browse", label: "Browse" },
+                { key: "config", label: "Settings" },
+              ]}
             />
-          )}
 
-          {tab === "config" && (
-            <MapSettingsTab
-              mapMode={mapMode}
-              onMapModeChange={updateMapMode}
-              activeTools={activeTools}
-              onActiveToolsChange={updateActiveTools}
-            />
-          )}
-        </div>
+            {tab === "browse" && (
+              <BrowseTab
+                readOnly
+                loading={false}
+                totalCount={places.length}
+                places={filters.result}
+                nameFilter={filters.nameFilter}
+                onNameFilterChange={filters.setNameFilter}
+                iconFilter={filters.iconFilter}
+                onIconFilterChange={filters.setIconFilter}
+                sortBy={filters.sortBy}
+                onSortByChange={filters.setSortBy}
+                distCenter={filters.distCenter}
+                onDistCenterChange={filters.setDistCenter}
+                onUseMyLocationForDistance={filters.fillDistanceFromMyLocation}
+                radiusKm={filters.radiusKm}
+                onRadiusKmChange={filters.setRadiusKm}
+                allTags={filters.allTags}
+                tagFilter={filters.tagFilter}
+                onTagFilterChange={filters.setTagFilter}
+                onClearFilters={filters.clearFilters}
+                onFitAll={fitAll}
+                selectedId={selectedId}
+                onSelectAndFly={selectAndFly}
+                longPress={longPress}
+              />
+            )}
+
+            {tab === "config" && (
+              <MapSettingsTab
+                mapMode={mapMode}
+                onMapModeChange={updateMapMode}
+                activeTools={activeTools}
+                onActiveToolsChange={updateActiveTools}
+              />
+            )}
+          </div>
+        )}
 
         <MapCanvas
           readOnly
           mapRef={mapRef}
           fullscreen={fullscreen}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((v) => !v)}
           mapMode={mapMode}
           activeTools={activeTools}
           onExitFullscreen={() => updateActiveTools(activeTools.filter((t) => t !== "fullscreen"))}
@@ -246,6 +273,12 @@ export function SharedPlacesPage() {
           onLeftClickDeselect={() => setSelectedId(null)}
           displayedPlaces={filters.result}
           onSelectPlace={setSelectedId}
+          selectedPlace={selectedPlace}
+          onTagClick={(t) => {
+            filters.setTagFilter((cur) => (cur.includes(t) ? cur : [...cur, t]));
+            setSidebarOpen(true);
+            setTab("browse");
+          }}
           form={blankForm}
           hasPreview={false}
           previewLat={0}
@@ -258,6 +291,7 @@ export function SharedPlacesPage() {
               mapRef.current?.flyTo([lat, lng], 13, { duration: 0.7 });
             })
           }
+          onFitAll={fitAll}
           onOpenAdd={() => {}}
           selectedId={selectedId}
         >

@@ -5,6 +5,7 @@ import { PLACE_ICON_CHOICES, iconForName, labelForName } from "../../content/pla
 import { tagSuggestions, applyTagSuggestion, splitLatLonPair, parseGoogleMapsPaste } from "./formHelpers";
 import type { FormState } from "./types";
 import "./MapPage.css";
+
 interface Props {
   form: FormState;
   onFormChange: (form: FormState) => void;
@@ -12,9 +13,12 @@ interface Props {
   onUseMyLocation: () => void;
   onSave: () => void;
   onCancel: () => void;
+  saving?: boolean;
 }
 
-export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocation, onSave, onCancel }: Props) {
+export default function PlaceFormTab({
+  form, onFormChange, allTags, onUseMyLocation, onSave, onCancel, saving = false,
+}: Props) {
   return (
     <div className="map-sidebar-body" style={{ paddingTop: 14 }}>
       <div className="map-form-row">
@@ -23,7 +27,8 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
           <Input
             value={form.name}
             onChange={(e) => onFormChange({ ...form, name: e.target.value })}
-            allowClear = {true}
+            placeholder="Place name"
+            allowClear
           />
         </div>
       </div>
@@ -77,19 +82,23 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
         <div className="map-form-row-content">
           <Space.Compact style={{ width: "100%" }}>
             <Input
+              className="map-tabular-input"
               value={form.lat}
               onChange={(e) => {
                 const pair = splitLatLonPair(e.target.value);
                 onFormChange(pair ? { ...form, lat: pair.lat, lon: pair.lon } : { ...form, lat: e.target.value });
               }}
+              placeholder="Lat"
               allowClear
             />
             <Input
+              className="map-tabular-input"
               value={form.lon}
               onChange={(e) => {
                 const pair = splitLatLonPair(e.target.value);
                 onFormChange(pair ? { ...form, lat: pair.lat, lon: pair.lon } : { ...form, lon: e.target.value });
               }}
+              placeholder="Lon"
               allowClear
             />
             <Tooltip title="Use my current location">
@@ -108,7 +117,7 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
             options={tagSuggestions(form.tags, allTags).map((t) => ({ value: t, label: `#${t}` }))}
             onChange={(v) => onFormChange({ ...form, tags: v })}
             onSelect={(v) => onFormChange({ ...form, tags: applyTagSuggestion(form.tags, v as string) })}
-            placeholder="date, food, memory..."
+            placeholder="date, food, memory…"
           >
             <Input />
           </AutoComplete>
@@ -120,33 +129,33 @@ export default function PlaceFormTab({ form, onFormChange, allTags, onUseMyLocat
         </div>
       </div>
 
-   <div className="map-form-row">
-  <span className="map-form-row-label">Description</span>
-  <div className="map-form-row-content">
-    <Input.TextArea
-      value={form.description}
-      onChange={(e) => onFormChange({ ...form, description: e.target.value })}
-      onPaste={(e) => {
-        const pasted = e.clipboardData.getData("text");
-        const parsed = parseGoogleMapsPaste(pasted);
-        if (!parsed) return; // normal paste, let it through
-        e.preventDefault();
-        onFormChange({
-          ...form,
-          name: form.name.trim() ? form.name : parsed.name,
-          lat: parsed.lat,
-          lon: parsed.lon,
-        });
-      }}
-      placeholder="Why this place matters... "
-      rows={3}
-    />
-  </div>
-</div>
+      <div className="map-form-row">
+        <span className="map-form-row-label">Description</span>
+        <div className="map-form-row-content">
+          <Input.TextArea
+            value={form.description}
+            onChange={(e) => onFormChange({ ...form, description: e.target.value })}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              const parsed = parseGoogleMapsPaste(pasted);
+              if (!parsed) return;
+              e.preventDefault();
+              onFormChange({
+                ...form,
+                name: form.name.trim() ? form.name : parsed.name,
+                lat: parsed.lat,
+                lon: parsed.lon,
+              });
+            }}
+            placeholder="Notes or paste a Google Maps place URL…"
+            rows={3}
+          />
+        </div>
+      </div>
 
       <div className="map-form-actions">
-        <Button type="primary" block onClick={onSave}>Save</Button>
-        <Button block onClick={onCancel}>Cancel</Button>
+        <Button type="primary" block loading={saving} onClick={onSave}>Save</Button>
+        <Button block onClick={onCancel} disabled={saving}>Cancel</Button>
       </div>
     </div>
   );
