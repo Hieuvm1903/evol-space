@@ -337,10 +337,14 @@ export default async function handler(req: IncomingMessage & { body?: unknown },
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const apiKey =
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_API_KEY?.trim() ||
+    process.env.API_KEY?.trim();
   if (!apiKey) {
     sendJson(res, 500, {
-      error: "GEMINI_API_KEY is not configured. Add it in the Settings > Secrets panel and retry.",
+      error:
+        "GEMINI_API_KEY is not configured on the server (a free Gemini API key works). Add GEMINI_API_KEY in AI Studio Settings > Secrets, or in your host's Environment Variables (e.g. Vercel Project Settings > Environment Variables) and redeploy.",
     });
     return;
   }
