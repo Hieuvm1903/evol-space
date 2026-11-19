@@ -65,6 +65,7 @@ export interface AiModelBlueprint {
 export interface SceneDoc {
   version: 2;
   objects: SceneObjectData[];
+  zones?: ZoneDef[];
   aiBlueprints?: Record<string, AiModelBlueprint>;
 }
 
@@ -83,7 +84,7 @@ export interface SceneRow {
   name: string;
   model_set_name: string | null;
   model_set_version: string | null;
-  data: { version: number; objects: unknown[]; aiBlueprints?: Record<string, AiModelBlueprint> }; // v1 docs are migrated on load (see sceneMath.normalizeObject)
+  data: { version: number; objects: unknown[]; zones?: ZoneDef[]; aiBlueprints?: Record<string, AiModelBlueprint> }; // v1 docs are migrated on load (see sceneMath.normalizeObject)
   created_at: string;
   updated_at: string;
 }

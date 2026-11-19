@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Dropdown, Empty, Input, Segmented, Select, Slider, Switch, Tabs, Tag, Tooltip } from "antd";
 import {
-  AlertCircle, ArrowLeftRight, BatteryCharging, Bot, Box, Boxes, Building2, ChevronDown, ChevronRight, Container, Cpu,
-  Download, FilePlus, Folder, FolderPlus, Layers, Lightbulb, LogIn, Monitor, Package, Plane, Plus, Route, ShoppingBag,
-  Sparkles, Trash2, Truck, User, Zap,
+  Activity, AlertCircle, ArrowLeftRight, BatteryCharging, Bot, Box, Boxes, Building2, ChevronDown, ChevronRight, Container, Cpu,
+  Download, FilePlus, Folder, FolderOpen, FolderPlus, FolderTree, Layers, Lightbulb, LogIn, Monitor, Package, Plane, Plus, Route,
+  ShoppingBag, SlidersHorizontal, Sparkles, Trash2, Truck, User, Zap,
 } from "lucide-react";
 import { childrenIndex } from "../../lib/sceneMath";
 import type { BuiltAiAsset } from "./aiModelBuilder";
@@ -20,7 +20,9 @@ import type {
   TwinScenario,
   ViewPrefs,
   WorkspaceMode,
+  ZoneDef,
 } from "../../lib/workTypes";
+import AreasSidebarTab from "./AreasSidebarTab";
 import TwinSidebarTab from "./TwinSidebarTab";
 
 export const DRAG_MIME = "application/x-work-asset";
@@ -91,12 +93,41 @@ interface Props {
   onClearAlerts: () => void;
   onConnectStream: (url: string) => void;
   onDisconnectStream: () => void;
+  // areas / zones
+  zones: ZoneDef[];
+  selectedZoneId: string | null;
+  drawingArea: boolean;
+  showAreasInAuthor: boolean;
+  onSelectZone: (id: string | null) => void;
+  onAddZone: () => void;
+  onToggleDrawArea: () => void;
+  onToggleShowAreasInAuthor: (v: boolean) => void;
+  onUpdateZone: (id: string, patch: Partial<ZoneDef>) => void;
+  onDeleteZone: (id: string) => void;
+  onResetZones: () => void;
 }
 
+const renderTabIcon = (title: string, icon: React.ReactNode, badgeCount?: number) => (
+  <Tooltip title={title} placement="bottom" mouseEnterDelay={0.15}>
+    <span className="work-side-tab-icon" aria-label={title}>
+      {icon}
+      {badgeCount !== undefined && badgeCount > 0 && (
+        <span className="work-side-tab-badge">{badgeCount > 99 ? "99+" : badgeCount}</span>
+      )}
+    </span>
+  </Tooltip>
+);
+
 export default function WorkSidebar(p: Props) {
+  const unackAlerts = p.alerts.filter((a) => !a.acknowledged).length;
+
   const twinItem = {
     key: "twin",
-    label: `Twin${p.alerts.some((a) => !a.acknowledged) ? ` (${p.alerts.filter((a) => !a.acknowledged).length})` : ""}`,
+    label: renderTabIcon(
+      unackAlerts > 0 ? `Digital Twin (${unackAlerts} alert${unackAlerts === 1 ? "" : "s"})` : "Digital Twin",
+      <Activity size={16} />,
+      unackAlerts,
+    ),
     children: (
       <TwinSidebarTab
         fleet={p.fleet}
@@ -114,11 +145,36 @@ export default function WorkSidebar(p: Props) {
     ),
   };
 
+  const areasItem = {
+    key: "areas",
+    label: renderTabIcon(
+      `Floor Areas (${p.zones.length})`,
+      <Layers size={16} />,
+    ),
+    children: (
+      <AreasSidebarTab
+        zones={p.zones}
+        selectedZoneId={p.selectedZoneId}
+        drawingArea={p.drawingArea}
+        showAreasInAuthor={p.showAreasInAuthor}
+        workspaceMode={p.workspaceMode}
+        onSelectZone={p.onSelectZone}
+        onAddZone={p.onAddZone}
+        onToggleDrawArea={p.onToggleDrawArea}
+        onToggleShowAreasInAuthor={p.onToggleShowAreasInAuthor}
+        onUpdateZone={p.onUpdateZone}
+        onDeleteZone={p.onDeleteZone}
+        onResetZones={p.onResetZones}
+      />
+    ),
+  };
+
   const authorItems = [
-    { key: "models", label: "Models", children: <ModelsTab {...p} /> },
-    { key: "tree", label: "Hierarchy", children: <HierarchyTab {...p} /> },
-    { key: "scenes", label: "Scenes", children: <ScenesTab {...p} /> },
-    { key: "view", label: "View", children: <ViewTab {...p} /> },
+    { key: "models", label: renderTabIcon("Models & AI 3D Generator", <Boxes size={16} />), children: <ModelsTab {...p} /> },
+    areasItem,
+    { key: "tree", label: renderTabIcon("Scene Hierarchy", <FolderTree size={16} />), children: <HierarchyTab {...p} /> },
+    { key: "scenes", label: renderTabIcon("Saved Scenes", <FolderOpen size={16} />), children: <ScenesTab {...p} /> },
+    { key: "view", label: renderTabIcon("View & Renderer", <SlidersHorizontal size={16} />), children: <ViewTab {...p} /> },
   ];
 
   const items = p.workspaceMode === "twin" ? [twinItem, ...authorItems] : [...authorItems, twinItem];

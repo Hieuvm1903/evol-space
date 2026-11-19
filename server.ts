@@ -255,7 +255,7 @@ async function generateWithRetry(ai: GoogleGenAI, prompt: string, targetHeight: 
         contents: userPrompt,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           responseMimeType: "application/json",
           responseSchema: BLUEPRINT_SCHEMA,
         },

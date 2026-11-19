@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
@@ -43,15 +43,18 @@ const CAMERA_PRESETS: Record<CameraPreset, { pos: Vec3; target: Vec3 }> = {
   dock: { pos: [-9.5, 5.2, -13.5], target: [0.0, 1.4, -5.5] },
 };
 
-const ZONE_PALETTE: Record<string, string> = {
+export const ZONE_PALETTE: Record<string, string> = {
   dock: "#10b981",
   racking: "#6366f1",
   robot_cell: "#ec4899",
   conveyor: "#22d3ee",
   amr_parking: "#f59e0b",
+  staging: "#8b6ff5",
+  safety: "#ef4444",
+  custom: "#38bdf8",
 };
 
-const DEFAULT_ZONES: ZoneDef[] = [
+export const DEFAULT_ZONES: ZoneDef[] = [
   { id: "receiving", name: "Receiving Dock", kind: "dock", x: [-9.2, 9.2], z: [-4.9, -2.5], color: "#10b981" },
   { id: "storage", name: "Storage Aisles", kind: "racking", x: [-4.5, 4.5], z: [-0.8, 8.2], color: "#6366f1" },
   { id: "picking", name: "Robotic Pick Cell", kind: "robot_cell", x: [-10.4, -6.5], z: [-2.4, 0.8], color: "#ec4899" },
@@ -217,21 +220,25 @@ export function TwinCameraController({
 }
 
 /** Spatial floor zones with polygonOffset so overlays never Z-fight the grid. */
-function ZoneHeatmapOverlay({
+export function ZoneHeatmapOverlay({
   zones,
   telemetry,
   objects,
   worlds,
   runtime,
+  selectedZoneId,
+  interactive,
+  onSelectZone,
 }: {
   zones: ZoneDef[];
   telemetry: AssetTelemetry[];
   objects: SceneObjectData[];
   worlds: Map<string, THREE.Matrix4>;
   runtime: Runtime;
+  selectedZoneId?: string | null;
+  interactive?: boolean;
+  onSelectZone?: (zoneId: string) => void;
 }) {
-  const activeZones = zones.length > 0 ? zones : DEFAULT_ZONES;
-
   const zoneMetrics = useMemo(() => {
     const tMap = new Map(telemetry.map((t) => [t.id, t]));
     const objPos = new Map<string, [number, number]>();
@@ -253,7 +260,7 @@ function ZoneHeatmapOverlay({
     }
 
     const out: Record<string, number> = {};
-    for (const z of activeZones) {
+    for (const z of zones) {
       const inside: AssetTelemetry[] = [];
       for (const [id, [px, pz]] of objPos.entries()) {
         if (px >= z.x[0] && px <= z.x[1] && pz >= z.z[0] && pz <= z.z[1]) {
@@ -268,18 +275,23 @@ function ZoneHeatmapOverlay({
       }
     }
     return out;
-  }, [activeZones, telemetry, objects, worlds, runtime]);
+  }, [zones, telemetry, objects, worlds, runtime]);
 
   return (
     <group position={[0, 0.008, 0]}>
-      {activeZones.map((z) => {
+      {zones.map((z) => {
         const util = zoneMetrics[z.id] ?? 20;
         const color = z.color ?? ZONE_PALETTE[z.kind] ?? "#6366f1";
-        const opacity = 0.05 + (util / 100) * 0.14;
-        const cx = (z.x[0] + z.x[1]) / 2;
-        const cz = (z.z[0] + z.z[1]) / 2;
-        const w = Math.max(0.5, z.x[1] - z.x[0]);
-        const d = Math.max(0.5, z.z[1] - z.z[0]);
+        const isSelected = selectedZoneId === z.id;
+        const opacity = isSelected ? 0.24 : 0.06 + (util / 100) * 0.14;
+        const x0 = Math.min(z.x[0], z.x[1]);
+        const x1 = Math.max(z.x[0], z.x[1]);
+        const z0 = Math.min(z.z[0], z.z[1]);
+        const z1 = Math.max(z.z[0], z.z[1]);
+        const cx = (x0 + x1) / 2;
+        const cz = (z0 + z1) / 2;
+        const w = Math.max(0.2, x1 - x0);
+        const d = Math.max(0.2, z1 - z0);
         const hw = w / 2;
         const hd = d / 2;
         const border: [number, number, number][] = [
@@ -291,7 +303,19 @@ function ZoneHeatmapOverlay({
         ];
         return (
           <group key={z.id} position={[cx, 0, cz]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow={false}>
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              receiveShadow={false}
+              onClick={
+                interactive && onSelectZone
+                  ? (e) => {
+                      if (e.delta > 4) return;
+                      e.stopPropagation();
+                      onSelectZone(z.id);
+                    }
+                  : undefined
+              }
+            >
               <planeGeometry args={[w, d]} />
               <meshBasicMaterial
                 color={color}
@@ -302,10 +326,133 @@ function ZoneHeatmapOverlay({
                 polygonOffsetFactor={-1}
               />
             </mesh>
-            <Line points={border} color={color} lineWidth={1.2} transparent opacity={0.45} />
+            <Line
+              points={border}
+              color={isSelected ? "#ffffff" : color}
+              lineWidth={isSelected ? 2.4 : 1.2}
+              transparent
+              opacity={isSelected ? 0.95 : 0.55}
+            />
+            {isSelected && (
+              <Html center position={[0, 0.18, 0]} style={{ pointerEvents: "none" }}>
+                <div className="work-area-badge-3d" style={{ borderColor: color }}>
+                  {z.name || z.id} · {w.toFixed(1)}×{d.toFixed(1)}m
+                </div>
+              </Html>
+            )}
           </group>
         );
       })}
+    </group>
+  );
+}
+
+/** Two-click interactive floor area drawer (respects camera orbit drags via e.delta). */
+export function FloorAreaDrawOverlay({
+  active,
+  snap,
+  onComplete,
+}: {
+  active: boolean;
+  snap: boolean;
+  onComplete: (x: [number, number], z: [number, number]) => void;
+}) {
+  const [startPt, setStartPt] = useState<[number, number] | null>(null);
+  const [hoverPt, setHoverPt] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    if (!active) {
+      setStartPt(null);
+      setHoverPt(null);
+    }
+  }, [active]);
+
+  if (!active) return null;
+
+  const snapCoord = (n: number) => {
+    const step = snap ? 0.5 : 0.1;
+    return Math.round(n / step) * step;
+  };
+
+  const preview =
+    startPt && hoverPt
+      ? (() => {
+          const x0 = Math.min(startPt[0], hoverPt[0]);
+          const x1 = Math.max(startPt[0], hoverPt[0]);
+          const z0 = Math.min(startPt[1], hoverPt[1]);
+          const z1 = Math.max(startPt[1], hoverPt[1]);
+          const w = Math.max(0.5, x1 - x0);
+          const d = Math.max(0.5, z1 - z0);
+          const cx = (x0 + x1) / 2;
+          const cz = (z0 + z1) / 2;
+          const hw = w / 2;
+          const hd = d / 2;
+          const border: [number, number, number][] = [
+            [-hw, 0.02, -hd],
+            [hw, 0.02, -hd],
+            [hw, 0.02, hd],
+            [-hw, 0.02, hd],
+            [-hw, 0.02, -hd],
+          ];
+          return { cx, cz, w, d, border };
+        })()
+      : null;
+
+  return (
+    <group>
+      <mesh
+        position={[0, 0.004, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        onPointerMove={(e) => {
+          e.stopPropagation();
+          setHoverPt([snapCoord(e.point.x), snapCoord(e.point.z)]);
+        }}
+        onClick={(e) => {
+          if (e.delta > 4) return;
+          e.stopPropagation();
+          const px = snapCoord(e.point.x);
+          const pz = snapCoord(e.point.z);
+          if (!startPt) {
+            setStartPt([px, pz]);
+            setHoverPt([px, pz]);
+          } else {
+            let x0 = Math.min(startPt[0], px);
+            let x1 = Math.max(startPt[0], px);
+            let z0 = Math.min(startPt[1], pz);
+            let z1 = Math.max(startPt[1], pz);
+            if (x1 - x0 < 0.5) x1 = x0 + 1;
+            if (z1 - z0 < 0.5) z1 = z0 + 1;
+            setStartPt(null);
+            setHoverPt(null);
+            onComplete([Number(x0.toFixed(2)), Number(x1.toFixed(2))], [Number(z0.toFixed(2)), Number(z1.toFixed(2))]);
+          }
+        }}
+      >
+        <planeGeometry args={[160, 160]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      {hoverPt && !startPt && (
+        <mesh position={[hoverPt[0], 0.02, hoverPt[1]]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.14, 0.24, 24]} />
+          <meshBasicMaterial color="#22d3ee" transparent opacity={0.85} depthWrite={false} />
+        </mesh>
+      )}
+
+      {preview && (
+        <group position={[preview.cx, 0, preview.cz]}>
+          <mesh position={[0, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[preview.w, preview.d]} />
+            <meshBasicMaterial color="#22d3ee" transparent opacity={0.18} depthWrite={false} />
+          </mesh>
+          <Line points={preview.border} color="#22d3ee" lineWidth={2.2} dashed dashSize={0.35} gapSize={0.2} />
+          <Html center position={[0, 0.22, 0]} style={{ pointerEvents: "none" }}>
+            <div className="work-area-badge-3d" style={{ borderColor: "#22d3ee" }}>
+              New Area · {preview.w.toFixed(1)}×{preview.d.toFixed(1)}m
+            </div>
+          </Html>
+        </group>
+      )}
     </group>
   );
 }
@@ -470,6 +617,10 @@ export function TwinOverlays({
   telemetryList,
   zones,
   selectedId,
+  selectedZoneId,
+  interactiveZones,
+  showAreasInAuthor,
+  onSelectZone,
   overlays,
   runtime,
 }: {
@@ -479,42 +630,53 @@ export function TwinOverlays({
   telemetryList: AssetTelemetry[];
   zones: ZoneDef[];
   selectedId: string | null;
+  selectedZoneId?: string | null;
+  interactiveZones?: boolean;
+  showAreasInAuthor?: boolean;
+  onSelectZone?: (zoneId: string) => void;
   overlays: TwinOverlayPrefs;
   runtime: Runtime;
 }) {
   const byId = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects]);
   const telemetryById = useMemo(() => new Map(telemetryList.map((t) => [t.id, t])), [telemetryList]);
 
-  if (workspaceMode !== "twin") return null;
+  const showZones =
+    workspaceMode === "twin"
+      ? overlays.zoneHeatmap || Boolean(interactiveZones)
+      : Boolean(showAreasInAuthor) || Boolean(interactiveZones);
 
   return (
     <>
-      {overlays.zoneHeatmap && (
+      {showZones && (
         <ZoneHeatmapOverlay
           zones={zones}
           telemetry={telemetryList}
           objects={objects}
           worlds={worlds}
           runtime={runtime}
+          selectedZoneId={selectedZoneId}
+          interactive={interactiveZones}
+          onSelectZone={onSelectZone}
         />
       )}
-      {objects
-        .filter((o) => o.kind === "model" && OVERLAY_ASSETS.has(o.asset ?? ""))
-        .map((o) => {
-          const t = telemetryById.get(o.id);
-          if (!t) return null;
-          return (
-            <AssetTwinOverlay
-              key={o.id}
-              obj={byId.get(o.id)!}
-              telemetry={t}
-              world={worlds.get(o.id)}
-              runtime={runtime}
-              overlays={overlays}
-              selected={selectedId === o.id}
-            />
-          );
-        })}
+      {workspaceMode === "twin" &&
+        objects
+          .filter((o) => o.kind === "model" && OVERLAY_ASSETS.has(o.asset ?? ""))
+          .map((o) => {
+            const t = telemetryById.get(o.id);
+            if (!t) return null;
+            return (
+              <AssetTwinOverlay
+                key={o.id}
+                obj={byId.get(o.id)!}
+                telemetry={t}
+                world={worlds.get(o.id)}
+                runtime={runtime}
+                overlays={overlays}
+                selected={selectedId === o.id}
+              />
+            );
+          })}
     </>
   );
 }

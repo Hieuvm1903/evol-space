@@ -80,6 +80,7 @@ import WorkInspector from "./WorkInspector";
 import WorkSidebar, { DRAG_MIME } from "./WorkSidebar";
 import { TwinControlsBar, TwinKpiStrip } from "./TwinHud";
 import TwinInspectorPanel from "./TwinInspectorPanel";
+import { DEFAULT_ZONES } from "./TwinOverlays";
 import "./WorkPage.css";
 
 const LAST_SCENE_KEY = "evol_work_last_scene";
@@ -161,7 +162,12 @@ export function WorkPage() {
   const [overlays, setOverlays] = useState<TwinOverlayPrefs>(() => loadJson(OVERLAYS_KEY, DEFAULT_OVERLAYS));
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraPresetSeq, setCameraPresetSeq] = useState(0);
-  const [zones, setZones] = useState<ZoneDef[]>([]);
+  const [zones, setZones] = useState<ZoneDef[]>(() =>
+    DEFAULT_ZONES.map((z) => ({ ...z, x: [...z.x] as [number, number], z: [...z.z] as [number, number] })),
+  );
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [drawingArea, setDrawingArea] = useState(false);
+  const [showAreasInAuthor, setShowAreasInAuthor] = useState(true);
   const [jointDefs, setJointDefs] = useState<Record<string, JointDef[]>>({});
   const [stats, setStats] = useState<PerfStats | null>(null);
   const [backend, setBackend] = useState("");
@@ -250,7 +256,7 @@ export function WorkPage() {
     [selectedId, allTelemetry],
   );
   const missing = objects.filter((o) => o.kind === "model" && (!o.asset || !assetUrls[o.asset])).length;
-  const currentKey = useMemo(() => JSON.stringify([activeSet?.version ?? null, objects]), [activeSet, objects]);
+  const currentKey = useMemo(() => JSON.stringify([activeSet?.version ?? null, objects, zones]), [activeSet, objects, zones]);
   const dirty = sceneId !== null ? currentKey !== savedKey : objects.length > 0 && savedKey !== currentKey;
 
   useEffect(() => {
@@ -340,7 +346,7 @@ export function WorkPage() {
 
   // ---------------------------------------------------------------- play mode
   const startSimulation = useCallback(
-    (objs: SceneObjectData[], setRef: ModelSetRow | null) => {
+    (objs: SceneObjectData[], setRef: ModelSetRow | null, zonesSnap?: ZoneDef[]) => {
       const w = computeWorlds(objs);
       const st = effectiveStatic(objs, prefs.instancing);
       runtime.start(objs, w, st, (id) => setForced((cur) => (cur.has(id) ? cur : new Set(cur).add(id))));
@@ -350,10 +356,10 @@ export function WorkPage() {
       setPlaying(true);
       setPaused(false);
       if (setRef) {
-        setSavedKey(JSON.stringify([setRef.version, objs]));
+        setSavedKey(JSON.stringify([setRef.version, objs, zonesSnap ?? zones]));
       }
     },
-    [prefs.instancing, runtime],
+    [prefs.instancing, runtime, zones],
   );
 
   function play() {
@@ -440,10 +446,16 @@ export function WorkPage() {
       }
       if (set) setActiveSetId(set.id);
       if (playing) stop();
+      const loadedZones = Array.isArray(row.data?.zones)
+        ? row.data.zones
+        : DEFAULT_ZONES.map((z) => ({ ...z, x: [...z.x] as [number, number], z: [...z.z] as [number, number] }));
       history.reset(objs);
+      setZones(loadedZones);
+      setSelectedZoneId(null);
+      setDrawingArea(false);
       setSceneId(row.id);
       setSceneName(row.name);
-      setSavedKey(JSON.stringify([set?.version ?? null, objs]));
+      setSavedKey(JSON.stringify([set?.version ?? null, objs, loadedZones]));
       setSelectedId(null);
       saveJson(LAST_SCENE_KEY, row.id);
     } catch (e) {
@@ -471,10 +483,15 @@ export function WorkPage() {
         const layout = await fetchLayout(activeSet);
         if (layout) {
           const out = layoutToObjects(layout, meshAssets(activeSet));
-          setZones(extractZones(layout));
+          const extracted = extractZones(layout);
+          const nextZones =
+            extracted.length > 0
+              ? extracted
+              : DEFAULT_ZONES.map((z) => ({ ...z, x: [...z.x] as [number, number], z: [...z.z] as [number, number] }));
+          setZones(nextZones);
           history.reset(out);
           setSceneName("sand3d Warehouse Twin");
-          startSimulation(out, activeSet);
+          startSimulation(out, activeSet, nextZones);
         }
       }
     })();
@@ -485,6 +502,9 @@ export function WorkPage() {
     if (!(await discardOk())) return;
     if (playing) stop();
     history.reset([]);
+    setZones([]);
+    setSelectedZoneId(null);
+    setDrawingArea(false);
     setSceneId(null);
     setSceneName("Untitled scene");
     setSavedKey("");
@@ -519,6 +539,7 @@ export function WorkPage() {
         doc: {
           version: 2,
           objects,
+          zones,
           ...(Object.keys(aiBlueprints).length > 0 ? { aiBlueprints } : {}),
         },
       });
@@ -732,17 +753,100 @@ export function WorkPage() {
       }
       if (playing) stop();
       const out = layoutToObjects(layout, assets);
-      setZones(extractZones(layout));
+      const extracted = extractZones(layout);
+      const nextZones =
+        extracted.length > 0
+          ? extracted
+          : DEFAULT_ZONES.map((z) => ({ ...z, x: [...z.x] as [number, number], z: [...z.z] as [number, number] }));
+      setZones(nextZones);
+      setSelectedZoneId(null);
+      setDrawingArea(false);
       history.set(out);
       setSelectedId(null);
       notify.added(`Imported ${out.length} objects.`);
       if (workspaceMode === "twin") {
-        startSimulation(out, activeSet);
+        startSimulation(out, activeSet, nextZones);
       }
     } catch (e) {
       notify.error("Couldn't import layout", errMsg(e));
     }
   }
+
+  // ---------------------------------------------------------------- Area / Zone ops
+  const handleAddZone = useCallback(() => {
+    const center = floorPoint();
+    const id = `area_${newId().slice(0, 6)}`;
+    const idx = zones.length + 1;
+    const nextZone: ZoneDef = {
+      id,
+      name: `Area ${idx}`,
+      kind: "staging",
+      x: [Number((center[0] - 2).toFixed(2)), Number((center[0] + 2).toFixed(2))],
+      z: [Number((center[2] - 1.5).toFixed(2)), Number((center[2] + 1.5).toFixed(2))],
+      color: "#8b6ff5",
+    };
+    setZones((cur) => [...cur, nextZone]);
+    setSelectedZoneId(id);
+    setShowAreasInAuthor(true);
+    setDrawingArea(false);
+    notify.added(`Added "${nextZone.name}".`);
+  }, [zones.length, floorPoint]);
+
+  const handleFinishDrawArea = useCallback(
+    (x: [number, number], z: [number, number]) => {
+      const id = `area_${newId().slice(0, 6)}`;
+      const idx = zones.length + 1;
+      const nextZone: ZoneDef = {
+        id,
+        name: `Area ${idx}`,
+        kind: "staging",
+        x,
+        z,
+        color: "#22d3ee",
+      };
+      setZones((cur) => [...cur, nextZone]);
+      setSelectedZoneId(id);
+      setShowAreasInAuthor(true);
+      setDrawingArea(false);
+      notify.added(`Created "${nextZone.name}".`);
+    },
+    [zones.length],
+  );
+
+  const handleUpdateZone = useCallback((id: string, patch: Partial<ZoneDef>) => {
+    setZones((cur) => cur.map((z) => (z.id === id ? { ...z, ...patch } : z)));
+  }, []);
+
+  const handleDeleteZone = useCallback(
+    (id: string) => {
+      const target = zones.find((z) => z.id === id);
+      setZones((cur) => cur.filter((z) => z.id !== id));
+      setSelectedZoneId((cur) => (cur === id ? null : cur));
+      if (target) notify.deleted(`Removed "${target.name || target.id}".`);
+    },
+    [zones],
+  );
+
+  const handleResetZones = useCallback(async () => {
+    let nextZones = DEFAULT_ZONES.map((z) => ({
+      ...z,
+      x: [...z.x] as [number, number],
+      z: [...z.z] as [number, number],
+    }));
+    if (activeSet?.files.layout) {
+      try {
+        const layout = await fetchLayout(activeSet);
+        const extracted = extractZones(layout);
+        if (extracted.length > 0) nextZones = extracted;
+      } catch {
+        /* fallback to DEFAULT_ZONES */
+      }
+    }
+    setZones(nextZones);
+    setSelectedZoneId(null);
+    setDrawingArea(false);
+    notify.updated("Restored default floor areas.");
+  }, [activeSet]);
 
   // ---------------------------------------------------------------- Digital Twin handlers
   const handleModeChange = (next: WorkspaceMode) => {
@@ -828,6 +932,10 @@ export function WorkPage() {
       }
       if (!mod && k === "v") {
         updatePrefs({ cameraMode: prefs.cameraMode === "perspective" ? "orthographic" : "perspective" });
+        return;
+      }
+      if (k === "escape" && drawingArea) {
+        setDrawingArea(false);
         return;
       }
       if (playing || workspaceMode === "twin") return;
@@ -947,7 +1055,10 @@ export function WorkPage() {
                   backend={backend}
                   workspaceMode={workspaceMode}
                   activeTab={sidebarTab}
-                  onTabChange={setSidebarTab}
+                  onTabChange={(k) => {
+                    setSidebarTab(k);
+                    if (k !== "areas") setDrawingArea(false);
+                  }}
                   fleet={fleet}
                   scenario={scenario}
                   alerts={alerts}
@@ -966,6 +1077,17 @@ export function WorkPage() {
                     twinEngine.disconnectStream();
                     setStreamStatus("disconnected");
                   }}
+                  zones={zones}
+                  selectedZoneId={selectedZoneId}
+                  drawingArea={drawingArea}
+                  showAreasInAuthor={showAreasInAuthor}
+                  onSelectZone={setSelectedZoneId}
+                  onAddZone={handleAddZone}
+                  onToggleDrawArea={() => setDrawingArea((d) => !d)}
+                  onToggleShowAreasInAuthor={setShowAreasInAuthor}
+                  onUpdateZone={handleUpdateZone}
+                  onDeleteZone={handleDeleteZone}
+                  onResetZones={handleResetZones}
                 />
               </aside>
             )}
@@ -1004,6 +1126,16 @@ export function WorkPage() {
             workspaceMode={workspaceMode}
             telemetryList={allTelemetry}
             zones={zones}
+            selectedZoneId={selectedZoneId}
+            interactiveZones={sidebarTab === "areas"}
+            showAreasInAuthor={showAreasInAuthor || sidebarTab === "areas"}
+            drawingArea={drawingArea}
+            onSelectZone={(id) => {
+              setSelectedZoneId(id);
+              setSidebarTab("areas");
+              updateUi({ side: true });
+            }}
+            onFinishDrawArea={handleFinishDrawArea}
             overlays={overlays}
             cameraPreset={cameraPreset}
             cameraPresetSeq={cameraPresetSeq}

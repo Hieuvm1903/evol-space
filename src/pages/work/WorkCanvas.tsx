@@ -21,7 +21,7 @@ import { BASE_ORTHO_SPAN, BASE_PERSP_FOV, cameraLodParams, computeLodTier } from
 import type { Runtime } from "./runtime";
 import StaticBatches, { type LiveDrag, type PerfCounters } from "./StaticBatches";
 import { DynNode, StaticProxy, type NodeCtx, type VisEntry } from "./SceneNodes";
-import { StudioEnvironment, TwinCameraController, TwinOverlays } from "./TwinOverlays";
+import { FloorAreaDrawOverlay, StudioEnvironment, TwinCameraController, TwinOverlays } from "./TwinOverlays";
 import type { TwinEngine } from "./twinEngine";
 
 /** Keeps a canvas failure from blanking the whole page: shows the error and a retry button instead. */
@@ -336,6 +336,12 @@ export interface WorkCanvasProps {
   workspaceMode: WorkspaceMode;
   telemetryList: AssetTelemetry[];
   zones: ZoneDef[];
+  selectedZoneId: string | null;
+  interactiveZones: boolean;
+  showAreasInAuthor: boolean;
+  drawingArea: boolean;
+  onSelectZone: (zoneId: string) => void;
+  onFinishDrawArea: (x: [number, number], z: [number, number]) => void;
   overlays: TwinOverlayPrefs;
   cameraPreset: CameraPreset;
   cameraPresetSeq: number;
@@ -485,8 +491,18 @@ function WorkCanvasInner(p: WorkCanvasProps) {
         telemetryList={p.telemetryList}
         zones={p.zones}
         selectedId={selectedId}
+        selectedZoneId={p.selectedZoneId}
+        interactiveZones={p.interactiveZones}
+        showAreasInAuthor={p.showAreasInAuthor}
+        onSelectZone={p.onSelectZone}
         overlays={p.overlays}
         runtime={p.runtime}
+      />
+
+      <FloorAreaDrawOverlay
+        active={p.drawingArea}
+        snap={p.snap}
+        onComplete={p.onFinishDrawArea}
       />
 
       {sel && selIsStatic && worlds.get(sel.id) && (
