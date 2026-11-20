@@ -4,9 +4,14 @@ import {
   Camera, Download, Save, Timer, MousePointerClick, Trash2, LogIn,
   Image as ImageIcon, Images, Pencil, X, Maximize2, Minimize2,
   FlipHorizontal2, Grid3x3, Upload, RefreshCw, Columns2, LayoutGrid,
-  Search, ChevronLeft, ChevronRight, CheckSquare,
+  Search, ChevronLeft, ChevronRight, CheckSquare, Activity, Hand, PauseCircle, Zap,
 } from "lucide-react";
-import { Button, Select, Input, InputNumber, Segmented, Empty, Tooltip } from "antd";
+import { Button, Select, Input, InputNumber, Segmented, Slider, Empty, Tooltip } from "antd";
+import {
+  MotionCaptureModel,
+  type MotionAnalysis,
+  type MotionTriggerMode,
+} from "../lib/motionCaptureModel";
 import { useAuth } from "../contexts/AuthContext";
 import { canvasToBlob } from "../lib/imageFilters";
 import {
@@ -85,9 +90,17 @@ export function PhotoboothPage() {
   const [stripLayout, setStripLayout] = useState<"strip" | "grid">("strip");
   const [stripProgress, setStripProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const [mode, setMode] = useState<"click" | "timer">("click");
+  const [mode, setMode] = useState<"click" | "timer" | "motion">("click");
   const [timerSeconds, setTimerSeconds] = useState(3);
   const [countdown, setCountdown] = useState<number | null>(null);
+
+  const [motionArmed, setMotionArmed] = useState(false);
+  const [motionTrigger, setMotionTrigger] = useState<MotionTriggerMode>("wave");
+  const [motionSensitivity, setMotionSensitivity] = useState(60);
+  const [motionDelay, setMotionDelay] = useState(2);
+  const [motionAnalysis, setMotionAnalysis] = useState<MotionAnalysis | null>(null);
+  const motionModelRef = useRef<MotionCaptureModel | null>(null);
+  const triggerMotionCaptureRef = useRef<() => void>(() => {});
 
   const [tab, setTab] = useState<"edit" | "gallery">("edit");
   const [base, setBase] = useState<HTMLCanvasElement | null>(null);
@@ -258,28 +271,13 @@ export function PhotoboothPage() {
     return !cancelRef.current;
   }
 
-  async function startCaptureFlow() {
-    if (!cameraReady) return;
-    cancelRef.current = false;
-
-    if (shotType === "single") {
-      if (mode === "click") {
-        captureSingleFrame();
-        return;
-      }
-      const ok = await runCountdown(timerSeconds);
-      if (ok) captureSingleFrame();
-      return;
-    }
-
-    // 4-Cut Photobooth Strip flow
+  async function runStripCapture(firstDelay: number, stepDelay: number) {
     const total = 4;
-    const stepDelay = mode === "timer" ? Math.max(1, timerSeconds) : 2;
     const frames: HTMLCanvasElement[] = [];
 
     for (let i = 1; i <= total; i++) {
       setStripProgress({ current: i, total });
-      const ok = await runCountdown(i === 1 && mode === "click" ? 2 : stepDelay);
+      const ok = await runCountdown(i === 1 ? firstDelay : stepDelay);
       if (!ok) {
         setStripProgress(null);
         return;
@@ -300,13 +298,135 @@ export function PhotoboothPage() {
     notify.added("4-cut booth strip captured!");
   }
 
+  async function executeMotionTriggeredCapture() {
+    if (!cameraReady) return;
+    cancelRef.current = false;
+
+    if (shotType === "single") {
+      if (motionDelay > 0) {
+        const ok = await runCountdown(motionDelay);
+        if (ok) captureSingleFrame();
+      } else {
+        captureSingleFrame();
+      }
+      return;
+    }
+
+    const firstDelay = motionDelay > 0 ? motionDelay : 1;
+    const stepDelay = Math.max(1, motionDelay || 2);
+    await runStripCapture(firstDelay, stepDelay);
+  }
+
+  triggerMotionCaptureRef.current = () => {
+    void executeMotionTriggeredCapture();
+  };
+
+  function toggleMotionArmed() {
+    if (!cameraReady) return;
+    if (motionArmed) {
+      setMotionArmed(false);
+      setMotionAnalysis(null);
+      return;
+    }
+    if (!motionModelRef.current) {
+      motionModelRef.current = new MotionCaptureModel();
+    } else {
+      motionModelRef.current.reset();
+    }
+    setMotionAnalysis(null);
+    setMotionArmed(true);
+  }
+
+  async function startCaptureFlow() {
+    if (!cameraReady) return;
+    if (mode === "motion") {
+      toggleMotionArmed();
+      return;
+    }
+    cancelRef.current = false;
+
+    if (shotType === "single") {
+      if (mode === "click") {
+        captureSingleFrame();
+        return;
+      }
+      const ok = await runCountdown(timerSeconds);
+      if (ok) captureSingleFrame();
+      return;
+    }
+
+    // 4-Cut Photobooth Strip flow
+    const stepDelay = mode === "timer" ? Math.max(1, timerSeconds) : 2;
+    await runStripCapture(mode === "click" ? 2 : stepDelay, stepDelay);
+  }
+
   function cancelCountdown() {
     cancelRef.current = true;
     setCountdown(null);
     setStripProgress(null);
+    setMotionArmed(false);
+    setMotionAnalysis(null);
   }
 
-  // Spacebar shortcut to trigger capture when camera ready and not typing
+  // Disarm motion detector if leaving motion mode or camera becomes unavailable
+  useEffect(() => {
+    if (mode !== "motion" || !cameraReady) {
+      setMotionArmed(false);
+      setMotionAnalysis(null);
+    }
+  }, [mode, cameraReady]);
+
+  // Reset temporal state when trigger pattern changes while armed
+  useEffect(() => {
+    if (motionArmed) {
+      motionModelRef.current?.reset();
+    }
+  }, [motionTrigger, motionArmed]);
+
+  // Lightweight ~15 FPS motion recognition loop
+  useEffect(() => {
+    if (mode !== "motion" || !motionArmed || !cameraReady || countdown !== null || stripProgress !== null) {
+      return;
+    }
+    if (!motionModelRef.current) {
+      motionModelRef.current = new MotionCaptureModel();
+    }
+    const model = motionModelRef.current;
+    let rafId = 0;
+    let lastTick = 0;
+    let cancelled = false;
+
+    const tick = (now: number) => {
+      if (cancelled) return;
+      if (now - lastTick >= 66) {
+        lastTick = now;
+        const video = videoElRef.current;
+        if (video) {
+          const result = model.processFrame(
+            video,
+            { mode: motionTrigger, sensitivity: motionSensitivity },
+            now,
+          );
+          if (result.triggered) {
+            setMotionArmed(false);
+            setMotionAnalysis(null);
+            triggerMotionCaptureRef.current();
+            return;
+          }
+          setMotionAnalysis(result);
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [mode, motionArmed, cameraReady, countdown, stripProgress, motionTrigger, motionSensitivity]);
+
+  // Spacebar shortcut to trigger capture (or toggle motion arm) when camera ready and not typing
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.code !== "Space" || e.repeat) return;
@@ -318,7 +438,7 @@ export function PhotoboothPage() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }); // intentional latest closure for current mode/timer state
+  }); // intentional latest closure for current mode/timer/motion state
 
   async function handleFileUpload(file: File | null | undefined) {
     if (!file) return;
@@ -511,6 +631,41 @@ export function PhotoboothPage() {
         </div>
       )}
 
+      {mode === "motion" && motionArmed && !busyCapturing && motionAnalysis && (
+        <>
+          {motionAnalysis.centroid && (
+            <div
+              className={`pb-motion-reticle phase-${motionAnalysis.phase}`}
+              style={{
+                left: `${(mirrored ? 1 - motionAnalysis.centroid.x : motionAnalysis.centroid.x) * 100}%`,
+                top: `${motionAnalysis.centroid.y * 100}%`,
+              }}
+              aria-hidden
+            />
+          )}
+          <div className={`pb-motion-hud phase-${motionAnalysis.phase}`}>
+            <div className="pb-motion-hud-row">
+              <span className="pb-motion-dot" />
+              <span className="pb-motion-label">{motionAnalysis.label}</span>
+            </div>
+            <div className="pb-motion-bars">
+              <div className="pb-motion-bar-track" title="Trigger lock progress">
+                <div
+                  className="pb-motion-bar-fill lock"
+                  style={{ width: `${Math.round(motionAnalysis.progress * 100)}%` }}
+                />
+              </div>
+              <div className="pb-motion-bar-track energy" title="Motion energy">
+                <div
+                  className="pb-motion-bar-fill energy"
+                  style={{ width: `${Math.round(motionAnalysis.energy * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {countdown !== null && <div className="pb-countdown">{countdown}</div>}
 
       <div className="pb-viewfinder-top-actions">
@@ -556,11 +711,12 @@ export function PhotoboothPage() {
           />
           <Segmented
             value={mode}
-            onChange={(v) => setMode(v as "click" | "timer")}
+            onChange={(v) => setMode(v as "click" | "timer" | "motion")}
             disabled={busyCapturing}
             options={[
               { label: <MousePointerClick size={14} style={{ verticalAlign: -2 }} />, value: "click" },
               { label: <Timer size={14} style={{ verticalAlign: -2 }} />, value: "timer" },
+              { label: <Activity size={14} style={{ verticalAlign: -2 }} />, value: "motion" },
             ]}
           />
           {mode === "timer" && (
@@ -570,8 +726,32 @@ export function PhotoboothPage() {
               disabled={busyCapturing} style={{ width: 92 }}
             />
           )}
+          {mode === "motion" && (
+            <Segmented
+              value={motionTrigger}
+              onChange={(v) => setMotionTrigger(v as MotionTriggerMode)}
+              disabled={busyCapturing}
+              options={[
+                { label: "Wave", value: "wave" },
+                { label: "Hold", value: "pose-hold" },
+                { label: "Burst", value: "impulse" },
+              ]}
+            />
+          )}
           {busyCapturing ? (
             <Button danger size="large" icon={<X size={16} />} onClick={cancelCountdown}>Cancel</Button>
+          ) : mode === "motion" ? (
+            <Button
+              type={motionArmed ? "default" : "primary"}
+              danger={motionArmed}
+              size="large"
+              className={motionArmed ? undefined : "btn-glow"}
+              icon={motionArmed ? <PauseCircle size={16} /> : <Activity size={16} />}
+              disabled={!cameraReady}
+              onClick={toggleMotionArmed}
+            >
+              {motionArmed ? "Stop motion" : "Arm motion (Space)"}
+            </Button>
           ) : (
             <Button
               type="primary" size="large" className="btn-glow"
@@ -698,10 +878,11 @@ export function PhotoboothPage() {
               block
               value={mode}
               disabled={busyCapturing}
-              onChange={(v) => setMode(v as "click" | "timer")}
+              onChange={(v) => setMode(v as "click" | "timer" | "motion")}
               options={[
                 { label: <span className="pb-seg-label"><MousePointerClick size={14} />Instant</span>, value: "click" },
                 { label: <span className="pb-seg-label"><Timer size={14} />Timer</span>, value: "timer" },
+                { label: <span className="pb-seg-label"><Activity size={14} />Motion</span>, value: "motion" },
               ]}
             />
 
@@ -722,7 +903,7 @@ export function PhotoboothPage() {
                   {shotType === "strip" ? "Capture 4-cut strip" : "Capture (Space)"}
                 </Button>
               )
-            ) : (
+            ) : mode === "timer" ? (
               <>
                 <div className="pb-timer-row">
                   <InputNumber
@@ -757,6 +938,73 @@ export function PhotoboothPage() {
                   ))}
                 </div>
               </>
+            ) : (
+              <div className="pb-motion-panel">
+                <Segmented
+                  block
+                  size="small"
+                  value={motionTrigger}
+                  disabled={busyCapturing}
+                  onChange={(v) => setMotionTrigger(v as MotionTriggerMode)}
+                  options={[
+                    { label: <span className="pb-seg-label"><Hand size={12} />Wave</span>, value: "wave" },
+                    { label: <span className="pb-seg-label"><Activity size={12} />Pose & hold</span>, value: "pose-hold" },
+                    { label: <span className="pb-seg-label"><Zap size={12} />Burst</span>, value: "impulse" },
+                  ]}
+                />
+
+                <div className="pb-motion-setting-row">
+                  <span className="pb-strip-layout-label">Delay after trigger</span>
+                  <div className="pb-chip-row">
+                    {[0, 1, 2, 3].map((s) => (
+                      <Button
+                        key={s}
+                        size="small"
+                        type={motionDelay === s ? "primary" : "default"}
+                        disabled={busyCapturing}
+                        onClick={() => setMotionDelay(s)}
+                      >
+                        {s === 0 ? "0s" : `${s}s`}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pb-motion-setting-row">
+                  <span className="pb-strip-layout-label">Sensitivity</span>
+                  <Slider
+                    min={15}
+                    max={95}
+                    value={motionSensitivity}
+                    onChange={setMotionSensitivity}
+                    disabled={busyCapturing}
+                    style={{ flex: 1, margin: "4px 6px" }}
+                  />
+                  <span className="pb-motion-val">{motionSensitivity}%</span>
+                </div>
+
+                {busyCapturing ? (
+                  <Button danger icon={<X size={15} />} onClick={cancelCountdown} block>
+                    Cancel capture
+                  </Button>
+                ) : (
+                  <Button
+                    type={motionArmed ? "default" : "primary"}
+                    danger={motionArmed}
+                    icon={motionArmed ? <PauseCircle size={15} /> : <Activity size={15} />}
+                    className={motionArmed ? undefined : "btn-glow"}
+                    onClick={toggleMotionArmed}
+                    disabled={!cameraReady}
+                    block
+                  >
+                    {motionArmed
+                      ? "Stop motion sensor (Space)"
+                      : shotType === "strip"
+                        ? "Arm motion 4-cut strip"
+                        : "Arm motion capture (Space)"}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </div>

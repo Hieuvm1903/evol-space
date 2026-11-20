@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Tabs, Typography } from "antd";
-import { MapPin, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { Tabs, Typography } from "antd";
+import { MapPin } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "../../contexts/AuthContext";
@@ -453,24 +453,6 @@ export function MapPage() {
           <p className="map-page-sub">
             Search any address on the map, right-click to drop a pin, or organize places into shareable lists.
           </p>
-        </div>
-
-        <div className="map-page-header-actions">
-          <Button
-            size="small"
-            icon={sidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
-            onClick={() => setSidebarOpen((v) => !v)}
-          >
-            {sidebarOpen ? "Hide panel" : "Show panel"}
-          </Button>
-          <Button
-            size="small"
-            type="primary"
-            icon={<Plus size={14} />}
-            onClick={() => openAdd()}
-          >
-            Add place
-          </Button>
         </div>
       </div>
 
