@@ -1,14 +1,18 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Button, Collapse, ColorPicker, Dropdown, Input, InputNumber, Select, Slider, Switch } from "antd";
-import { ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Code2, Copy, Trash2 } from "lucide-react";
 import { childrenIndex, descendantsOf } from "../../lib/sceneMath";
 import type { JointDef, LightProps, SceneObjectData, Vec3 } from "../../lib/workTypes";
-import { parseScript, SCRIPT_TEMPLATES } from "./script";
+import { assetToProfileId, parseScript, ROBOT_SCRIPT_TEMPLATES, SCRIPT_TEMPLATES } from "./script";
+import ScriptEditorModal from "./ScriptEditorModal";
 
 interface Props {
   object: SceneObjectData;
   objects: SceneObjectData[];
   joints: JointDef[];
+  assetUrls: Record<string, string>;
+  defaultLight: boolean;
+  onToggleDefaultLight: (v: boolean) => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onChange: (patch: Partial<SceneObjectData>, key: string) => void;
@@ -23,6 +27,7 @@ const rad = (d: number) => (d * Math.PI) / 180;
 
 export default function WorkInspector(p: Props) {
   const o = p.object;
+  const [studioOpen, setStudioOpen] = useState(false);
   const hasKids = useMemo(() => (childrenIndex(p.objects).get(o.id)?.length ?? 0) > 0, [p.objects, o.id]);
   const parentOptions = useMemo(() => {
     const banned = descendantsOf(p.objects, o.id);
@@ -160,23 +165,45 @@ export default function WorkInspector(p: Props) {
       )}
       <div className="work-pref-row"><span>Cast shadows</span>
         <Switch size="small" checked={o.light.castShadow} onChange={(v) => setLight({ castShadow: v })} /></div>
-      {o.light.type !== "point" && <div className="work-hint">Shines along the object's −Y axis — rotate it to aim.</div>}
+      <div className="work-pref-row" title="Turn off global editor lighting to isolate and preview your custom lights">
+        <span>Editor lighting</span>
+        <Switch size="small" checked={p.defaultLight} onChange={p.onToggleDefaultLight} />
+      </div>
+      <div className="work-light-guide">
+        <div><b>Aiming:</b> {o.light.type === "point" ? "Point emits 360° in all directions." : "Shines along local −Y (arrow). Press E or edit Rotation X/Z to aim."}</div>
+        <div><b>Headlight tip:</b> Set <b>Parent</b> above to a robot/drone so the light moves with it.</div>
+      </div>
     </>
   );
+
+  const quickTemplates = useMemo(() => {
+    const profile = assetToProfileId(o.asset);
+    const specific = ROBOT_SCRIPT_TEMPLATES.filter((t) => t.profile === profile);
+    return specific.length > 0 ? specific : SCRIPT_TEMPLATES;
+  }, [o.asset]);
 
   const behaviour = o.kind === "model" && (
     <>
       <div className="work-btn-row" style={{ marginBottom: 6 }}>
+        <Button
+          size="small"
+          type="primary"
+          ghost
+          icon={<Code2 size={13} />}
+          onClick={() => setStudioOpen(true)}
+        >
+          Template Studio (3D Demo)
+        </Button>
         <Dropdown trigger={["click"]}
           menu={{
-            items: SCRIPT_TEMPLATES.map((t, i) => ({ key: String(i), label: t.name })),
-            onClick: ({ key }) => p.onChange({ script: SCRIPT_TEMPLATES[Number(key)].script }, `script:${o.id}`),
+            items: quickTemplates.map((t, i) => ({ key: String(i), label: t.name })),
+            onClick: ({ key }) => p.onChange({ script: quickTemplates[Number(key)].script }, `script:${o.id}`),
           }}>
-          <Button size="small">Insert template ▾</Button>
+          <Button size="small">Quick ▾</Button>
         </Dropdown>
         {o.script && <Button size="small" onClick={() => p.onChange({ script: undefined }, `script:${o.id}`)}>Clear</Button>}
       </div>
-      <Input.TextArea className="work-script" rows={10} spellCheck={false} value={o.script ?? ""}
+      <Input.TextArea className="work-script" rows={8} spellCheck={false} value={o.script ?? ""}
         placeholder={"# runs in Play mode, e.g.\ngoto R0-3 0 1.25\nlift 0.15\npick tote"}
         onChange={(e) => p.onChange({ script: e.target.value || undefined }, `script:${o.id}`)} />
       {parse && parse.errors.length > 0 && (
@@ -185,6 +212,14 @@ export default function WorkInspector(p: Props) {
         </div>
       )}
       {parse && parse.errors.length === 0 && o.script?.trim() && <div className="work-hint">✓ {parse.program.length} instructions</div>}
+      <ScriptEditorModal
+        open={studioOpen}
+        object={o}
+        joints={p.joints}
+        assetUrls={p.assetUrls}
+        onClose={() => setStudioOpen(false)}
+        onApply={(nextScript) => p.onChange({ script: nextScript }, `script:${o.id}`)}
+      />
     </>
   );
 

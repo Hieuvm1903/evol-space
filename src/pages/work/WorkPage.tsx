@@ -1440,6 +1440,9 @@ export function WorkPage() {
               object={selected}
               objects={objects}
               joints={selected.asset ? jointDefs[selected.asset] ?? [] : []}
+              assetUrls={assetUrls}
+              defaultLight={prefs.defaultLight}
+              onToggleDefaultLight={(v) => updatePrefs({ defaultLight: v })}
               collapsed={!ui.inspector}
               onToggleCollapsed={() => updateUi({ inspector: !ui.inspector })}
               onChange={(patch, key) => updateObject(selected.id, patch, key)}

@@ -519,15 +519,18 @@ function ModelsTab(p: Props) {
           trigger={["click"]}
           menu={{
             items: [
-              { key: "point", label: "Point light" },
-              { key: "spot", label: "Spot light" },
-              { key: "directional", label: "Directional light" },
+              { key: "point", label: "Point light (360° bulb)" },
+              { key: "spot", label: "Spot light (aimed cone)" },
+              { key: "directional", label: "Directional light (sun beam)" },
             ],
             onClick: ({ key }) => p.onAddLight(key as LightType),
           }}
         >
           <Button size="small" icon={<Lightbulb size={13} />}>Light ▾</Button>
         </Dropdown>
+      </div>
+      <div className="work-hint">
+        Tip: Turn off <b>View → Editor lighting</b> to preview your own lights and shadows cleanly.
       </div>
 
       {p.hasLayout && (
@@ -545,7 +548,32 @@ function HierarchyTab(p: Props) {
   const byId = useMemo(() => new Map(p.objects.map((o) => [o.id, o])), [p.objects]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [dropId, setDropId] = useState<string | "root" | null>(null);
+  const [search, setSearch] = useState("");
   const dragId = useRef<string | null>(null);
+
+  const q = search.trim().toLowerCase();
+  const { matchedIds, visibleIds } = useMemo(() => {
+    const matched = new Set<string>();
+    const visible = new Set<string>();
+    if (!q) return { matchedIds: matched, visibleIds: visible };
+
+    for (const o of p.objects) {
+      const hit =
+        o.label.toLowerCase().includes(q) ||
+        (o.asset && o.asset.toLowerCase().includes(q)) ||
+        o.kind.toLowerCase().includes(q) ||
+        (o.light?.type && o.light.type.toLowerCase().includes(q)) ||
+        (o.script?.trim() && "script".includes(q));
+      if (!hit) continue;
+      matched.add(o.id);
+      visible.add(o.id);
+      for (let cur = o.parentId, guard = 0; cur && guard < 64; guard++) {
+        visible.add(cur);
+        cur = byId.get(cur)?.parentId ?? null;
+      }
+    }
+    return { matchedIds: matched, visibleIds: visible };
+  }, [p.objects, byId, q]);
 
   // keep the selected object visible: expand its ancestors
   useEffect(() => {
@@ -565,15 +593,18 @@ function HierarchyTab(p: Props) {
   };
 
   const row = (id: string, depth: number): React.ReactNode => {
+    if (q && !visibleIds.has(id)) return null;
     const o = byId.get(id);
     if (!o) return null;
-    const kids = idx.get(id) ?? [];
-    const expanded = open.has(id);
+    const allKids = idx.get(id) ?? [];
+    const kids = q ? allKids.filter((k) => visibleIds.has(k)) : allKids;
+    const expanded = q ? kids.length > 0 : open.has(id);
     const isStatic = p.staticIds.has(id);
+    const isMatch = q ? matchedIds.has(id) : false;
     return (
       <React.Fragment key={id}>
         <div
-          className={`work-tree-row${id === p.selectedId ? " active" : ""}${dropId === id ? " drop" : ""}`}
+          className={`work-tree-row${id === p.selectedId ? " active" : ""}${dropId === id ? " drop" : ""}${isMatch ? " match" : ""}`}
           style={{ paddingLeft: 6 + depth * 14 }}
           draggable
           onClick={() => p.onSelectObject(id)}
@@ -604,15 +635,30 @@ function HierarchyTab(p: Props) {
   const roots = idx.get(null) ?? [];
   return (
     <div className="work-side-body">
+      <div style={{ marginBottom: 8 }}>
+        <Input
+          allowClear
+          size="small"
+          prefix={<Search size={13} style={{ color: "var(--evol-muted)" }} />}
+          placeholder="Search hierarchy (name, asset, light)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
       <div
         className={`work-tree-root${dropId === "root" ? " drop" : ""}`}
         onDragOver={(e) => { if (e.dataTransfer.types.includes(NODE_MIME)) { e.preventDefault(); setDropId("root"); } }}
         onDragLeave={() => setDropId((d) => (d === "root" ? null : d))}
         onDrop={(e) => { e.preventDefault(); drop(null); }}
       >
-        {p.objects.length} objects · drag a row onto another to make it a child, or here to unparent
+        {q
+          ? `${matchedIds.size} match${matchedIds.size === 1 ? "" : "es"} of ${p.objects.length} objects`
+          : `${p.objects.length} objects · drag a row onto another to make it a child, or here to unparent`}
       </div>
       {p.objects.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Scene is empty" />}
+      {p.objects.length > 0 && q && matchedIds.size === 0 && (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={`No objects match "${search.trim()}"`} />
+      )}
       {roots.map((r) => row(r, 0))}
     </div>
   );
