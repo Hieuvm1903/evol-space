@@ -2,12 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Dropdown, Empty, Input, Segmented, Select, Slider, Switch, Tabs, Tag, Tooltip } from "antd";
 import {
   Activity, AlertCircle, ArrowLeftRight, BatteryCharging, Bot, Box, Boxes, Building2, ChevronDown, ChevronRight, Container, Cpu,
-  Download, FilePlus, Folder, FolderOpen, FolderPlus, FolderTree, Layers, Lightbulb, LogIn, Monitor, Package, Plane, Plus, Route,
-  ShoppingBag, SlidersHorizontal, Sparkles, Trash2, Truck, User, Zap,
+  Download, FilePlus, Folder, FolderOpen, FolderPlus, FolderTree, Layers, Lightbulb, Lock, LogIn, Monitor, Package, Plane, Plus, Route,
+  Search, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, Truck, UploadCloud, User, Zap,
 } from "lucide-react";
 import { childrenIndex } from "../../lib/sceneMath";
 import type { BuiltAiAsset } from "./aiModelBuilder";
+import type { UploadedModelAsset } from "./uploadedModelLoader";
 import type {
+  AiGenerateOptions,
   AssetTelemetry,
   CameraMode,
   LightType,
@@ -22,6 +24,7 @@ import type {
   WorkspaceMode,
   ZoneDef,
 } from "../../lib/workTypes";
+import AiDetailModal from "./AiDetailModal";
 import AreasSidebarTab from "./AreasSidebarTab";
 import TwinSidebarTab from "./TwinSidebarTab";
 
@@ -50,13 +53,6 @@ const assetIcon = (asset: string | null, size = 18) => {
   }
 };
 
-const AI_QUICK_PROMPTS = [
-  { label: "Delivery Rover", prompt: "Autonomous warehouse delivery rover with 4 rugged wheels, cyan lidar dome, and cargo tray" },
-  { label: "Charging Kiosk", prompt: "Industrial EV robot charging station kiosk with glowing cyan status screen and power cable" },
-  { label: "Gantry Crane", prompt: "Yellow overhead gantry frame crane with trolley beam and hanging lifting hook" },
-  { label: "Control Desk", prompt: "Futuristic operator control desk with curved dual monitors and illuminated console" },
-];
-
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 
 interface Props {
@@ -64,13 +60,20 @@ interface Props {
   sets: ModelSetRow[]; activeSet: ModelSetRow | null; latestSet: ModelSetRow | null; assets: string[]; hasLayout: boolean;
   onSelectSet: (id: number) => void; onAddAsset: (asset: string) => void; onImportLayout: () => void;
   onAddGroup: () => void; onAddLight: (t: LightType) => void;
-  // AI 3D generator
+  // AI 3D generator (admin-only)
+  isAdmin: boolean;
   aiAssets: BuiltAiAsset[];
   aiGenerating: boolean;
   aiError: string | null;
-  onGenerateAiModel: (prompt: string, targetHeight: number, autoPlace: boolean) => Promise<boolean>;
+  onGenerateAiModel: (options: AiGenerateOptions) => Promise<boolean>;
   onDownloadAiAsset: (assetId: string) => void;
   onDeleteAiAsset: (assetId: string) => void;
+  // Uploaded 3D models
+  uploadedAssets: UploadedModelAsset[];
+  uploadingModels: boolean;
+  onUploadModelFiles: (files: FileList | File[]) => Promise<void>;
+  onDownloadUploadedAsset: (assetId: string) => void;
+  onDeleteUploadedAsset: (assetId: string) => void;
   // scenes
   loggedIn: boolean; scenes: SceneSummary[]; currentSceneId: number | null;
   onNewScene: () => void; onOpenScene: (id: number) => void; onDeleteScene: (s: SceneSummary) => void;
@@ -193,103 +196,235 @@ export default function WorkSidebar(p: Props) {
 function ModelsTab(p: Props) {
   const isLatest = !!p.activeSet && !!p.latestSet && p.activeSet.id === p.latestSet.id;
   const [aiPrompt, setAiPrompt] = useState("");
-  const [targetHeight, setTargetHeight] = useState<number>(1.5);
-  const [autoPlace, setAutoPlace] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [uploadDragOver, setUploadDragOver] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGenerate = async () => {
+  const handleQuickGenerate = async () => {
     const clean = aiPrompt.trim();
-    if (!clean || p.aiGenerating) return;
-    await p.onGenerateAiModel(clean, targetHeight, autoPlace);
+    if (!clean || p.aiGenerating || !p.isAdmin) return;
+    await p.onGenerateAiModel({
+      prompt: clean,
+      targetHeight: 1.5,
+      autoPlace: true,
+    });
   };
+
+  const q = search.trim().toLowerCase();
+  const filteredAi = useMemo(
+    () =>
+      q
+        ? p.aiAssets.filter(
+            (a) =>
+              a.blueprint.name.toLowerCase().includes(q) ||
+              a.blueprint.description.toLowerCase().includes(q) ||
+              a.blueprint.id.toLowerCase().includes(q),
+          )
+        : p.aiAssets,
+    [p.aiAssets, q],
+  );
+  const filteredUploaded = useMemo(
+    () =>
+      q
+        ? p.uploadedAssets.filter(
+            (u) =>
+              u.name.toLowerCase().includes(q) ||
+              u.format.toLowerCase().includes(q) ||
+              u.id.toLowerCase().includes(q),
+          )
+        : p.uploadedAssets,
+    [p.uploadedAssets, q],
+  );
+  const filteredSetAssets = useMemo(
+    () => (q ? p.assets.filter((a) => a.toLowerCase().includes(q)) : p.assets),
+    [p.assets, q],
+  );
 
   return (
     <div className="work-side-body">
-      <div className="work-ai-box">
-        <div className="work-ai-head">
-          <span className="work-ai-title">
-            <Sparkles size={13} />
-            AI 3D Generator
-          </span>
-          <span className="work-ai-badge">GLB</span>
-        </div>
+      {p.isAdmin ? (
+        <div className="work-ai-box">
+          <div className="work-ai-head">
+            <span className="work-ai-title">
+              <Sparkles size={13} />
+              AI 3D Generator
+            </span>
+            <Tooltip title="Open detail mode (reference image, specs & articulated joints)">
+              <Button
+                size="small"
+                type="text"
+                icon={<SlidersHorizontal size={12} />}
+                onClick={() => setDetailOpen(true)}
+                disabled={p.aiGenerating}
+                style={{ fontSize: "0.72rem", padding: "0 6px", height: 22 }}
+              >
+                Detail
+              </Button>
+            </Tooltip>
+          </div>
 
-        <Input.TextArea
-          value={aiPrompt}
-          onChange={(e) => setAiPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
-              e.preventDefault();
-              handleGenerate();
-            }
-          }}
-          placeholder="Describe a 3D model (e.g. forklift, solar kiosk, robotic arm)..."
-          autoSize={{ minRows: 2, maxRows: 4 }}
-          maxLength={600}
-          disabled={p.aiGenerating}
-        />
-
-        <div className="work-ai-presets">
-          {AI_QUICK_PROMPTS.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              className="work-ai-preset-btn"
-              disabled={p.aiGenerating}
-              onClick={() => setAiPrompt(q.prompt)}
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="work-ai-controls">
-          <Select
-            size="small"
-            value={targetHeight}
-            onChange={setTargetHeight}
+          <Input.TextArea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
+                e.preventDefault();
+                handleQuickGenerate();
+              }
+            }}
+            placeholder="Describe a 3D model..."
+            autoSize={{ minRows: 2, maxRows: 3 }}
+            maxLength={600}
             disabled={p.aiGenerating}
-            style={{ width: 92 }}
-            options={[
-              { value: 0, label: "Auto size" },
-              { value: 0.8, label: "0.8 m" },
-              { value: 1.5, label: "1.5 m" },
-              { value: 2.5, label: "2.5 m" },
-              { value: 4.0, label: "4.0 m" },
-            ]}
           />
-          <label className="work-ai-autoplace" title="Automatically place generated model at floor center">
-            <Switch size="small" checked={autoPlace} onChange={setAutoPlace} disabled={p.aiGenerating} />
-            <span>Place</span>
-          </label>
+
           <Button
             size="small"
             type="primary"
+            block
             className="btn-glow"
             icon={<Sparkles size={12} />}
             loading={p.aiGenerating}
             disabled={!aiPrompt.trim()}
-            onClick={handleGenerate}
-            style={{ marginLeft: "auto" }}
+            onClick={handleQuickGenerate}
           >
             Generate
           </Button>
-        </div>
 
-        {p.aiError && (
-          <div className="work-ai-error">
-            <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>{p.aiError}</span>
-          </div>
-        )}
+          {p.aiError && (
+            <div className="work-ai-error">
+              <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{p.aiError}</span>
+            </div>
+          )}
+
+          <AiDetailModal
+            open={detailOpen}
+            isAdmin={p.isAdmin}
+            prompt={aiPrompt}
+            generating={p.aiGenerating}
+            error={p.aiError}
+            onPromptChange={setAiPrompt}
+            onClose={() => setDetailOpen(false)}
+            onGenerate={p.onGenerateAiModel}
+          />
+        </div>
+      ) : (
+        <div className="work-ai-locked">
+          <Lock size={13} style={{ flexShrink: 0 }} />
+          <span>AI model generation is restricted to users with <b>role = admin</b>.</span>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        <Input
+          allowClear
+          size="small"
+          prefix={<Search size={13} style={{ color: "var(--evol-muted)" }} />}
+          placeholder="Search models..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
-      {p.aiAssets.length > 0 && (
+      <label
+        className={`work-upload-drop${uploadDragOver ? " dragover" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setUploadDragOver(true);
+        }}
+        onDragLeave={() => setUploadDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setUploadDragOver(false);
+          if (e.dataTransfer.files?.length) p.onUploadModelFiles(e.dataTransfer.files);
+        }}
+      >
+        <UploadCloud size={15} />
+        <div className="work-upload-copy">
+          <span>{p.uploadingModels ? "Importing 3D file..." : "Upload 3D file to create model"}</span>
+          <em>.glb · .gltf · .obj · .stl</em>
+        </div>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept=".glb,.gltf,.obj,.stl"
+          multiple
+          disabled={p.uploadingModels}
+          style={{ display: "none" }}
+          onChange={(e) => {
+            if (e.target.files?.length) p.onUploadModelFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+      </label>
+
+      {filteredUploaded.length > 0 && (
         <>
-          <div className="work-field-label" style={{ marginTop: 14 }}>
-            AI Models ({p.aiAssets.length})
+          <div className="work-field-label" style={{ marginTop: 12 }}>
+            Uploaded Models ({filteredUploaded.length})
           </div>
           <div className="work-asset-grid">
-            {p.aiAssets.map((item) => (
+            {filteredUploaded.map((item) => (
+              <div
+                key={item.id}
+                className="work-asset-card work-upload-asset-card cursor-target"
+                draggable
+                title={`${item.name} (${item.format.toUpperCase()})`}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(DRAG_MIME, item.id);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+              >
+                <span className="work-asset-icon work-upload-asset-icon">
+                  <Box size={17} />
+                </span>
+                <span className="work-asset-name work-ai-asset-name">{item.name}</span>
+                <span className="work-ai-asset-meta">
+                  {item.format.toUpperCase()} · {item.partCount}p
+                  {item.jointCount > 0 ? ` · ${item.jointCount}j` : ""}
+                </span>
+                <Tooltip title="Add to scene">
+                  <button
+                    type="button"
+                    className="work-asset-add"
+                    onClick={() => p.onAddAsset(item.id)}
+                  >
+                    <Plus size={14} />
+                  </button>
+                </Tooltip>
+                <Tooltip title="Download .glb">
+                  <button
+                    type="button"
+                    className="work-ai-mini-btn work-ai-dl"
+                    onClick={() => p.onDownloadUploadedAsset(item.id)}
+                  >
+                    <Download size={11} />
+                  </button>
+                </Tooltip>
+                <Tooltip title="Remove uploaded model">
+                  <button
+                    type="button"
+                    className="work-ai-mini-btn work-ai-del"
+                    onClick={() => p.onDeleteUploadedAsset(item.id)}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {filteredAi.length > 0 && (
+        <>
+          <div className="work-field-label" style={{ marginTop: 12 }}>
+            AI Models ({filteredAi.length})
+          </div>
+          <div className="work-asset-grid">
+            {filteredAi.map((item) => (
               <div
                 key={item.blueprint.id}
                 className="work-asset-card work-ai-asset-card cursor-target"
@@ -305,7 +440,8 @@ function ModelsTab(p: Props) {
                 </span>
                 <span className="work-asset-name work-ai-asset-name">{item.blueprint.name}</span>
                 <span className="work-ai-asset-meta">
-                  {item.partCount}p · {item.bounds[1]}m
+                  {item.partCount}p
+                  {item.jointCount > 0 ? ` · ${item.jointCount}j` : ""} · {item.bounds[1]}m
                 </span>
                 <Tooltip title="Add to scene">
                   <button
@@ -350,13 +486,15 @@ function ModelsTab(p: Props) {
           {isLatest ? <Tag color="cyan">latest</Tag> : (
             <Button size="small" type="link" onClick={() => p.latestSet && p.onSelectSet(p.latestSet.id)}>Update to latest</Button>
           )}
-          <span>{p.assets.length} models</span>
+          <span>
+            {q ? `${filteredSetAssets.length} / ${p.assets.length} models` : `${p.assets.length} models`}
+          </span>
         </div>
       )}
 
       <div className="work-field-label" style={{ marginTop: 14 }}>Drag onto the scene, or click +</div>
       <div className="work-asset-grid">
-        {p.assets.map((a) => (
+        {filteredSetAssets.map((a) => (
           <div key={a} className="work-asset-card cursor-target" draggable
             onDragStart={(e) => { e.dataTransfer.setData(DRAG_MIME, a); e.dataTransfer.effectAllowed = "copy"; }}>
             <span className="work-asset-icon">{assetIcon(a)}</span>
@@ -366,7 +504,12 @@ function ModelsTab(p: Props) {
             </Tooltip>
           </div>
         ))}
-        {p.assets.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing published yet" />}
+        {filteredSetAssets.length === 0 && (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={q ? `No models match "${search.trim()}"` : "Nothing published yet"}
+          />
+        )}
       </div>
 
       <div className="work-field-label" style={{ marginTop: 14 }}>Other objects</div>

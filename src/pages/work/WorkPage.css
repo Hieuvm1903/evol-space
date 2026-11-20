@@ -205,6 +205,44 @@
 .work-ai-dl:hover { color: #22d3ee; border-color: #22d3ee; }
 .work-ai-del { left: 29px; }
 .work-ai-del:hover { color: #f87171; border-color: #f87171; }
+.work-ai-locked {
+  display: flex; align-items: center; gap: 7px; padding: 8px 10px;
+  border-radius: 10px; border: 1px dashed var(--evol-border);
+  background: rgba(255,255,255,0.02); color: var(--evol-muted); font-size: 0.74rem; line-height: 1.35;
+}
+.work-upload-drop {
+  margin-top: 10px; display: flex; align-items: center; gap: 9px; padding: 9px 11px;
+  border-radius: 10px; border: 1px dashed rgba(139,111,245,0.42);
+  background: rgba(139,111,245,0.06); color: var(--evol-text); cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.work-upload-drop:hover, .work-upload-drop.dragover {
+  border-color: #22d3ee; background: rgba(34,211,238,0.1);
+}
+.work-upload-drop svg { color: #22d3ee; flex-shrink: 0; }
+.work-upload-copy { display: flex; flex-direction: column; min-width: 0; }
+.work-upload-copy span { font-size: 0.76rem; font-weight: 500; }
+.work-upload-copy em { font-style: normal; font-size: 0.67rem; color: var(--evol-muted); }
+.work-upload-asset-card { padding-bottom: 8px; border-color: rgba(16,185,129,0.32); }
+.work-upload-asset-icon { background: linear-gradient(135deg, #10b981, #22d3ee); }
+
+/* ---------- AI Detail Mode Modal ---------- */
+.work-ai-detail-form { display: flex; flex-direction: column; gap: 12px; }
+.work-ai-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.work-ai-img-row { display: flex; align-items: stretch; gap: 10px; }
+.work-ai-img-drop {
+  flex: 1; min-height: 82px; border-radius: 10px; border: 1px dashed var(--evol-border);
+  background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; overflow: hidden; padding: 6px; transition: border-color .15s ease;
+}
+.work-ai-img-drop:hover { border-color: #22d3ee; }
+.work-ai-img-empty { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--evol-muted); text-align: center; }
+.work-ai-img-thumb { max-height: 110px; max-width: 100%; border-radius: 7px; object-fit: contain; }
+.work-ai-img-meta { flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.work-ai-joint-box {
+  padding: 10px 12px; border-radius: 10px;
+  border: 1px solid rgba(34,211,238,0.28); background: rgba(34,211,238,0.05);
+}
 
 .work-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .work-list-row { display: flex; align-items: center; flex-shrink: 0; gap: 8px; padding: 8px 10px; border-radius: 10px; cursor: pointer; border: 1px solid var(--evol-border); background: rgba(255,255,255,.02); }

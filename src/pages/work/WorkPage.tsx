@@ -42,6 +42,7 @@ import {
   toLocalData,
 } from "../../lib/sceneMath";
 import type {
+  AiGenerateOptions,
   AiModelBlueprint,
   AssetTelemetry,
   CameraMode,
@@ -71,6 +72,11 @@ import {
   requestAiModelBlueprint,
   type BuiltAiAsset,
 } from "./aiModelBuilder";
+import {
+  downloadUploadedAsset,
+  loadUploadedModelFile,
+  type UploadedModelAsset,
+} from "./uploadedModelLoader";
 import { extractZones, layoutToObjects } from "./layoutImport";
 import { Runtime } from "./runtime";
 import { TwinEngine } from "./twinEngine";
@@ -132,7 +138,7 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String((e as an
 const snap01 = (n: number) => Math.round(n * 10) / 10;
 
 export function WorkPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const confirmDialog = useConfirm();
 
   // --- workspace mode
@@ -206,6 +212,11 @@ export function WorkPage() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // --- Uploaded local 3D model files (.glb, .gltf, .obj, .stl)
+  const [uploadedAssets, setUploadedAssets] = useState<Record<string, UploadedModelAsset>>({});
+  const uploadedAssetsRef = useRef<Record<string, UploadedModelAsset>>({});
+  const [uploadingModels, setUploadingModels] = useState(false);
+
   const updatePrefs = useCallback((patch: Partial<ViewPrefs>) => {
     setPrefs((cur) => {
       const n = { ...cur, ...patch };
@@ -244,11 +255,18 @@ export function WorkPage() {
     for (const [id, item] of Object.entries(aiAssets)) {
       urls[id] = item.url;
     }
+    for (const [id, item] of Object.entries(uploadedAssets)) {
+      urls[id] = item.url;
+    }
     return urls;
-  }, [assets, activeSet, aiAssets]);
+  }, [assets, activeSet, aiAssets, uploadedAssets]);
   const aiAssetList = useMemo(
     () => Object.values(aiAssets).sort((a, b) => b.blueprint.createdAt.localeCompare(a.blueprint.createdAt)),
     [aiAssets],
+  );
+  const uploadedAssetList = useMemo(
+    () => Object.values(uploadedAssets).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [uploadedAssets],
   );
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
   const selectedTelemetry = useMemo(
@@ -262,6 +280,10 @@ export function WorkPage() {
   useEffect(() => {
     aiAssetsRef.current = aiAssets;
   }, [aiAssets]);
+
+  useEffect(() => {
+    uploadedAssetsRef.current = uploadedAssets;
+  }, [uploadedAssets]);
 
   const persistAiBlueprints = useCallback((map: Record<string, BuiltAiAsset>) => {
     const bps: Record<string, AiModelBlueprint> = {};
@@ -309,6 +331,10 @@ export function WorkPage() {
       cancelled = true;
       twinEngine.disconnectStream();
       for (const item of Object.values(aiAssetsRef.current)) {
+        useGLTF.clear(item.url);
+        URL.revokeObjectURL(item.url);
+      }
+      for (const item of Object.values(uploadedAssetsRef.current)) {
         useGLTF.clear(item.url);
         URL.revokeObjectURL(item.url);
       }
@@ -613,19 +639,26 @@ export function WorkPage() {
   const addModel = (asset: string, at?: Vec3 | null) =>
     addObject({ kind: "model", asset, label: labelFor(asset), position: floorPoint(at) });
 
-  const handleGenerateAiModel = async (prompt: string, targetHeight: number, autoPlace: boolean) => {
+  const handleGenerateAiModel = async (options: AiGenerateOptions) => {
+    if (!isAdmin) {
+      const msg = "Only users with role = admin can generate AI 3D models.";
+      setAiError(msg);
+      notify.error("Permission denied", msg);
+      return false;
+    }
     setAiGenerating(true);
     setAiError(null);
     try {
-      const blueprint = await requestAiModelBlueprint(prompt, targetHeight);
+      const blueprint = await requestAiModelBlueprint(options);
       const built = await assembleAndExportGlb(blueprint);
       setAiAssets((cur) => {
         const next = { ...cur, [blueprint.id]: built };
         persistAiBlueprints(next);
         return next;
       });
-      notify.added(`Generated "${built.blueprint.name}" (${built.partCount} parts).`);
-      if (autoPlace) {
+      const jointNote = built.jointCount > 0 ? `, ${built.jointCount} joints` : "";
+      notify.added(`Generated "${built.blueprint.name}" (${built.partCount} parts${jointNote}).`);
+      if (options.autoPlace) {
         const nice = blueprint.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "_")
@@ -677,6 +710,79 @@ export function WorkPage() {
     useGLTF.clear(item.url);
     URL.revokeObjectURL(item.url);
     notify.deleted(`Removed "${item.blueprint.name}".`);
+  };
+
+  const handleUploadModelFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (!list.length) return;
+    setUploadingModels(true);
+    try {
+      const loaded: UploadedModelAsset[] = [];
+      for (const file of list) {
+        try {
+          loaded.push(await loadUploadedModelFile(file));
+        } catch (e) {
+          notify.error(`Could not load "${file.name}"`, errMsg(e));
+        }
+      }
+      if (!loaded.length) return;
+      setUploadedAssets((cur) => {
+        const next = { ...cur };
+        for (const item of loaded) next[item.id] = item;
+        return next;
+      });
+      if (!playing) {
+        for (const item of loaded) {
+          const nice = item.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "") || item.id;
+          const label = `${nice}-${objects.filter((o) => o.label.startsWith(`${nice}-`)).length + 1}`;
+          addObject({ kind: "model", asset: item.id, label, position: floorPoint() });
+        }
+      }
+      notify.added(
+        loaded.length === 1
+          ? `Uploaded "${loaded[0].name}" (${loaded[0].format.toUpperCase()}).`
+          : `Uploaded ${loaded.length} 3D models.`,
+      );
+    } finally {
+      setUploadingModels(false);
+    }
+  };
+
+  const handleDownloadUploadedAsset = (assetId: string) => {
+    const item = uploadedAssets[assetId];
+    if (item) downloadUploadedAsset(item);
+  };
+
+  const handleDeleteUploadedAsset = async (assetId: string) => {
+    const item = uploadedAssets[assetId];
+    if (!item) return;
+    const usedInScene = objects.some((o) => o.asset === assetId);
+    if (
+      usedInScene &&
+      !(await confirmDialog({
+        title: `Remove "${item.name}"?`,
+        description: "Instances of this uploaded model in the current scene will also be removed.",
+        confirmText: "Remove",
+        danger: true,
+      }))
+    ) {
+      return;
+    }
+    if (usedInScene) {
+      history.set((cur) => cur.filter((o) => o.asset !== assetId));
+      setSelectedId((s) => (s && objects.find((o) => o.id === s)?.asset === assetId ? null : s));
+    }
+    setUploadedAssets((cur) => {
+      const next = { ...cur };
+      delete next[assetId];
+      return next;
+    });
+    useGLTF.clear(item.url);
+    URL.revokeObjectURL(item.url);
+    notify.deleted(`Removed "${item.name}".`);
   };
 
   const addGroup = () => addObject({ kind: "group", label: labelFor("group"), position: floorPoint() });
@@ -1031,12 +1137,18 @@ export function WorkPage() {
                   onImportLayout={importLayout}
                   onAddGroup={addGroup}
                   onAddLight={addLight}
+                  isAdmin={isAdmin}
                   aiAssets={aiAssetList}
                   aiGenerating={aiGenerating}
                   aiError={aiError}
                   onGenerateAiModel={handleGenerateAiModel}
                   onDownloadAiAsset={handleDownloadAiAsset}
                   onDeleteAiAsset={handleDeleteAiAsset}
+                  uploadedAssets={uploadedAssetList}
+                  uploadingModels={uploadingModels}
+                  onUploadModelFiles={handleUploadModelFiles}
+                  onDownloadUploadedAsset={handleDownloadUploadedAsset}
+                  onDeleteUploadedAsset={handleDeleteUploadedAsset}
                   loggedIn={!!user}
                   scenes={scenes}
                   currentSceneId={sceneId}

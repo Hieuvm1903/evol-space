@@ -38,6 +38,16 @@ export type AiPartShape =
   | "ring"
   | "octahedron";
 
+export interface AiModelJoint {
+  name: string;
+  type: "revolute" | "continuous" | "prismatic";
+  parentJoint?: string;
+  pivot: Vec3;
+  axis: Vec3;
+  lower: number;
+  upper: number;
+}
+
 export interface AiModelPart {
   name: string;
   shape: AiPartShape;
@@ -50,6 +60,7 @@ export interface AiModelPart {
   emissive?: string;
   emissiveIntensity?: number;
   opacity?: number;
+  joint?: string;
 }
 
 export interface AiModelBlueprint {
@@ -59,7 +70,24 @@ export interface AiModelBlueprint {
   prompt: string;
   targetHeightMeters: number;
   parts: AiModelPart[];
+  joints?: AiModelJoint[];
   createdAt: string;
+}
+
+export interface AiGenerateOptions {
+  prompt: string;
+  targetHeight: number;
+  autoPlace: boolean;
+  style?: string;
+  materials?: string;
+  extraDetails?: string;
+  partDensity?: "standard" | "high";
+  includeJoints?: boolean;
+  jointDetails?: string;
+  referenceImage?: {
+    mimeType: string;
+    data: string;
+  } | null;
 }
 
 export interface SceneDoc {
