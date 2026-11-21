@@ -19,6 +19,7 @@ import { MapPage } from "./pages/map/MapPage";
 import { PhotoboothPage } from "./pages/PhotoboothPage";
 import { WorkPage } from "./pages/work/WorkPage";
 import { AsciiPage } from "./pages/ascii/AsciiPage";
+import { World3DPage } from "./pages/world3d/World3DPage";
 import { SharedPlacesPage } from "./pages/SharedPlacesPage";
 import { SharedAlbumPage } from "./pages/SharedAlbumPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -45,11 +46,13 @@ const evolAntdTheme = {
 };
 function AppBody() {
   const location = useLocation();
-  const hideGalaxy = location.pathname === "/work" || location.pathname === "/ascii";
+  const is3DMode = location.pathname === "/3d";
+  const hideGalaxy =
+    location.pathname === "/work" || location.pathname === "/ascii" || is3DMode;
   return (
     <>
       {!hideGalaxy && <GalaxyBackground />}
-      <NavBar />
+      {!is3DMode && <NavBar />}
       <main className="app-content">
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -64,6 +67,7 @@ function AppBody() {
           <Route path="/photobooth" element={<PhotoboothPage />} />
           <Route path="/work" element={<WorkPage />} />
           <Route path="/ascii" element={<AsciiPage />} />
+          <Route path="/3d" element={<World3DPage />} />
           <Route path="/share/album/:token" element={<SharedAlbumPage />} />
 <Route path="/share/places/:token" element={<SharedPlacesPage />} />
         </Routes>

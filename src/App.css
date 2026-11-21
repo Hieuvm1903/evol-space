@@ -104,7 +104,8 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-.app-content:has(> .work-page-shell) {
+.app-content:has(> .work-page-shell),
+.app-content:has(> .world3d-page) {
   overflow: hidden;
 }
 ::selection { background: rgba(139, 111, 245, 0.4); color: #fff; }

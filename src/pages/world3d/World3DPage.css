@@ -1,0 +1,299 @@
+.world3d-page {
+  position: relative;
+  flex: 1;
+  min-height: 480px;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #05040d;
+  user-select: none;
+}
+
+.world3d-canvas-mount {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.world3d-canvas-mount canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Projected 3D monument labels (no backdrop-filter over WebGL, no pills) */
+.world3d-labels-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.world3d-node-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(196, 181, 253, 0.18);
+  background: rgba(11, 9, 22, 0.86);
+  color: #f1f5f9;
+  cursor: pointer;
+  white-space: nowrap;
+  will-change: transform, opacity;
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.world3d-node-label:hover,
+.world3d-node-label.is-hovered {
+  background: rgba(18, 15, 36, 0.96);
+  border-color: var(--node-accent, #22d3ee);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+.world3d-node-label:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
+
+.world3d-node-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.world3d-node-route {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  color: #9c97b8;
+  letter-spacing: 0.01em;
+}
+
+.world3d-node-label.is-hovered .world3d-node-route {
+  color: var(--node-accent, #22d3ee);
+}
+
+/* Minimal Top HUD Strip */
+.world3d-top-hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.world3d-title-strip {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(11, 9, 22, 0.88);
+  border: 1px solid rgba(196, 181, 253, 0.16);
+  color: #e8e6f5;
+  font-size: 0.82rem;
+}
+
+.world3d-brand-title {
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.world3d-hud-sep {
+  width: 1px;
+  height: 15px;
+  background: rgba(196, 181, 253, 0.18);
+}
+
+.world3d-hud-hint {
+  color: #9c97b8;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.world3d-top-actions {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.world3d-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(196, 181, 253, 0.18);
+  background: rgba(11, 9, 22, 0.88);
+  color: #e8e6f5;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.world3d-action-btn:hover {
+  border-color: #22d3ee;
+  color: #ffffff;
+}
+
+.world3d-action-btn:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
+
+/* Collapsible Bottom Navigation & Camera Dock */
+.world3d-dock-wrap {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 14;
+  max-width: min(1060px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.world3d-dock-wrap.collapsed {
+  transform: translate(-50%, calc(100% - 30px));
+}
+
+.world3d-dock-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid rgba(196, 181, 253, 0.18);
+  border-bottom: none;
+  background: rgba(11, 9, 22, 0.92);
+  color: #9c97b8;
+  font-size: 0.74rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.world3d-dock-toggle:hover {
+  color: #ffffff;
+}
+
+.world3d-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(11, 9, 22, 0.92);
+  border: 1px solid rgba(196, 181, 253, 0.18);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.world3d-dock-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.world3d-routes-row {
+  padding-top: 6px;
+  border-top: 1px solid rgba(196, 181, 253, 0.12);
+}
+
+.world3d-dock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 7px;
+  border: 1px solid rgba(196, 181, 253, 0.14);
+  background: rgba(25, 22, 46, 0.75);
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.world3d-dock-btn:hover,
+.world3d-dock-btn.is-active {
+  border-color: var(--btn-accent, #22d3ee);
+  background: rgba(34, 211, 238, 0.14);
+  color: #ffffff;
+}
+
+.world3d-dock-btn:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
+
+.world3d-target-readout {
+  font-size: 0.76rem;
+  color: #9c97b8;
+  white-space: nowrap;
+  padding: 0 6px;
+}
+
+.world3d-target-readout strong {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.world3d-fallback-banner {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #05040d;
+  color: #e8e6f5;
+  text-align: center;
+  padding: 24px;
+}
+
+@media (max-width: 760px) {
+  .world3d-top-hud {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+  .world3d-hud-hint,
+  .world3d-hud-sep {
+    display: none;
+  }
+  .world3d-dock {
+    padding: 8px 10px;
+  }
+}
