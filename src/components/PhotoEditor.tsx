@@ -1,14 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Input, Slider, Segmented, Tooltip } from "antd";
 import {
   Sliders, Wand2, Frame, Sticker as StickerIcon, Pencil, Trash2, Undo2, Type,
-  Crop, RotateCw, FlipHorizontal2, Eye, RotateCcw,
+  Crop, RotateCw, FlipHorizontal2, Eye, RotateCcw, ZoomIn, ZoomOut, Search, X, Sparkles, Move,
 } from "lucide-react";
 import {
   ASPECT_OPTIONS, DEFAULT_ADJ, DEFAULT_TRANSFORM, FILTER_PRESETS, FRAME_OPTIONS,
-  defaultEdit, drawSelection, hitSticker, renderEdit,
-  type Adjustments, type EditState, type FrameId, type Sticker,
+  defaultEdit, drawSelection, hitSticker, preloadFrameOverlay, renderEdit,
+  type Adjustments, type EditState, type FrameId, type OverlayLayout, type Sticker,
 } from "../lib/photoEditor";
+import {
+  FRAME_API_CATEGORIES, fetchMotifSvg, getIconifyPreviewUrl, searchFrameMotifs,
+  type ApiFrameMotif,
+} from "../lib/frameApi";
+import { notify } from "../lib/notify";
 import "./PhotoEditor.css";
 
 type Tab = "adjust" | "filter" | "crop" | "frame" | "stickers" | "draw";
@@ -47,11 +52,49 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
   const [textInput, setTextInput] = useState("");
   const [textColor, setTextColor] = useState("#ffffff");
   const [comparingOriginal, setComparingOriginal] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const [overlayRenderTick, setOverlayRenderTick] = useState(0);
+
+  // API Frame & Motif search state
+  const [motifQuery, setMotifQuery] = useState("sparkle");
+  const [motifs, setMotifs] = useState<ApiFrameMotif[]>([]);
+  const [motifsLoading, setMotifsLoading] = useState(false);
+  const [motifsOffline, setMotifsOffline] = useState(false);
+  const [applyingMotifId, setApplyingMotifId] = useState<string | null>(null);
 
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const panDragRef = useRef<{ startX: number; startY: number; origPanX: number; origPanY: number } | null>(null);
   const drawingRef = useRef(false);
 
   const selected = state.stickers.find((s) => s.id === selectedId) ?? null;
+  const transform = state.transform ?? DEFAULT_TRANSFORM;
+  const cropZoom = transform.zoom ?? 1;
+  const canPanCrop = tab === "crop" && (cropZoom > 1 || transform.aspect !== "original");
+
+  const runMotifSearch = useCallback(async (query: string) => {
+    setMotifsLoading(true);
+    try {
+      const res = await searchFrameMotifs(query, 24);
+      setMotifs(res.motifs);
+      setMotifsOffline(res.fromFallback);
+    } finally {
+      setMotifsLoading(false);
+    }
+  }, []);
+
+  // Load initial frame motifs when entering the Frame tab
+  useEffect(() => {
+    if (tab === "frame" && motifs.length === 0) {
+      void runMotifSearch(motifQuery);
+    }
+  }, [tab, motifs.length, motifQuery, runMotifSearch]);
+
+  // Preload SVG overlay whenever it changes so canvas redraws immediately on decode
+  useEffect(() => {
+    if (state.overlay?.svg) {
+      preloadFrameOverlay(state.overlay, () => setOverlayRenderTick((t) => t + 1));
+    }
+  }, [state.overlay]);
 
   // Render preview (max 900px wide — final export re-renders at full res).
   useEffect(() => {
@@ -62,7 +105,7 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
       : state;
     renderEdit(base, renderState, Math.min(base.width, 900), c);
     if (!comparingOriginal && tab === "stickers" && selected) drawSelection(c, selected);
-  }, [base, state, selected, tab, comparingOriginal]);
+  }, [base, state, selected, tab, comparingOriginal, overlayRenderTick]);
 
   // Delete selected sticker with Delete / Backspace when not focused inside text input.
   useEffect(() => {
@@ -102,6 +145,33 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
     setSelectedId(null);
   }
 
+  async function selectApiMotif(motif: ApiFrameMotif) {
+    if (state.overlay?.id === motif.id) {
+      patch({ overlay: null });
+      return;
+    }
+    setApplyingMotifId(motif.id);
+    try {
+      const svg = motif.svg ?? (await fetchMotifSvg(motif.id));
+      const prev = stateRef.current.overlay;
+      patch({
+        overlay: {
+          id: motif.id,
+          name: motif.name,
+          svg,
+          layout: prev?.layout ?? "corners",
+          tint: prev?.tint ?? "#ffffff",
+          scale: prev?.scale ?? 1,
+          opacity: prev?.opacity ?? 0.9,
+        },
+      });
+    } catch {
+      notify.error("Couldn't load frame motif", "Please try another motif.");
+    } finally {
+      setApplyingMotifId(null);
+    }
+  }
+
   function pt(e: React.PointerEvent<HTMLCanvasElement>) {
     const r = e.currentTarget.getBoundingClientRect();
     return { nx: (e.clientX - r.left) / r.width, ny: (e.clientY - r.top) / r.height };
@@ -123,6 +193,15 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
         e.currentTarget.setPointerCapture(e.pointerId);
         dragRef.current = { id: hit.id, dx: hit.x - nx, dy: hit.y - ny };
       }
+    } else if (canPanCrop) {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const t = s.transform ?? DEFAULT_TRANSFORM;
+      panDragRef.current = {
+        startX: nx,
+        startY: ny,
+        origPanX: t.panX ?? 0,
+        origPanY: t.panY ?? 0,
+      };
     }
   }
 
@@ -135,36 +214,93 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
     } else if (dragRef.current) {
       const { id, dx, dy } = dragRef.current;
       updateSticker(id, { x: Math.min(1, Math.max(0, nx + dx)), y: Math.min(1, Math.max(0, ny + dy)) });
+    } else if (panDragRef.current) {
+      const { startX, startY, origPanX, origPanY } = panDragRef.current;
+      const dx = (nx - startX) * 2;
+      const dy = (ny - startY) * 2;
+      const t = s.transform ?? DEFAULT_TRANSFORM;
+      patch({
+        transform: {
+          ...t,
+          panX: Math.min(1, Math.max(-1, origPanX - dx)),
+          panY: Math.min(1, Math.max(-1, origPanY - dy)),
+        },
+      });
     }
   }
 
-  function onUp() { drawingRef.current = false; dragRef.current = null; }
-
-  const transform = state.transform ?? DEFAULT_TRANSFORM;
+  function onUp() {
+    drawingRef.current = false;
+    dragRef.current = null;
+    panDragRef.current = null;
+  }
 
   return (
     <div className="pe-root">
       <div className="pe-canvas-stage">
-        <canvas
-          ref={canvasRef}
-          className={`pe-canvas${tab === "draw" ? " pe-canvas-draw" : ""}`}
-          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-        />
+        <div className={`pe-canvas-viewport${previewZoom > 1 ? " zoomed" : ""}`}>
+          <canvas
+            ref={canvasRef}
+            className={`pe-canvas${tab === "draw" ? " pe-canvas-draw" : canPanCrop ? " pe-canvas-pan" : ""}`}
+            style={
+              previewZoom > 1
+                ? { width: `${Math.round(previewZoom * 100)}%`, maxHeight: "none" }
+                : undefined
+            }
+            onPointerDown={onDown}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            onPointerCancel={onUp}
+          />
+        </div>
+
         <div className="pe-stage-toolbar">
-          <button
-            type="button"
-            className={`pe-compare-btn${comparingOriginal ? " active" : ""}`}
-            onPointerDown={() => setComparingOriginal(true)}
-            onPointerUp={() => setComparingOriginal(false)}
-            onPointerLeave={() => setComparingOriginal(false)}
-            onPointerCancel={() => setComparingOriginal(false)}
-            title="Hold to compare with original"
-          >
-            <Eye size={13} />
-            <span>{comparingOriginal ? "Original" : "Hold to compare"}</span>
-          </button>
+          <div className="pe-stage-left">
+            <button
+              type="button"
+              className={`pe-compare-btn${comparingOriginal ? " active" : ""}`}
+              onPointerDown={() => setComparingOriginal(true)}
+              onPointerUp={() => setComparingOriginal(false)}
+              onPointerLeave={() => setComparingOriginal(false)}
+              onPointerCancel={() => setComparingOriginal(false)}
+              title="Hold to compare with original"
+            >
+              <Eye size={13} />
+              <span>{comparingOriginal ? "Original" : "Compare"}</span>
+            </button>
+
+            <div className="pe-zoom-controls" aria-label="Preview zoom">
+              <button
+                type="button"
+                className="pe-zoom-btn"
+                disabled={previewZoom <= 1}
+                onClick={() => setPreviewZoom((z) => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
+                title="Zoom out preview"
+              >
+                <ZoomOut size={13} />
+              </button>
+              <button
+                type="button"
+                className="pe-zoom-readout"
+                onClick={() => setPreviewZoom(1)}
+                title="Reset preview zoom"
+              >
+                {Math.round(previewZoom * 100)}%
+              </button>
+              <button
+                type="button"
+                className="pe-zoom-btn"
+                disabled={previewZoom >= 2.5}
+                onClick={() => setPreviewZoom((z) => Math.min(2.5, Math.round((z + 0.25) * 100) / 100))}
+                title="Zoom in preview"
+              >
+                <ZoomIn size={13} />
+              </button>
+            </div>
+          </div>
+
           <span className="pe-dims-label">
-            {base.width}×{base.height}
+            {base.width}×{base.height}{cropZoom > 1 ? ` · ${cropZoom.toFixed(1)}×` : ""}
           </span>
         </div>
       </div>
@@ -174,8 +310,8 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
         options={[
           { value: "adjust", label: <Tooltip title="Adjust"><span className="pe-seg-ic"><Sliders size={14} /></span></Tooltip> },
           { value: "filter", label: <Tooltip title="Filters"><span className="pe-seg-ic"><Wand2 size={14} /></span></Tooltip> },
-          { value: "crop", label: <Tooltip title="Rotate & Crop"><span className="pe-seg-ic"><Crop size={14} /></span></Tooltip> },
-          { value: "frame", label: <Tooltip title="Frame"><span className="pe-seg-ic"><Frame size={14} /></span></Tooltip> },
+          { value: "crop", label: <Tooltip title="Zoom, Rotate & Crop"><span className="pe-seg-ic"><Crop size={14} /></span></Tooltip> },
+          { value: "frame", label: <Tooltip title="Frames & API Motifs"><span className="pe-seg-ic"><Frame size={14} /></span></Tooltip> },
           { value: "stickers", label: <Tooltip title="Stickers & Text"><span className="pe-seg-ic"><StickerIcon size={14} /></span></Tooltip> },
           { value: "draw", label: <Tooltip title="Draw"><span className="pe-seg-ic"><Pencil size={14} /></span></Tooltip> },
         ]}
@@ -210,7 +346,31 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
 
         {tab === "crop" && (
           <>
-            <div className="pe-chip-grid">
+            <Row
+              label="Crop zoom"
+              value={cropZoom}
+              min={1}
+              max={3}
+              step={0.05}
+              unit="×"
+              onChange={(v) => patch({ transform: { ...transform, zoom: v } })}
+            />
+            {(cropZoom > 1 || transform.aspect !== "original") && (
+              <div className="pe-chip-grid" style={{ alignItems: "center" }}>
+                <span className="pe-hint" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <Move size={12} /> Drag photo to pan
+                </span>
+                {(transform.panX !== 0 || transform.panY !== 0) && (
+                  <Button
+                    size="small"
+                    onClick={() => patch({ transform: { ...transform, panX: 0, panY: 0 } })}
+                  >
+                    Center
+                  </Button>
+                )}
+              </div>
+            )}
+            <div className="pe-chip-grid" style={{ marginTop: 2 }}>
               <Button
                 size="small"
                 icon={<RotateCw size={13} />}
@@ -252,18 +412,148 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
           <>
             <div className="pe-chip-grid">
               {FRAME_OPTIONS.map((f) => (
-                <Button key={f.id} size="small" type={state.frame.id === f.id ? "primary" : "default"}
-                  onClick={() => patch({ frame: { ...state.frame, id: f.id as FrameId } })}>
+                <Button
+                  key={f.id}
+                  size="small"
+                  type={state.frame.id === f.id ? "primary" : "default"}
+                  onClick={() => patch({ frame: { ...state.frame, id: f.id as FrameId } })}
+                >
                   {f.label}
                 </Button>
               ))}
             </div>
             <label className="pe-color-row">
               Frame colour
-              <input type="color" value={state.frame.color}
-                onChange={(e) => patch({ frame: { ...state.frame, color: e.target.value } })} />
-              <span className="pe-hint">(Film & Galaxy use fixed colours)</span>
+              <input
+                type="color"
+                value={state.frame.color}
+                onChange={(e) => patch({ frame: { ...state.frame, color: e.target.value } })}
+              />
+              <span className="pe-hint">(Film, Neon & Galaxy use themed colours)</span>
             </label>
+
+            <div className="pe-api-frame-section">
+              <div className="pe-api-frame-header">
+                <span className="pe-api-frame-title">
+                  <Sparkles size={13} /> Frame Ornaments (Iconify API)
+                </span>
+                {state.overlay && (
+                  <Button size="small" type="text" icon={<X size={12} />} onClick={() => patch({ overlay: null })}>
+                    Clear motif
+                  </Button>
+                )}
+              </div>
+
+              <div className="pe-api-search-row">
+                <Input
+                  size="small"
+                  value={motifQuery}
+                  onChange={(e) => setMotifQuery(e.target.value)}
+                  onPressEnter={() => void runMotifSearch(motifQuery)}
+                  placeholder="Search motifs (sparkle, floral, ribbon…)"
+                  prefix={<Search size={12} color="#9c97b8" />}
+                  allowClear
+                />
+                <Button size="small" type="primary" loading={motifsLoading} onClick={() => void runMotifSearch(motifQuery)}>
+                  Search
+                </Button>
+              </div>
+
+              <div className="pe-chip-grid">
+                {FRAME_API_CATEGORIES.map((cat) => (
+                  <Button
+                    key={cat.query}
+                    size="small"
+                    type={motifQuery.toLowerCase() === cat.query ? "primary" : "default"}
+                    onClick={() => {
+                      setMotifQuery(cat.query);
+                      void runMotifSearch(cat.query);
+                    }}
+                  >
+                    {cat.label}
+                  </Button>
+                ))}
+              </div>
+
+              {motifsOffline && (
+                <span className="pe-hint">Showing built-in motifs (API unavailable offline).</span>
+              )}
+
+              <div className="pe-motif-grid">
+                {motifs.map((m) => {
+                  const active = state.overlay?.id === m.id;
+                  const busy = applyingMotifId === m.id;
+                  return (
+                    <Tooltip key={m.id} title={m.id}>
+                      <button
+                        type="button"
+                        className={`pe-motif-btn${active ? " active" : ""}`}
+                        onClick={() => void selectApiMotif(m)}
+                        disabled={busy}
+                      >
+                        <img
+                          src={getIconifyPreviewUrl(m.id)}
+                          alt={m.name}
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                        />
+                      </button>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+
+              {state.overlay && (
+                <div className="pe-overlay-controls">
+                  <Segmented
+                    block
+                    size="small"
+                    value={state.overlay.layout}
+                    onChange={(v) =>
+                      patch({ overlay: { ...state.overlay!, layout: v as OverlayLayout } })
+                    }
+                    options={[
+                      { label: "Corners", value: "corners" },
+                      { label: "Border", value: "border-tile" },
+                      { label: "Top/Bottom", value: "top-bottom" },
+                      { label: "Badge", value: "badge" },
+                    ]}
+                  />
+                  <Row
+                    label="Size"
+                    value={state.overlay.scale}
+                    min={0.6}
+                    max={1.8}
+                    step={0.05}
+                    unit="×"
+                    onChange={(v) => patch({ overlay: { ...state.overlay!, scale: v } })}
+                  />
+                  <Row
+                    label="Opacity"
+                    value={Math.round(state.overlay.opacity * 100)}
+                    min={20}
+                    max={100}
+                    unit="%"
+                    onChange={(v) => patch({ overlay: { ...state.overlay!, opacity: v / 100 } })}
+                  />
+                  <label className="pe-color-row">
+                    Motif tint
+                    <input
+                      type="color"
+                      value={state.overlay.tint || "#ffffff"}
+                      onChange={(e) => patch({ overlay: { ...state.overlay!, tint: e.target.value } })}
+                    />
+                    <Button
+                      size="small"
+                      type={state.overlay.tint === "" ? "primary" : "default"}
+                      onClick={() => patch({ overlay: { ...state.overlay!, tint: "" } })}
+                    >
+                      Original colours
+                    </Button>
+                  </label>
+                </div>
+              )}
+            </div>
           </>
         )}
 

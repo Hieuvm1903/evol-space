@@ -1,11 +1,28 @@
-export type MotionTriggerMode = "wave" | "pose-hold" | "impulse";
+import {
+  FaceLandmarker,
+  FilesetResolver,
+  GestureRecognizer,
+  type Classifications,
+} from "@mediapipe/tasks-vision";
+
+export type MotionTriggerMode =
+  | "wave"
+  | "pose-hold"
+  | "impulse"
+  | "thumb-up"
+  | "victory"
+  | "smile"
+  | "open-palm"
+  | "wink"
+  | "love";
 
 export type MotionPhase =
   | "calibrating"
   | "watching"
   | "detecting"
   | "holding"
-  | "triggered";
+  | "triggered"
+  | "error";
 
 export interface MotionModelConfig {
   mode: MotionTriggerMode;
@@ -15,11 +32,11 @@ export interface MotionModelConfig {
 
 export interface MotionAnalysis {
   phase: MotionPhase;
-  /** Normalized instantaneous motion energy in [0, 1]. */
+  /** Normalized instantaneous motion/confidence energy in [0, 1]. */
   energy: number;
   /** Progress toward trigger lock in [0, 1]. */
   progress: number;
-  /** Normalized [0..1, 0..1] centroid of motion in raw video coordinates, or null if idle. */
+  /** Normalized [0..1, 0..1] centroid of motion/hand/face in raw video coordinates, or null if idle. */
   centroid: { x: number; y: number } | null;
   /** 6x4 spatial grid motion intensities in [0, 1]. */
   zones: Float32Array;
@@ -28,6 +45,40 @@ export interface MotionAnalysis {
   /** True on the exact frame the trigger condition is satisfied. */
   triggered: boolean;
 }
+
+export interface MotionTriggerMeta {
+  id: MotionTriggerMode;
+  label: string;
+  shortLabel: string;
+  hint: string;
+  kind: "motion" | "hand" | "face";
+}
+
+export const MOTION_TRIGGER_OPTIONS: MotionTriggerMeta[] = [
+  { id: "thumb-up", label: "Thumb Up", shortLabel: "Thumb", hint: "Show a thumbs-up 👍 to capture", kind: "hand" },
+  { id: "victory", label: "V-Sign", shortLabel: "V-Sign", hint: "Show a peace / V sign ✌️ to capture", kind: "hand" },
+  { id: "smile", label: "Smile", shortLabel: "Smile", hint: "Give a bright smile 😊 to capture", kind: "face" },
+  { id: "open-palm", label: "Open Palm", shortLabel: "Palm", hint: "Raise an open palm 🖐️ to capture", kind: "hand" },
+  { id: "wink", label: "Wink", shortLabel: "Wink", hint: "Wink one eye 😉 to capture", kind: "face" },
+  { id: "love", label: "Love Sign", shortLabel: "Love", hint: "Show an I-Love-You hand 🤟 to capture", kind: "hand" },
+  { id: "wave", label: "Wave", shortLabel: "Wave", hint: "Wave hand side-to-side 👋", kind: "motion" },
+  { id: "pose-hold", label: "Pose & Hold", shortLabel: "Hold", hint: "Move into frame, then hold still", kind: "motion" },
+  { id: "impulse", label: "Burst", shortLabel: "Burst", hint: "Make a quick motion burst ⚡", kind: "motion" },
+];
+
+export function isVisionGestureMode(mode: MotionTriggerMode): boolean {
+  return mode !== "wave" && mode !== "pose-hold" && mode !== "impulse";
+}
+
+function isFaceMode(mode: MotionTriggerMode): boolean {
+  return mode === "smile" || mode === "wink";
+}
+
+const MEDIAPIPE_WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm";
+const GESTURE_MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
+const FACE_MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 const SAMPLE_W = 96;
 const SAMPLE_H = 72;
@@ -45,10 +96,107 @@ interface MotionSample {
   vx: number;
 }
 
+type VisionLoaderState<T> = {
+  instance: T | null;
+  loading: Promise<T> | null;
+  error: string | null;
+};
+
+let sharedWasmFilesetPromise: Promise<Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>> | null = null;
+const gestureState: VisionLoaderState<GestureRecognizer> = { instance: null, loading: null, error: null };
+const faceState: VisionLoaderState<FaceLandmarker> = { instance: null, loading: null, error: null };
+
+function getWasmFileset() {
+  if (!sharedWasmFilesetPromise) {
+    sharedWasmFilesetPromise = FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_ROOT).catch((err) => {
+      sharedWasmFilesetPromise = null;
+      throw err;
+    });
+  }
+  return sharedWasmFilesetPromise;
+}
+
+async function ensureGestureRecognizer(): Promise<GestureRecognizer> {
+  if (gestureState.instance) return gestureState.instance;
+  if (gestureState.loading) return gestureState.loading;
+  gestureState.error = null;
+  gestureState.loading = (async () => {
+    const vision = await getWasmFileset();
+    try {
+      const recognizer = await GestureRecognizer.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: GESTURE_MODEL_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        numHands: 2,
+      });
+      gestureState.instance = recognizer;
+      return recognizer;
+    } catch {
+      const recognizer = await GestureRecognizer.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: GESTURE_MODEL_URL, delegate: "CPU" },
+        runningMode: "VIDEO",
+        numHands: 2,
+      });
+      gestureState.instance = recognizer;
+      return recognizer;
+    }
+  })()
+    .catch((err) => {
+      gestureState.error = err instanceof Error ? err.message : "Failed to load hand gesture AI";
+      throw err;
+    })
+    .finally(() => {
+      gestureState.loading = null;
+    });
+  return gestureState.loading;
+}
+
+async function ensureFaceLandmarker(): Promise<FaceLandmarker> {
+  if (faceState.instance) return faceState.instance;
+  if (faceState.loading) return faceState.loading;
+  faceState.error = null;
+  faceState.loading = (async () => {
+    const vision = await getWasmFileset();
+    try {
+      const landmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        outputFaceBlendshapes: true,
+        numFaces: 1,
+      });
+      faceState.instance = landmarker;
+      return landmarker;
+    } catch {
+      const landmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "CPU" },
+        runningMode: "VIDEO",
+        outputFaceBlendshapes: true,
+        numFaces: 1,
+      });
+      faceState.instance = landmarker;
+      return landmarker;
+    }
+  })()
+    .catch((err) => {
+      faceState.error = err instanceof Error ? err.message : "Failed to load face expression AI";
+      throw err;
+    })
+    .finally(() => {
+      faceState.loading = null;
+    });
+  return faceState.loading;
+}
+
+function getBlendshapeScore(classifications: Classifications | undefined, name: string): number {
+  if (!classifications?.categories) return 0;
+  const found = classifications.categories.find((c) => c.categoryName === name);
+  return found ? found.score : 0;
+}
+
 /**
- * Lightweight client-side spatio-temporal motion recognition model.
- * Operates on a downsampled 96x72 luminance tensor with illumination-normalized
- * temporal differencing, EMA background modeling, and a 6x4 spatial receptive grid.
+ * Hybrid client-side motion & vision recognition engine.
+ * - Spatio-temporal luminance differencing for Wave / Pose & Hold / Burst.
+ * - MediaPipe Tasks Vision (GestureRecognizer & FaceLandmarker) for Thumb Up, V-Sign,
+ *   Open Palm, Love Sign, Smile, and Wink.
  */
 export class MotionCaptureModel {
   private canvas: HTMLCanvasElement;
@@ -73,6 +221,11 @@ export class MotionCaptureModel {
   private poseHoldStartAt: number | null = null;
   private cooldownUntil = 0;
 
+  // Vision AI state
+  private lastVisionTs = 0;
+  private visionMatchStartAt: number | null = null;
+  private visionGraceUntil = 0;
+
   constructor() {
     this.canvas = document.createElement("canvas");
     this.canvas.width = SAMPLE_W;
@@ -83,7 +236,6 @@ export class MotionCaptureModel {
     }
     this.ctx = ctx;
 
-    // Precompute pixel count per grid cell
     for (let y = 0; y < SAMPLE_H; y++) {
       const gy = Math.min(GRID_ROWS - 1, Math.floor((y / SAMPLE_H) * GRID_ROWS));
       for (let x = 0; x < SAMPLE_W; x++) {
@@ -104,7 +256,19 @@ export class MotionCaptureModel {
     this.poseSeenMotionAt = null;
     this.poseHoldStartAt = null;
     this.cooldownUntil = 0;
+    this.visionMatchStartAt = null;
+    this.visionGraceUntil = 0;
     this.zones.fill(0);
+  }
+
+  /** Pre-warm MediaPipe vision models when a hand/face trigger mode is selected. */
+  preloadForMode(mode: MotionTriggerMode) {
+    if (!isVisionGestureMode(mode)) return;
+    if (isFaceMode(mode)) {
+      void ensureFaceLandmarker().catch(() => {});
+    } else {
+      void ensureGestureRecognizer().catch(() => {});
+    }
   }
 
   processFrame(video: HTMLVideoElement, config: MotionModelConfig, now = performance.now()): MotionAnalysis {
@@ -120,6 +284,250 @@ export class MotionCaptureModel {
       };
     }
 
+    if (now < this.cooldownUntil) {
+      return {
+        phase: "watching",
+        energy: 0,
+        progress: 0,
+        centroid: null,
+        zones: this.zones,
+        label: "Ready",
+        triggered: false,
+      };
+    }
+
+    if (isVisionGestureMode(config.mode)) {
+      return this.processVisionFrame(video, config, now);
+    }
+
+    return this.processMotionFrame(video, config, now);
+  }
+
+  private processVisionFrame(video: HTMLVideoElement, config: MotionModelConfig, now: number): MotionAnalysis {
+    const sens = Math.min(95, Math.max(10, config.sensitivity)) / 100; // 0.10 .. 0.95
+    const holdDurationMs = Math.round(780 - sens * 340); // ~457ms at 95% sens, ~746ms at 10% sens
+    const ts = Math.max(this.lastVisionTs + 1, Math.round(now));
+    this.lastVisionTs = ts;
+
+    if (isFaceMode(config.mode)) {
+      if (!faceState.instance) {
+        if (faceState.error) {
+          return {
+            phase: "error",
+            energy: 0,
+            progress: 0,
+            centroid: null,
+            zones: this.zones,
+            label: "Face AI unavailable — try Wave / Hold / Burst",
+            triggered: false,
+          };
+        }
+        void ensureFaceLandmarker().catch(() => {});
+        return {
+          phase: "calibrating",
+          energy: 0,
+          progress: 0.4,
+          centroid: null,
+          zones: this.zones,
+          label: "Loading face expression AI…",
+          triggered: false,
+        };
+      }
+
+      try {
+        const res = faceState.instance.detectForVideo(video, ts);
+        const face = res.faceLandmarks?.[0];
+        const blend = res.faceBlendshapes?.[0];
+        const nose = face?.[1];
+        const centroid = nose ? { x: Math.min(1, Math.max(0, nose.x)), y: Math.min(1, Math.max(0, nose.y)) } : null;
+
+        let score = 0;
+        let activeLabel = "";
+        let idleLabel = "";
+        let threshold = 0.5;
+
+        if (config.mode === "smile") {
+          const left = getBlendshapeScore(blend, "mouthSmileLeft");
+          const right = getBlendshapeScore(blend, "mouthSmileRight");
+          score = (left + right) / 2;
+          threshold = 0.58 - sens * 0.28; // ~0.31 at 95%, ~0.41 at 60%, ~0.55 at 10%
+          activeLabel = "Nice smile — hold it…";
+          idleLabel = face ? "Smile to auto-capture 😊" : "Look at the camera & smile 😊";
+        } else {
+          // Wink: one eye closed while other stays open
+          const blinkL = getBlendshapeScore(blend, "eyeBlinkLeft");
+          const blinkR = getBlendshapeScore(blend, "eyeBlinkRight");
+          const winkL = Math.max(0, blinkL - blinkR * 0.65);
+          const winkR = Math.max(0, blinkR - blinkL * 0.65);
+          score = Math.max(winkL, winkR);
+          threshold = 0.52 - sens * 0.24; // ~0.29 at 95%, ~0.38 at 60%
+          activeLabel = "Wink detected — hold…";
+          idleLabel = face ? "Wink one eye to capture 😉" : "Face camera & wink 😉";
+        }
+
+        const normalizedEnergy = Math.min(1, score / Math.max(0.15, threshold));
+        return this.evaluateVisionLock(now, score >= threshold, holdDurationMs, normalizedEnergy, centroid, activeLabel, idleLabel, config.mode);
+      } catch {
+        return {
+          phase: "watching",
+          energy: 0,
+          progress: 0,
+          centroid: null,
+          zones: this.zones,
+          label: "Analyzing face…",
+          triggered: false,
+        };
+      }
+    }
+
+    // Hand Gesture Modes: thumb-up, victory, open-palm, love
+    if (!gestureState.instance) {
+      if (gestureState.error) {
+        return {
+          phase: "error",
+          energy: 0,
+          progress: 0,
+          centroid: null,
+          zones: this.zones,
+          label: "Hand gesture AI unavailable — try Wave / Hold / Burst",
+          triggered: false,
+        };
+      }
+      void ensureGestureRecognizer().catch(() => {});
+      return {
+        phase: "calibrating",
+        energy: 0,
+        progress: 0.4,
+        centroid: null,
+        zones: this.zones,
+        label: "Loading hand gesture AI…",
+        triggered: false,
+      };
+    }
+
+    const targetCategoryMap: Record<string, { category: string; prompt: string; locked: string }> = {
+      "thumb-up": { category: "Thumb_Up", prompt: "Show 👍 Thumbs Up to capture", locked: "Thumbs up — hold steady…" },
+      victory: { category: "Victory", prompt: "Show ✌️ V-Sign to capture", locked: "V-Sign detected — hold…" },
+      "open-palm": { category: "Open_Palm", prompt: "Show 🖐️ Open Palm to capture", locked: "Open palm — hold…" },
+      love: { category: "ILoveYou", prompt: "Show 🤟 Love Sign to capture", locked: "Love sign — hold…" },
+    };
+    const spec = targetCategoryMap[config.mode] ?? targetCategoryMap["thumb-up"];
+
+    try {
+      const res = gestureState.instance.recognizeForVideo(video, ts);
+      const minConf = 0.72 - sens * 0.34; // ~0.40 at 95%, ~0.52 at 60%, ~0.69 at 10%
+      let bestScore = 0;
+      let bestCentroid: { x: number; y: number } | null = null;
+      let anyHandCentroid: { x: number; y: number } | null = null;
+
+      const hands = res.landmarks ?? [];
+      const gestures = res.gestures ?? [];
+      for (let i = 0; i < hands.length; i++) {
+        const palm = hands[i]?.[9] ?? hands[i]?.[0];
+        const pt = palm ? { x: Math.min(1, Math.max(0, palm.x)), y: Math.min(1, Math.max(0, palm.y)) } : null;
+        if (pt && !anyHandCentroid) anyHandCentroid = pt;
+
+        const top = gestures[i]?.[0];
+        if (top && top.categoryName === spec.category && top.score > bestScore) {
+          bestScore = top.score;
+          bestCentroid = pt;
+        }
+      }
+
+      const centroid = bestCentroid ?? anyHandCentroid;
+      const energy = Math.min(1, bestScore / Math.max(0.2, minConf));
+      return this.evaluateVisionLock(
+        now,
+        bestScore >= minConf,
+        holdDurationMs,
+        energy,
+        centroid,
+        spec.locked,
+        spec.prompt,
+        config.mode,
+      );
+    } catch {
+      return {
+        phase: "watching",
+        energy: 0,
+        progress: 0,
+        centroid: null,
+        zones: this.zones,
+        label: "Watching hand gestures…",
+        triggered: false,
+      };
+    }
+  }
+
+  private evaluateVisionLock(
+    now: number,
+    matched: boolean,
+    holdDurationMs: number,
+    energy: number,
+    centroid: { x: number; y: number } | null,
+    activeLabel: string,
+    idleLabel: string,
+    mode: MotionTriggerMode,
+  ): MotionAnalysis {
+    if (matched) {
+      if (this.visionMatchStartAt === null) {
+        this.visionMatchStartAt = now;
+      }
+      this.visionGraceUntil = now + 180; // brief grace window against 1-frame flicker
+      const elapsed = now - this.visionMatchStartAt;
+      const progress = Math.min(1, elapsed / holdDurationMs);
+      if (progress >= 1) {
+        this.cooldownUntil = now + 1500;
+        this.visionMatchStartAt = null;
+        this.visionGraceUntil = 0;
+        const meta = MOTION_TRIGGER_OPTIONS.find((m) => m.id === mode);
+        return {
+          phase: "triggered",
+          energy: 1,
+          progress: 1,
+          centroid,
+          zones: this.zones,
+          label: `${meta?.label ?? "Gesture"} captured!`,
+          triggered: true,
+        };
+      }
+      return {
+        phase: "holding",
+        energy,
+        progress,
+        centroid,
+        zones: this.zones,
+        label: activeLabel,
+        triggered: false,
+      };
+    }
+
+    if (this.visionMatchStartAt !== null && now < this.visionGraceUntil) {
+      const progress = Math.min(1, (now - this.visionMatchStartAt) / holdDurationMs);
+      return {
+        phase: "detecting",
+        energy,
+        progress,
+        centroid,
+        zones: this.zones,
+        label: activeLabel,
+        triggered: false,
+      };
+    }
+
+    this.visionMatchStartAt = null;
+    return {
+      phase: "watching",
+      energy,
+      progress: 0,
+      centroid,
+      zones: this.zones,
+      label: idleLabel,
+      triggered: false,
+    };
+  }
+
+  private processMotionFrame(video: HTMLVideoElement, config: MotionModelConfig, now: number): MotionAnalysis {
     this.ctx.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
     const { data } = this.ctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H);
 
@@ -136,7 +544,6 @@ export class MotionCaptureModel {
       this.currNorm[i] = luma[i] - meanY;
     }
 
-    // Initialize reference buffers on frame 0
     if (this.frameCount === 0) {
       this.prevLuma.set(luma);
       this.bgLuma.set(luma);
@@ -155,8 +562,7 @@ export class MotionCaptureModel {
 
     this.frameCount++;
 
-    // Sensitivity mapping: higher sensitivity => lower threshold
-    const sens = Math.min(95, Math.max(10, config.sensitivity)) / 100; // 0.10 .. 0.95
+    const sens = Math.min(95, Math.max(10, config.sensitivity)) / 100;
     const pixelDiffGate = this.noiseFloor + (1 - sens) * 22;
 
     this.zones.fill(0);
@@ -194,19 +600,16 @@ export class MotionCaptureModel {
         } else {
           quietDiffSum += diff;
           quietCount++;
-          // Slowly adapt background model only on quiet pixels
           this.bgLuma[idx] = this.bgLuma[idx] * 0.93 + luma[idx] * 0.07;
         }
       }
     }
 
-    // Update adaptive sensor noise floor during quiet intervals
     if (quietCount > PIXEL_COUNT * 0.65) {
       const avgQuiet = quietDiffSum / quietCount;
       this.noiseFloor = Math.max(9, Math.min(26, this.noiseFloor * 0.92 + (avgQuiet * 2.2 + 7) * 0.08));
     }
 
-    // Normalize zone energies
     for (let z = 0; z < ZONE_COUNT; z++) {
       const count = this.zoneCounts[z] || 1;
       this.zones[z] = Math.min(1, (this.zones[z] / count) * 4.5);
@@ -215,7 +618,6 @@ export class MotionCaptureModel {
     this.prevLuma.set(luma);
     this.prevNorm.set(this.currNorm);
 
-    // Combine active area ratio + intensity into normalized energy [0..1]
     const areaRatio = activePixels / PIXEL_COUNT;
     const meanStrength = weightedDiffSum / PIXEL_COUNT;
     const rawEnergy = Math.min(1, areaRatio * 3.4 + meanStrength * 5.2);
@@ -239,7 +641,6 @@ export class MotionCaptureModel {
       this.prevCentroid = centroid;
     }
 
-    // Warmup calibration phase
     if (this.frameCount <= WARMUP_FRAMES) {
       return {
         phase: "calibrating",
@@ -252,21 +653,8 @@ export class MotionCaptureModel {
       };
     }
 
-    if (now < this.cooldownUntil) {
-      return {
-        phase: "watching",
-        energy: this.smoothEnergy,
-        progress: 0,
-        centroid,
-        zones: this.zones,
-        label: "Ready",
-        triggered: false,
-      };
-    }
+    const activeThreshold = Math.max(0.035, 0.24 - sens * 0.19);
 
-    const activeThreshold = Math.max(0.035, 0.24 - sens * 0.19); // ~0.059 at sens 0.95, ~0.126 at sens 0.60, ~0.22 at sens 0.10
-
-    // Maintain sliding temporal window (1400ms)
     if (centroid && this.smoothEnergy >= activeThreshold * 0.65) {
       this.history.push({
         t: now,
@@ -281,7 +669,6 @@ export class MotionCaptureModel {
       this.history.shift();
     }
 
-    // 2. Pattern recognition per selected trigger mode
     if (config.mode === "wave") {
       return this.evaluateWaveGesture(now, activeThreshold, centroid);
     }
@@ -297,7 +684,6 @@ export class MotionCaptureModel {
     activeThreshold: number,
     centroid: { x: number; y: number } | null,
   ): MotionAnalysis {
-    // Detect rhythmic lateral oscillations (sign reversals in vx) OR sustained deliberate hand-wave energy
     let reversals = 0;
     let lastSign = 0;
     let activeSamples = 0;
@@ -317,7 +703,6 @@ export class MotionCaptureModel {
       }
     }
 
-    // Progress combines lateral reversals (2 reversals = classic wave) + sustained active motion frames
     const reversalScore = reversals / 2.2;
     const durationScore = activeSamples / 9;
     const progress = Math.min(1, Math.max(reversalScore * 0.75 + durationScore * 0.4, durationScore * 0.85));
@@ -357,7 +742,6 @@ export class MotionCaptureModel {
     const stillThreshold = activeThreshold * 0.42;
     const holdDurationMs = 950;
 
-    // Require user movement / entry before starting stillness lock
     if (this.smoothEnergy >= enterThreshold || fgPresence > 0.06) {
       this.poseSeenMotionAt = now;
       this.poseHoldStartAt = null;

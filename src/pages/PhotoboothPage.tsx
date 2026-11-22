@@ -5,9 +5,11 @@ import {
   Image as ImageIcon, Images, Pencil, X, Maximize2, Minimize2,
   FlipHorizontal2, Grid3x3, Upload, RefreshCw, Columns2, LayoutGrid,
   Search, ChevronLeft, ChevronRight, CheckSquare, Activity, Hand, PauseCircle, Zap,
+  ZoomIn, ZoomOut, ThumbsUp, Smile, Eye, Heart, Sparkles, Copy, RotateCw,
 } from "lucide-react";
-import { Button, Select, Input, InputNumber, Segmented, Slider, Empty, Tooltip } from "antd";
+import { Button, Select, Input, InputNumber, Segmented, Slider, Empty, Tooltip, Switch } from "antd";
 import {
+  MOTION_TRIGGER_OPTIONS,
   MotionCaptureModel,
   type MotionAnalysis,
   type MotionTriggerMode,
@@ -15,8 +17,19 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { canvasToBlob } from "../lib/imageFilters";
 import {
-  buildPhotoStripCanvas, defaultEdit, FILTER_PRESETS, filterCssPreview,
-  normalizeEdit, renderEdit, type EditState, type FilterPreset,
+  STRIP_THEMES,
+  buildPhotoStripCanvas,
+  defaultEdit,
+  defaultStripConfig,
+  ensureEditAssetsLoaded,
+  FILTER_PRESETS,
+  filterCssPreview,
+  normalizeEdit,
+  renderEdit,
+  type EditState,
+  type FilterPreset,
+  type StripConfig,
+  type StripThemeId,
 } from "../lib/photoEditor";
 import * as photosService from "../lib/photosService";
 import { Photo } from "../lib/photosService";
@@ -33,6 +46,20 @@ import "./PhotoboothPage.css";
 const TIMER_PRESETS = [3, 5, 10, 15, 30];
 
 type PhotoWithUrl = Photo & { url: string | null };
+
+function triggerIconFor(id: MotionTriggerMode) {
+  switch (id) {
+    case "thumb-up": return <ThumbsUp size={12} />;
+    case "victory": return <Sparkles size={12} />;
+    case "smile": return <Smile size={12} />;
+    case "open-palm": return <Hand size={12} />;
+    case "wink": return <Eye size={12} />;
+    case "love": return <Heart size={12} />;
+    case "wave": return <Hand size={12} />;
+    case "pose-hold": return <Activity size={12} />;
+    case "impulse": return <Zap size={12} />;
+  }
+}
 
 function GalleryThumb({
   url,
@@ -72,6 +99,8 @@ export function PhotoboothPage() {
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const slotFileInputRef = useRef<HTMLInputElement | null>(null);
+  const slotUploadTargetRef = useRef<number | null>(null);
   const cancelRef = useRef(false);
 
   const [expanded, setExpanded] = useState(false);
@@ -83,6 +112,7 @@ export function PhotoboothPage() {
 
   const [mirrored, setMirrored] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
+  const [cameraZoom, setCameraZoom] = useState(1);
   const [liveFilter, setLiveFilter] = useState<FilterPreset>("None");
   const [flashActive, setFlashActive] = useState(false);
 
@@ -95,7 +125,7 @@ export function PhotoboothPage() {
   const [countdown, setCountdown] = useState<number | null>(null);
 
   const [motionArmed, setMotionArmed] = useState(false);
-  const [motionTrigger, setMotionTrigger] = useState<MotionTriggerMode>("wave");
+  const [motionTrigger, setMotionTrigger] = useState<MotionTriggerMode>("thumb-up");
   const [motionSensitivity, setMotionSensitivity] = useState(60);
   const [motionDelay, setMotionDelay] = useState(2);
   const [motionAnalysis, setMotionAnalysis] = useState<MotionAnalysis | null>(null);
@@ -109,6 +139,14 @@ export function PhotoboothPage() {
   const [caption, setCaption] = useState("");
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+
+  // 4-Shot Strip per-shot editing state
+  const [stripFrames, setStripFrames] = useState<HTMLCanvasElement[] | null>(null);
+  const [stripEdits, setStripEdits] = useState<EditState[]>([]);
+  const [stripOuterEdit, setStripOuterEdit] = useState<EditState>(defaultEdit());
+  const [stripConfig, setStripConfig] = useState<StripConfig>(() => defaultStripConfig("strip"));
+  const [activeStripSlot, setActiveStripSlot] = useState<number | "all">("all");
+  const [retakingSlot, setRetakingSlot] = useState<number | null>(null);
 
   const [photos, setPhotos] = useState<PhotoWithUrl[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
@@ -213,6 +251,20 @@ export function PhotoboothPage() {
     loadGallery();
   }, [loadGallery]);
 
+  // Keep stripConfig.layout synced with left-panel stripLayout
+  useEffect(() => {
+    setStripConfig((prev) => (prev.layout === stripLayout ? prev : { ...prev, layout: stripLayout }));
+  }, [stripLayout]);
+
+  // Pre-warm MediaPipe vision models when user selects a hand/face trigger in Motion mode
+  useEffect(() => {
+    if (mode !== "motion") return;
+    if (!motionModelRef.current) {
+      motionModelRef.current = new MotionCaptureModel();
+    }
+    motionModelRef.current.preloadForMode(motionTrigger);
+  }, [mode, motionTrigger]);
+
   function triggerFlash() {
     setFlashActive(true);
     window.setTimeout(() => setFlashActive(false), 220);
@@ -221,15 +273,23 @@ export function PhotoboothPage() {
   function grabVideoCanvas(): HTMLCanvasElement | null {
     const video = videoElRef.current;
     if (!video || video.videoWidth === 0) return null;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const z = Math.min(3, Math.max(1, cameraZoom));
+    const sw = vw / z;
+    const sh = vh / z;
+    const sx = (vw - sw) / 2;
+    const sy = (vh - sh) / 2;
+
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = vw;
+    canvas.height = vh;
     const ctx = canvas.getContext("2d")!;
     if (mirrored) {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, vw, vh);
     return canvas;
   }
 
@@ -238,11 +298,21 @@ export function PhotoboothPage() {
     setEdit(defaultEdit());
     setEditing(null);
     setCaption("");
+    setStripFrames(null);
+    setStripEdits([]);
+    setStripOuterEdit(defaultEdit());
+    setActiveStripSlot("all");
+    setRetakingSlot(null);
   }
 
   function loadCanvasIntoEditor(canvas: HTMLCanvasElement, initialFilter: FilterPreset = "None") {
     const nextEdit = defaultEdit();
     nextEdit.filter = initialFilter;
+    setStripFrames(null);
+    setStripEdits([]);
+    setStripOuterEdit(defaultEdit());
+    setActiveStripSlot("all");
+    setRetakingSlot(null);
     setBase(canvas);
     setEdit(nextEdit);
     setEditing(null);
@@ -251,10 +321,48 @@ export function PhotoboothPage() {
     setTab("edit");
   }
 
+  function loadStripIntoEditor(frames: HTMLCanvasElement[], initialFilter: FilterPreset = "None") {
+    const edits = frames.map(() => {
+      const e = defaultEdit();
+      e.filter = initialFilter;
+      return e;
+    });
+    const cfg = { ...stripConfig, layout: stripLayout };
+    setStripConfig(cfg);
+    setStripFrames(frames);
+    setStripEdits(edits);
+    setStripOuterEdit(defaultEdit());
+    setActiveStripSlot("all");
+    setRetakingSlot(null);
+    setBase(buildPhotoStripCanvas(frames, cfg));
+    setEditing(null);
+    setCaption("");
+    setExpanded(false);
+    setTab("edit");
+  }
+
+  function replaceSingleStripSlot(slotIdx: number, frame: HTMLCanvasElement) {
+    setStripFrames((prev) => {
+      if (!prev) return prev;
+      const next = [...prev];
+      next[slotIdx] = frame;
+      return next;
+    });
+    setRetakingSlot(null);
+    setExpanded(false);
+    setTab("edit");
+    setActiveStripSlot(slotIdx);
+    notify.updated(`Shot #${slotIdx + 1} updated.`);
+  }
+
   function captureSingleFrame() {
     const canvas = grabVideoCanvas();
     if (!canvas) return;
     triggerFlash();
+    if (retakingSlot !== null && stripFrames) {
+      replaceSingleStripSlot(retakingSlot, canvas);
+      return;
+    }
     loadCanvasIntoEditor(canvas, liveFilter);
   }
 
@@ -293,16 +401,15 @@ export function PhotoboothPage() {
     }
 
     setStripProgress(null);
-    const composed = buildPhotoStripCanvas(frames, stripLayout);
-    loadCanvasIntoEditor(composed, liveFilter);
-    notify.added("4-cut booth strip captured!");
+    loadStripIntoEditor(frames, liveFilter);
+    notify.added("4-cut booth strip captured! Click any shot (1–4) to edit individually.");
   }
 
   async function executeMotionTriggeredCapture() {
     if (!cameraReady) return;
     cancelRef.current = false;
 
-    if (shotType === "single") {
+    if (shotType === "single" || retakingSlot !== null) {
       if (motionDelay > 0) {
         const ok = await runCountdown(motionDelay);
         if (ok) captureSingleFrame();
@@ -333,6 +440,7 @@ export function PhotoboothPage() {
     } else {
       motionModelRef.current.reset();
     }
+    motionModelRef.current.preloadForMode(motionTrigger);
     setMotionAnalysis(null);
     setMotionArmed(true);
   }
@@ -345,7 +453,7 @@ export function PhotoboothPage() {
     }
     cancelRef.current = false;
 
-    if (shotType === "single") {
+    if (shotType === "single" || retakingSlot !== null) {
       if (mode === "click") {
         captureSingleFrame();
         return;
@@ -366,6 +474,7 @@ export function PhotoboothPage() {
     setStripProgress(null);
     setMotionArmed(false);
     setMotionAnalysis(null);
+    setRetakingSlot(null);
   }
 
   // Disarm motion detector if leaving motion mode or camera becomes unavailable
@@ -380,10 +489,11 @@ export function PhotoboothPage() {
   useEffect(() => {
     if (motionArmed) {
       motionModelRef.current?.reset();
+      motionModelRef.current?.preloadForMode(motionTrigger);
     }
   }, [motionTrigger, motionArmed]);
 
-  // Lightweight ~15 FPS motion recognition loop
+  // Lightweight ~15 FPS motion & vision recognition loop
   useEffect(() => {
     if (mode !== "motion" || !motionArmed || !cameraReady || countdown !== null || stripProgress !== null) {
       return;
@@ -440,6 +550,15 @@ export function PhotoboothPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }); // intentional latest closure for current mode/timer/motion state
 
+  async function fileToCanvas(file: File): Promise<HTMLCanvasElement> {
+    const bmp = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    canvas.getContext("2d")!.drawImage(bmp, 0, 0);
+    return canvas;
+  }
+
   async function handleFileUpload(file: File | null | undefined) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -447,12 +566,24 @@ export function PhotoboothPage() {
       return;
     }
     try {
-      const bmp = await createImageBitmap(file);
-      const canvas = document.createElement("canvas");
-      canvas.width = bmp.width;
-      canvas.height = bmp.height;
-      canvas.getContext("2d")!.drawImage(bmp, 0, 0);
+      const canvas = await fileToCanvas(file);
       loadCanvasIntoEditor(canvas);
+    } catch {
+      notify.error("Couldn't open that image", "Please try a different file.");
+    }
+  }
+
+  async function handleSlotFileUpload(file: File | null | undefined) {
+    const targetIdx = slotUploadTargetRef.current;
+    slotUploadTargetRef.current = null;
+    if (!file || targetIdx === null || !stripFrames) return;
+    if (!file.type.startsWith("image/")) {
+      notify.error("Unsupported file", "Please choose an image file (JPG, PNG, or WEBP).");
+      return;
+    }
+    try {
+      const canvas = await fileToCanvas(file);
+      replaceSingleStripSlot(targetIdx, canvas);
     } catch {
       notify.error("Couldn't open that image", "Please try a different file.");
     }
@@ -466,6 +597,11 @@ export function PhotoboothPage() {
       canvas.width = bmp.width;
       canvas.height = bmp.height;
       canvas.getContext("2d")!.drawImage(bmp, 0, 0);
+      setStripFrames(null);
+      setStripEdits([]);
+      setStripOuterEdit(defaultEdit());
+      setActiveStripSlot("all");
+      setRetakingSlot(null);
       setBase(canvas);
       setEdit(p.original_filename ? normalizeEdit(p.edit) : defaultEdit());
       setEditing(p);
@@ -477,10 +613,52 @@ export function PhotoboothPage() {
     }
   }
 
+  // Recompute composed strip preview canvas whenever individual shots or strip theme change
+  const composedStripBase = useMemo(() => {
+    if (!stripFrames || stripFrames.length === 0) return null;
+    const renderedShots = stripFrames.map((frame, i) =>
+      renderEdit(frame, stripEdits[i] ?? defaultEdit(), 720),
+    );
+    return buildPhotoStripCanvas(renderedShots, stripConfig);
+  }, [stripFrames, stripEdits, stripConfig]);
+
+  // Mini thumbnails for the 4-shot slot bar
+  const stripSlotThumbnails = useMemo(() => {
+    if (!stripFrames) return [];
+    return stripFrames.map((frame, i) => {
+      const mini = renderEdit(frame, stripEdits[i] ?? defaultEdit(), 140);
+      return mini.toDataURL("image/jpeg", 0.78);
+    });
+  }, [stripFrames, stripEdits]);
+
+  async function renderFinalExportCanvas(): Promise<{
+    rendered: HTMLCanvasElement;
+    originalBase: HTMLCanvasElement;
+    exportEdit: EditState;
+  } | null> {
+    if (stripFrames && stripFrames.length > 0) {
+      await Promise.all([
+        ...stripEdits.map((e) => ensureEditAssetsLoaded(e)),
+        ensureEditAssetsLoaded(stripOuterEdit),
+      ]);
+      const fullShots = stripFrames.map((frame, i) =>
+        renderEdit(frame, stripEdits[i] ?? defaultEdit()),
+      );
+      const stitched = buildPhotoStripCanvas(fullShots, stripConfig);
+      const rendered = renderEdit(stitched, stripOuterEdit);
+      const rawStitched = buildPhotoStripCanvas(stripFrames, stripConfig);
+      return { rendered, originalBase: rawStitched, exportEdit: stripOuterEdit };
+    }
+    if (!base) return null;
+    await ensureEditAssetsLoaded(edit);
+    return { rendered: renderEdit(base, edit), originalBase: base, exportEdit: edit };
+  }
+
   async function handleDownload() {
-    if (!base) return;
     try {
-      const blob = await canvasToBlob(renderEdit(base, edit));
+      const res = await renderFinalExportCanvas();
+      if (!res) return;
+      const blob = await canvasToBlob(res.rendered);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -489,6 +667,23 @@ export function PhotoboothPage() {
       URL.revokeObjectURL(url);
     } catch {
       notify.error("Couldn't export photo", "Please try again.");
+    }
+  }
+
+  async function handleDownloadSingleSlot(slotIdx: number) {
+    if (!stripFrames?.[slotIdx]) return;
+    try {
+      const slotEdit = stripEdits[slotIdx] ?? defaultEdit();
+      await ensureEditAssetsLoaded(slotEdit);
+      const blob = await canvasToBlob(renderEdit(stripFrames[slotIdx], slotEdit));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `evol-shot-${slotIdx + 1}-${Date.now().toString(36)}.jpg`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify.error("Couldn't export shot", "Please try again.");
     }
   }
 
@@ -503,16 +698,24 @@ export function PhotoboothPage() {
   }
 
   async function handleSaveToGallery() {
-    if (!base || !user) return;
+    if (!user) return;
     setSaving(true);
     try {
-      const rendered = await canvasToBlob(renderEdit(base, edit));
+      const res = await renderFinalExportCanvas();
+      if (!res) return;
+      const rendered = await canvasToBlob(res.rendered);
       if (editing) {
-        const legacy = editing.original_filename ? undefined : await canvasToBlob(base, 0.95);
-        await photosService.updatePhoto(editing, user.id, rendered, caption.trim(), edit, legacy);
+        const legacy = editing.original_filename ? undefined : await canvasToBlob(res.originalBase, 0.95);
+        await photosService.updatePhoto(editing, user.id, rendered, caption.trim(), res.exportEdit, legacy);
         notify.updated("Photo updated.");
       } else {
-        await photosService.savePhoto(user.id, await canvasToBlob(base, 0.95), rendered, caption.trim(), edit);
+        await photosService.savePhoto(
+          user.id,
+          await canvasToBlob(res.originalBase, 0.95),
+          rendered,
+          caption.trim(),
+          res.exportEdit,
+        );
         notify.added("Photo saved to your gallery.");
       }
       resetEditor();
@@ -575,6 +778,45 @@ export function PhotoboothPage() {
     }
   }
 
+  function swapStripSlots(a: number, b: number) {
+    if (!stripFrames || a < 0 || b < 0 || a >= stripFrames.length || b >= stripFrames.length) return;
+    const nextFrames = [...stripFrames];
+    const nextEdits = [...stripEdits];
+    [nextFrames[a], nextFrames[b]] = [nextFrames[b], nextFrames[a]];
+    [nextEdits[a], nextEdits[b]] = [nextEdits[b], nextEdits[a]];
+    setStripFrames(nextFrames);
+    setStripEdits(nextEdits);
+    setActiveStripSlot(b);
+  }
+
+  function applyLookToAllSlots(sourceIdx: number) {
+    const src = stripEdits[sourceIdx];
+    if (!src) return;
+    setStripEdits((prev) =>
+      prev.map((item, idx) =>
+        idx === sourceIdx
+          ? item
+          : {
+              ...item,
+              filter: src.filter,
+              adj: { ...src.adj },
+              frame: { ...src.frame },
+              overlay: src.overlay ? { ...src.overlay } : null,
+            },
+      ),
+    );
+    notify.updated("Look & frame applied to all 4 shots.");
+  }
+
+  function startRetakeSlot(slotIdx: number) {
+    if (!cameraReady) {
+      notify.error("Camera unavailable", "Upload a replacement photo instead.");
+      return;
+    }
+    setRetakingSlot(slotIdx);
+    setExpanded(true);
+  }
+
   const galleryFilterOptions = useMemo(() => {
     const used = new Set(photos.map((p) => p.filter).filter(Boolean));
     return ["All", ...Array.from(used)];
@@ -607,14 +849,50 @@ export function PhotoboothPage() {
   }, [lightboxPhoto, lightboxIndex, filteredPhotos]);
 
   const busyCapturing = countdown !== null || stripProgress !== null;
+  const activeMotionMeta = MOTION_TRIGGER_OPTIONS.find((m) => m.id === motionTrigger) ?? MOTION_TRIGGER_OPTIONS[0];
 
   const liveVideoStyle: React.CSSProperties = {
-    transform: mirrored ? "scaleX(-1)" : undefined,
+    transform: `${mirrored ? "scaleX(-1) " : ""}scale(${cameraZoom})`,
     filter: filterCssPreview(liveFilter, 1) || undefined,
   };
 
+  const adjustCameraZoom = (delta: number) => {
+    setCameraZoom((z) => Math.min(3, Math.max(1, Math.round((z + delta) * 10) / 10)));
+  };
+
+  const isStripModeActive = Boolean(stripFrames && stripFrames.length > 0);
+  const editorBase = isStripModeActive
+    ? activeStripSlot === "all"
+      ? composedStripBase
+      : stripFrames![activeStripSlot] ?? null
+    : base;
+  const editorState = isStripModeActive
+    ? activeStripSlot === "all"
+      ? stripOuterEdit
+      : stripEdits[activeStripSlot] ?? defaultEdit()
+    : edit;
+
+  const handleEditorChange = (next: EditState) => {
+    if (isStripModeActive) {
+      if (activeStripSlot === "all") {
+        setStripOuterEdit(next);
+      } else {
+        setStripEdits((prev) => prev.map((e, idx) => (idx === activeStripSlot ? next : e)));
+      }
+      return;
+    }
+    setEdit(next);
+  };
+
   const cameraView = (
-    <div className={`pb-video-wrap${expanded ? " pb-video-expanded" : ""}`}>
+    <div
+      className={`pb-video-wrap${expanded ? " pb-video-expanded" : ""}`}
+      onWheel={(e) => {
+        if (Math.abs(e.deltaY) < 4) return;
+        e.preventDefault();
+        adjustCameraZoom(e.deltaY < 0 ? 0.1 : -0.1);
+      }}
+    >
       <video ref={setVideoEl} autoPlay playsInline muted style={liveVideoStyle} />
 
       {showGrid && (
@@ -624,6 +902,12 @@ export function PhotoboothPage() {
       )}
 
       {flashActive && <div className="pb-shutter-flash" aria-hidden />}
+
+      {retakingSlot !== null && (
+        <div className="pb-strip-badge">
+          Retaking Shot #{retakingSlot + 1}
+        </div>
+      )}
 
       {stripProgress && (
         <div className="pb-strip-badge">
@@ -645,7 +929,7 @@ export function PhotoboothPage() {
           )}
           <div className={`pb-motion-hud phase-${motionAnalysis.phase}`}>
             <div className="pb-motion-hud-row">
-              <span className="pb-motion-dot" />
+              {motionAnalysis.phase !== "error" && <span className="pb-motion-dot" />}
               <span className="pb-motion-label">{motionAnalysis.label}</span>
             </div>
             <div className="pb-motion-bars">
@@ -655,7 +939,7 @@ export function PhotoboothPage() {
                   style={{ width: `${Math.round(motionAnalysis.progress * 100)}%` }}
                 />
               </div>
-              <div className="pb-motion-bar-track energy" title="Motion energy">
+              <div className="pb-motion-bar-track energy" title="Signal strength">
                 <div
                   className="pb-motion-bar-fill energy"
                   style={{ width: `${Math.round(motionAnalysis.energy * 100)}%` }}
@@ -691,24 +975,88 @@ export function PhotoboothPage() {
           <button
             type="button"
             className="pb-vf-btn"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => {
+              if (expanded) setRetakingSlot(null);
+              setExpanded((v) => !v);
+            }}
           >
             {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
           </button>
         </Tooltip>
       </div>
 
+      {!expanded && cameraReady && (
+        <div className="pb-vf-zoom-bar">
+          <button
+            type="button"
+            className="pb-vf-zoom-btn"
+            disabled={cameraZoom <= 1}
+            onClick={() => adjustCameraZoom(-0.2)}
+            aria-label="Zoom out camera"
+          >
+            <ZoomOut size={12} />
+          </button>
+          <button
+            type="button"
+            className="pb-vf-zoom-val"
+            onClick={() => setCameraZoom(1)}
+            title="Reset camera zoom"
+          >
+            {cameraZoom.toFixed(1)}×
+          </button>
+          <button
+            type="button"
+            className="pb-vf-zoom-btn"
+            disabled={cameraZoom >= 3}
+            onClick={() => adjustCameraZoom(0.2)}
+            aria-label="Zoom in camera"
+          >
+            <ZoomIn size={12} />
+          </button>
+        </div>
+      )}
+
       {expanded && (
         <div className="pb-expanded-controls">
-          <Segmented
-            value={shotType}
-            onChange={(v) => setShotType(v as "single" | "strip")}
-            disabled={busyCapturing}
-            options={[
-              { label: "Single", value: "single" },
-              { label: "4-Cut Strip", value: "strip" },
-            ]}
-          />
+          <div className="pb-vf-zoom-bar inline">
+            <button
+              type="button"
+              className="pb-vf-zoom-btn"
+              disabled={cameraZoom <= 1}
+              onClick={() => adjustCameraZoom(-0.2)}
+              aria-label="Zoom out camera"
+            >
+              <ZoomOut size={13} />
+            </button>
+            <button
+              type="button"
+              className="pb-vf-zoom-val"
+              onClick={() => setCameraZoom(1)}
+              title="Reset camera zoom"
+            >
+              {cameraZoom.toFixed(1)}×
+            </button>
+            <button
+              type="button"
+              className="pb-vf-zoom-btn"
+              disabled={cameraZoom >= 3}
+              onClick={() => adjustCameraZoom(0.2)}
+              aria-label="Zoom in camera"
+            >
+              <ZoomIn size={13} />
+            </button>
+          </div>
+          {retakingSlot === null && (
+            <Segmented
+              value={shotType}
+              onChange={(v) => setShotType(v as "single" | "strip")}
+              disabled={busyCapturing}
+              options={[
+                { label: "Single", value: "single" },
+                { label: "4-Cut Strip", value: "strip" },
+              ]}
+            />
+          )}
           <Segmented
             value={mode}
             onChange={(v) => setMode(v as "click" | "timer" | "motion")}
@@ -727,15 +1075,15 @@ export function PhotoboothPage() {
             />
           )}
           {mode === "motion" && (
-            <Segmented
+            <Select
               value={motionTrigger}
               onChange={(v) => setMotionTrigger(v as MotionTriggerMode)}
               disabled={busyCapturing}
-              options={[
-                { label: "Wave", value: "wave" },
-                { label: "Hold", value: "pose-hold" },
-                { label: "Burst", value: "impulse" },
-              ]}
+              style={{ width: 145 }}
+              options={MOTION_TRIGGER_OPTIONS.map((m) => ({
+                value: m.id,
+                label: m.label,
+              }))}
             />
           )}
           {busyCapturing ? (
@@ -755,11 +1103,17 @@ export function PhotoboothPage() {
           ) : (
             <Button
               type="primary" size="large" className="btn-glow"
-              icon={mode === "click" && shotType === "single" ? <Camera size={16} /> : <Timer size={16} />}
+              icon={mode === "click" && (shotType === "single" || retakingSlot !== null) ? <Camera size={16} /> : <Timer size={16} />}
               disabled={!cameraReady}
               onClick={startCaptureFlow}
             >
-              {shotType === "strip" ? "Start 4-cut strip" : mode === "click" ? "Capture (Space)" : "Start countdown"}
+              {retakingSlot !== null
+                ? `Retake #${retakingSlot + 1}`
+                : shotType === "strip"
+                  ? "Start 4-cut strip"
+                  : mode === "click"
+                    ? "Capture (Space)"
+                    : "Start countdown"}
             </Button>
           )}
         </div>
@@ -779,6 +1133,16 @@ export function PhotoboothPage() {
           e.target.value = "";
         }}
       />
+      <input
+        ref={slotFileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          void handleSlotFileUpload(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
 
       <div className="music-shell-header fade-in-up">
         <div className="pb-header-row">
@@ -786,8 +1150,8 @@ export function PhotoboothPage() {
             <h2 className="music-title"><Camera size={20} className="music-title-icon" /> Photobooth</h2>
             <p className="music-subtitle">
               {user
-                ? "Snap a pic, compose a 4-cut strip, or upload an image — non-destructive layers stay editable anytime."
-                : "Snap a pic, edit layers, and export in full quality. Log in to save editable photos to your gallery."}
+                ? "Snap a pic, compose a 4-cut strip with per-shot editing, zoom, API frames, and gesture capture."
+                : "Snap a pic, edit each shot individually, add frames, and export in full quality."}
             </p>
           </div>
           <Button
@@ -805,6 +1169,22 @@ export function PhotoboothPage() {
         <div className="music-pane pb-pane fade-in-up">
           <div className="pb-pane-body">
             {expanded ? createPortal(cameraView, document.body) : cameraView}
+
+            {cameraReady && (
+              <div className="pb-zoom-slider-row">
+                <span className="pb-strip-layout-label">Zoom</span>
+                <Slider
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={cameraZoom}
+                  onChange={setCameraZoom}
+                  disabled={busyCapturing}
+                  style={{ flex: 1, margin: "4px 6px" }}
+                />
+                <span className="pb-motion-val">{cameraZoom.toFixed(1)}×</span>
+              </div>
+            )}
 
             {cameraError && (
               <div className="pb-camera-fallback">
@@ -882,7 +1262,7 @@ export function PhotoboothPage() {
               options={[
                 { label: <span className="pb-seg-label"><MousePointerClick size={14} />Instant</span>, value: "click" },
                 { label: <span className="pb-seg-label"><Timer size={14} />Timer</span>, value: "timer" },
-                { label: <span className="pb-seg-label"><Activity size={14} />Motion</span>, value: "motion" },
+                { label: <span className="pb-seg-label"><Activity size={14} />Gesture / Motion</span>, value: "motion" },
               ]}
             />
 
@@ -940,18 +1320,23 @@ export function PhotoboothPage() {
               </>
             ) : (
               <div className="pb-motion-panel">
-                <Segmented
-                  block
-                  size="small"
-                  value={motionTrigger}
-                  disabled={busyCapturing}
-                  onChange={(v) => setMotionTrigger(v as MotionTriggerMode)}
-                  options={[
-                    { label: <span className="pb-seg-label"><Hand size={12} />Wave</span>, value: "wave" },
-                    { label: <span className="pb-seg-label"><Activity size={12} />Pose & hold</span>, value: "pose-hold" },
-                    { label: <span className="pb-seg-label"><Zap size={12} />Burst</span>, value: "impulse" },
-                  ]}
-                />
+                <div className="pb-motion-trigger-grid">
+                  {MOTION_TRIGGER_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={busyCapturing}
+                      className={`pb-trigger-chip${motionTrigger === opt.id ? " active" : ""}`}
+                      onClick={() => setMotionTrigger(opt.id)}
+                      title={opt.hint}
+                    >
+                      {triggerIconFor(opt.id)}
+                      <span>{opt.shortLabel}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pb-motion-hint">{activeMotionMeta.hint}</div>
 
                 <div className="pb-motion-setting-row">
                   <span className="pb-strip-layout-label">Delay after trigger</span>
@@ -998,10 +1383,10 @@ export function PhotoboothPage() {
                     block
                   >
                     {motionArmed
-                      ? "Stop motion sensor (Space)"
+                      ? "Stop sensor (Space)"
                       : shotType === "strip"
-                        ? "Arm motion 4-cut strip"
-                        : "Arm motion capture (Space)"}
+                        ? `Arm ${activeMotionMeta.label} · 4-cut`
+                        : `Arm ${activeMotionMeta.label} (Space)`}
                   </Button>
                 )}
               </div>
@@ -1035,12 +1420,170 @@ export function PhotoboothPage() {
 
             {tab === "edit" && (
               <div className="pb-tab-content fade-in" key="edit">
-                {base ? (
+                {editorBase ? (
                   <>
-                    <PhotoEditor base={base} state={edit} onChange={setEdit} />
+                    {isStripModeActive && (
+                      <div className="pb-strip-composer-bar">
+                        <div className="pb-strip-slots-row">
+                          {stripSlotThumbnails.map((thumb, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              className={`pb-slot-card${activeStripSlot === idx ? " active" : ""}`}
+                              onClick={() => setActiveStripSlot(idx)}
+                            >
+                              <img src={thumb} alt={`Shot ${idx + 1}`} />
+                              <span className="pb-slot-num">Shot {idx + 1}</span>
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            className={`pb-slot-card pb-slot-all${activeStripSlot === "all" ? " active" : ""}`}
+                            onClick={() => setActiveStripSlot("all")}
+                          >
+                            <Columns2 size={18} />
+                            <span className="pb-slot-num">Full Strip</span>
+                          </button>
+                        </div>
+
+                        {activeStripSlot === "all" ? (
+                          <div className="pb-strip-theme-panel">
+                            <div className="pb-strip-theme-row">
+                              <span className="pb-strip-layout-label">Strip frame</span>
+                              <div className="pb-chip-row">
+                                {STRIP_THEMES.map((t) => (
+                                  <Button
+                                    key={t.id}
+                                    size="small"
+                                    type={stripConfig.theme === t.id ? "primary" : "default"}
+                                    onClick={() =>
+                                      setStripConfig((prev) => ({ ...prev, theme: t.id as StripThemeId }))
+                                    }
+                                  >
+                                    {t.label}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {stripConfig.theme === "custom" && (
+                              <div className="pb-strip-theme-row">
+                                <label className="pe-color-row">
+                                  Background
+                                  <input
+                                    type="color"
+                                    value={stripConfig.bgColor}
+                                    onChange={(e) =>
+                                      setStripConfig((prev) => ({ ...prev, bgColor: e.target.value }))
+                                    }
+                                  />
+                                </label>
+                                <label className="pe-color-row">
+                                  Border
+                                  <input
+                                    type="color"
+                                    value={stripConfig.borderColor}
+                                    onChange={(e) =>
+                                      setStripConfig((prev) => ({ ...prev, borderColor: e.target.value }))
+                                    }
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                            <div className="pb-strip-theme-row">
+                              <Input
+                                size="small"
+                                value={stripConfig.footerText}
+                                onChange={(e) =>
+                                  setStripConfig((prev) => ({ ...prev, footerText: e.target.value }))
+                                }
+                                placeholder="Strip footer label"
+                                style={{ flex: 1, minWidth: 120 }}
+                              />
+                              <label className="pb-strip-toggle">
+                                <span>Date</span>
+                                <Switch
+                                  size="small"
+                                  checked={stripConfig.showDate}
+                                  onChange={(checked) =>
+                                    setStripConfig((prev) => ({ ...prev, showDate: checked }))
+                                  }
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pb-slot-actions-bar">
+                            <span className="pb-slot-editing-label">
+                              Editing Shot #{activeStripSlot + 1} of 4
+                            </span>
+                            <div className="pb-chip-row">
+                              <Tooltip title="Retake this shot from camera">
+                                <Button
+                                  size="small"
+                                  icon={<RotateCw size={12} />}
+                                  onClick={() => startRetakeSlot(activeStripSlot)}
+                                >
+                                  Retake
+                                </Button>
+                              </Tooltip>
+                              <Tooltip title="Upload an image into this slot">
+                                <Button
+                                  size="small"
+                                  icon={<Upload size={12} />}
+                                  onClick={() => {
+                                    slotUploadTargetRef.current = activeStripSlot;
+                                    slotFileInputRef.current?.click();
+                                  }}
+                                >
+                                  Replace
+                                </Button>
+                              </Tooltip>
+                              <Tooltip title="Swap with previous shot">
+                                <Button
+                                  size="small"
+                                  icon={<ChevronLeft size={12} />}
+                                  disabled={activeStripSlot === 0}
+                                  onClick={() => swapStripSlots(activeStripSlot, activeStripSlot - 1)}
+                                />
+                              </Tooltip>
+                              <Tooltip title="Swap with next shot">
+                                <Button
+                                  size="small"
+                                  icon={<ChevronRight size={12} />}
+                                  disabled={activeStripSlot === stripFrames!.length - 1}
+                                  onClick={() => swapStripSlots(activeStripSlot, activeStripSlot + 1)}
+                                />
+                              </Tooltip>
+                              <Tooltip title="Copy filter, adjustments & frame to all 4 shots">
+                                <Button
+                                  size="small"
+                                  icon={<Copy size={12} />}
+                                  onClick={() => applyLookToAllSlots(activeStripSlot)}
+                                >
+                                  Apply to all 4
+                                </Button>
+                              </Tooltip>
+                              <Tooltip title="Download just this shot">
+                                <Button
+                                  size="small"
+                                  icon={<Download size={12} />}
+                                  onClick={() => void handleDownloadSingleSlot(activeStripSlot)}
+                                />
+                              </Tooltip>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <PhotoEditor base={editorBase} state={editorState} onChange={handleEditorChange} />
                     <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption (optional)" allowClear />
                     <div className="pb-actions-row">
-                      <Button icon={<Download size={14} />} onClick={handleDownload}>Download</Button>
+                      <Button icon={<Download size={14} />} onClick={() => void handleDownload()}>
+                        {isStripModeActive ? "Download strip" : "Download"}
+                      </Button>
                       {user ? (
                         <Button
                           type="primary"
@@ -1050,7 +1593,7 @@ export function PhotoboothPage() {
                           loading={saving}
                           style={{ flex: 1 }}
                         >
-                          {editing ? "Save changes" : "Save to gallery"}
+                          {editing ? "Save changes" : isStripModeActive ? "Save strip to gallery" : "Save to gallery"}
                         </Button>
                       ) : (
                         <Button
@@ -1080,7 +1623,7 @@ export function PhotoboothPage() {
                   >
                     <Upload size={26} style={{ color: "#8b6ff5", marginBottom: 8 }} />
                     <p className="placeholder-note">
-                      Capture from the camera, or drop an image here to start editing.
+                      Capture from the camera (single or 4-cut strip), or drop an image here to start editing.
                     </p>
                     <Button
                       size="small"
