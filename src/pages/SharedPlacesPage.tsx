@@ -12,6 +12,7 @@ import * as placesService from "../lib/placesService";
 import { notify } from "../lib/notify";
 import { useLongPressSelect } from "../hooks/useLongPressSelect";
 import TargetCursor from "../components/TargetCursor";
+import { PanelEdgeToggle } from "../components/PanelEdgeToggle";
 import BrowseTab from "./map/BrowseTab";
 import MapSettingsTab from "./map/MapSettingsTab";
 import MapCanvas from "./map/MapCanvas";
@@ -195,8 +196,9 @@ export function SharedPlacesPage() {
       </p>
 
       <div className={`map-layout${sidebarOpen ? "" : " sidebar-collapsed"}`}>
-        {sidebarOpen && (
-          <div className="map-sidebar">
+        <div className={`map-side-wrap${sidebarOpen ? "" : " collapsed"}`}>
+          {sidebarOpen && (
+            <div className="map-sidebar">
             <Tabs
               className="map-sidebar-tabs"
               activeKey={tab}
@@ -243,15 +245,21 @@ export function SharedPlacesPage() {
                 onActiveToolsChange={updateActiveTools}
               />
             )}
-          </div>
-        )}
+            </div>
+          )}
+          <PanelEdgeToggle
+            collapsed={!sidebarOpen}
+            onToggle={() => setSidebarOpen((v) => !v)}
+            side="left"
+            label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            className="map-side-edge"
+          />
+        </div>
 
         <MapCanvas
           readOnly
           mapRef={mapRef}
           fullscreen={fullscreen}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((v) => !v)}
           mapMode={mapMode}
           activeTools={activeTools}
           onExitFullscreen={() => updateActiveTools(activeTools.filter((t) => t !== "fullscreen"))}

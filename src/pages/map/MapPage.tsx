@@ -14,6 +14,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import { notify } from "../../lib/notify";
 import { useLongPressSelect } from "../../hooks/useLongPressSelect";
 import SelectionToolbar from "../../components/SelectionToolbar";
+import { PanelEdgeToggle } from "../../components/PanelEdgeToggle";
 
 import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./constants";
 import type { MapMode, MapTool, FormState, SortOption } from "./types";
@@ -458,8 +459,9 @@ export function MapPage() {
 
       <div className={`map-layout${sidebarOpen ? "" : " sidebar-collapsed"}`}>
         {/* ---------------- Left rail ---------------- */}
-        {sidebarOpen && (
-          <div className="map-sidebar">
+        <div className={`map-side-wrap${sidebarOpen ? "" : " collapsed"}`}>
+          {sidebarOpen && (
+            <div className="map-sidebar">
             <Tabs
               className="map-sidebar-tabs"
               activeKey={tab}
@@ -536,15 +538,21 @@ export function MapPage() {
                 onActiveToolsChange={updateActiveTools}
               />
             )}
-          </div>
-        )}
+            </div>
+          )}
+          <PanelEdgeToggle
+            collapsed={!sidebarOpen}
+            onToggle={() => setSidebarOpen((v) => !v)}
+            side="left"
+            label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            className="map-side-edge"
+          />
+        </div>
 
         {/* ---------------- Map ---------------- */}
         <MapCanvas
           mapRef={mapRef}
           fullscreen={fullscreen}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((v) => !v)}
           mapMode={mapMode}
           activeTools={activeTools}
           onExitFullscreen={() => updateActiveTools(activeTools.filter((t) => t !== "fullscreen"))}

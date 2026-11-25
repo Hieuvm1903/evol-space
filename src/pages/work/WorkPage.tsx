@@ -10,8 +10,6 @@ import {
   EyeOff,
   Magnet,
   Move,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pause,
   Play,
   Redo2,
@@ -26,6 +24,7 @@ import type * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
 import { useAuth } from "../../contexts/AuthContext";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { PanelEdgeToggle } from "../../components/PanelEdgeToggle";
 import { notify } from "../../lib/notify";
 import { fetchLayout, fileUrl, getModelSet, listModelSets, meshAssets } from "../../lib/modelsService";
 import { deleteScene, getScene, listScenes, saveScene } from "../../lib/scenesService";
@@ -1121,7 +1120,7 @@ export function WorkPage() {
         </p>
       </div>
 
-      <div className="work-layout">
+      <div className={`work-layout${!showUi || !ui.side ? " side-collapsed" : ""}`}>
         {showUi && (
           <div className={`work-side-wrap${ui.side ? "" : " collapsed"}`}>
             {ui.side && (
@@ -1203,14 +1202,13 @@ export function WorkPage() {
                 />
               </aside>
             )}
-            <button
-              type="button"
-              className="work-side-toggle"
-              onClick={() => updateUi({ side: !ui.side })}
-              title={ui.side ? "Collapse panel" : "Expand panel"}
-            >
-              {ui.side ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
-            </button>
+            <PanelEdgeToggle
+              collapsed={!ui.side}
+              onToggle={() => updateUi({ side: !ui.side })}
+              side="left"
+              label={ui.side ? "Collapse panel" : "Expand panel"}
+              className="work-side-edge"
+            />
           </div>
         )}
 

@@ -22,8 +22,9 @@
   height: 100%;
   max-height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
+.work-layout.side-collapsed { gap: 0; }
 
 /* ---------- collapsible sidebar ---------- */
 .work-side-wrap {
@@ -34,7 +35,10 @@
   height: 100%;
   max-height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
+}
+.work-side-wrap.collapsed {
+  width: 0;
 }
 .work-side {
   width: 310px;
@@ -45,12 +49,16 @@
   min-height: 0;
   overflow: hidden;
 }
-.work-side-toggle {
-  align-self: flex-start; margin: 8px 0 0 6px; width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
-  border: 1px solid var(--evol-border); background: var(--evol-glass-bg); color: var(--evol-muted);
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
+.work-side-edge {
+  position: absolute !important;
+  top: 0;
+  bottom: 0;
+  right: -12px;
 }
-.work-side-toggle:hover { color: #fff; border-color: var(--evol-green); }
+.work-side-wrap.collapsed .work-side-edge {
+  right: auto;
+  left: -7px;
+}
 .work-side-tabs {
   display: flex !important;
   flex-direction: column !important;
@@ -668,6 +676,13 @@
     pointer-events: none;
   }
   .work-side-wrap > * { pointer-events: auto; }
+  .work-side-wrap .work-side-edge {
+    right: -10px;
+  }
+  .work-side-wrap.collapsed .work-side-edge {
+    right: auto;
+    left: -6px;
+  }
   .work-side {
     width: min(310px, calc(100vw - 72px));
     height: 100%;

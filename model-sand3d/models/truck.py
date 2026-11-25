@@ -6,7 +6,8 @@ from lib.parts import wheel
 
 def build(length=7200, width=2400):
     """Origin = floor centre, +X is the driving direction. Joints: wheel_*_spin (continuous about Y)."""
-    chassis = mat(s3d.at(s3d.box("truck_chassis", length, width - 500, 220), z=450), "steel", "#2a2740")
+    chassis_z = 450
+    chassis = mat(s3d.at(s3d.box("truck_chassis", length, width - 500, 220), z=chassis_z), "steel", "#2a2740")
     cargo = mat(s3d.at(s3d.box("cargo_box", 4800, width, 2500), x=-1000, z=670), "painted_metal", "#e8e6f5")
     stripe = mat(s3d.at(s3d.box("cargo_stripe", 4802, width + 4, 160), x=-1000, z=1200), "painted_metal", VIOLET)
     rear_door = mat(s3d.at(s3d.box("rear_door", 40, width - 200, 2300), x=-3420, z=760), "brushed_steel", "#9a96b8")
@@ -21,14 +22,16 @@ def build(length=7200, width=2400):
                   for i, sy in enumerate((-1, 1))]
     bumper = mat(s3d.at(s3d.box("bumper_front", 120, width, 220), x=3560, z=380), "steel", "#8a86a8")
 
+    wheel_dia, wheel_w = 1000, 300
     wheels, joints = [], []
-    for k, (x, tag) in enumerate([(2500, "front"), (-300, "mid"), (-1700, "rear")]):
+    for x, tag in [(2500, "front"), (-300, "mid"), (-1700, "rear")]:
         for sy, side in ((-1, "l"), (1, "r")):
-            w = wheel(f"wheel_{tag}_{side}", 1000, 300, x, sy * (width / 2 - 150))
+            wy = sy * (width / 2 - 150)
+            w = wheel(f"wheel_{tag}_{side}", wheel_dia, wheel_w, x, wy)
             wheels.append(w)
-            joints.append((f"wheel_{tag}_{side}_spin", w))
-    for name, w in joints:
-        s3d.joint(name, w, s3d.bbox(chassis, "+Y" if "_r_" in name else "-Y"), kind="continuous", axis="+Y")
+            joints.append((f"wheel_{tag}_{side}_spin", w, x, wy))
+    for name, w, x, wy in joints:
+        s3d.joint(name, w, s3d.local(chassis, x, wy, wheel_dia / 2 - chassis_z), kind="continuous", axis="+Y")
 
     return s3d.assembly("truck", chassis, cargo, stripe, rear_door, cab, windshield, *side_win,
                         *headlights, *taillights, bumper, *wheels)

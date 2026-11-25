@@ -4,7 +4,8 @@ import L from "leaflet";
 import { Button, Input, Tooltip } from "antd";
 import {
   LocateFixed, Plus, Minimize2, Ruler, PenLine, Search, X,
-  PanelLeftClose, PanelLeftOpen, Scan, Copy, Check, Pencil, Navigation2, Trash2,
+  Scan, Copy, Check, Pencil, Navigation2, Trash2,
+  ZoomIn, ZoomOut,
 } from "lucide-react";
 import type { Place } from "../../lib/placesService";
 import { iconForName, splitIcon } from "../../content/placeIcons";
@@ -26,8 +27,6 @@ export interface GeoSearchResult {
 interface Props {
   mapRef: React.RefObject<L.Map>;
   fullscreen: boolean;
-  sidebarOpen?: boolean;
-  onToggleSidebar?: () => void;
   mapMode: MapMode;
   activeTools: MapTool[];
   onExitFullscreen: () => void;
@@ -83,7 +82,7 @@ function formatDistance(km: number): string {
 }
 
 export default function MapCanvas({
-  mapRef, fullscreen, sidebarOpen = true, onToggleSidebar, mapMode, activeTools, onExitFullscreen,
+  mapRef, fullscreen, mapMode, activeTools, onExitFullscreen,
   cursorLatLng, onCursorMove,
   measurePoints, measuredDistanceKm, onMeasureAddPoint, onMeasureClear, onAddMeasurePointFromLocation,
   sketchLines, activeSketch, onSketchStart, onSketchExtend, onSketchEnd, onAddSketchPointFromLocation, onClearSketches,
@@ -163,15 +162,6 @@ export default function MapCanvas({
     return (
       <div className={`map-canvas-wrap${fullscreen ? " map-canvas-fullscreen" : ""}`}>
         <div className="map-floating-controls">
-          {onToggleSidebar && !fullscreen && (
-            <Tooltip title={sidebarOpen ? "Hide sidebar" : "Show sidebar"} placement="left">
-              <Button
-                shape="circle"
-                icon={sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-                onClick={onToggleSidebar}
-              />
-            </Tooltip>
-          )}
           <Tooltip title="My location" placement="left">
             <Button shape="circle" icon={<LocateFixed size={16} />} onClick={onUseMyLocationOnMap} />
           </Tooltip>
@@ -298,15 +288,12 @@ export default function MapCanvas({
 
       {/* Top-right floating controls */}
       <div className="map-floating-controls">
-        {onToggleSidebar && !fullscreen && (
-          <Tooltip title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"} placement="left">
-            <Button
-              shape="circle"
-              icon={sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-              onClick={onToggleSidebar}
-            />
-          </Tooltip>
-        )}
+        <Tooltip title="Zoom in" placement="left">
+          <Button shape="circle" icon={<ZoomIn size={16} />} onClick={() => mapRef.current?.zoomIn()} />
+        </Tooltip>
+        <Tooltip title="Zoom out" placement="left">
+          <Button shape="circle" icon={<ZoomOut size={16} />} onClick={() => mapRef.current?.zoomOut()} />
+        </Tooltip>
         <Tooltip title="My location" placement="left">
           <Button shape="circle" icon={<LocateFixed size={16} />} onClick={onUseMyLocationOnMap} />
         </Tooltip>
@@ -458,14 +445,44 @@ export default function MapCanvas({
         </div>
       )}
 
-      <MapContainer ref={mapRef} center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} zoomControl={false} style={{ height: "100%" }}>
-        <TileLayer
-          url={MAP_TILE_CONFIG[mapMode].url}
-          attribution={MAP_TILE_CONFIG[mapMode].attribution}
-          className={MAP_TILE_CONFIG[mapMode].className}
-          updateWhenZooming={false}
-          keepBuffer={2}
-        />
+      <MapContainer
+        ref={mapRef}
+        center={DEFAULT_CENTER}
+        zoom={DEFAULT_ZOOM}
+        minZoom={2}
+        maxZoom={20}
+        zoomControl={false}
+        style={{ height: "100%" }}
+      >
+        {(() => {
+          const tileConfig = MAP_TILE_CONFIG[mapMode];
+          return (
+            <>
+              <TileLayer
+                key={mapMode}
+                url={tileConfig.url}
+                attribution={tileConfig.attribution}
+                subdomains={tileConfig.subdomains ?? "abc"}
+                maxNativeZoom={tileConfig.maxNativeZoom ?? 19}
+                maxZoom={20}
+                className={tileConfig.className}
+                updateWhenZooming={false}
+                keepBuffer={4}
+              />
+              {tileConfig.overlayUrl && (
+                <TileLayer
+                  key={`${mapMode}-overlay`}
+                  url={tileConfig.overlayUrl}
+                  subdomains={tileConfig.subdomains ?? "abcd"}
+                  maxNativeZoom={20}
+                  maxZoom={20}
+                  updateWhenZooming={false}
+                  keepBuffer={4}
+                />
+              )}
+            </>
+          );
+        })()}
         <MapEvents onRightClick={readOnly ? () => {} : onRightClickAdd} onLeftClick={onLeftClickDeselect} />
         <MapDragLock locked={activeTools.includes("draw")} />
 

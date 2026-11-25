@@ -1,27 +1,74 @@
 import {
-  Sun, Moon, MapIcon, Satellite, Mountain, Globe, Maximize2, Ruler, Compass, PenLine, type LucideIcon,
+  Sun, Moon, MapIcon, Compass as CompassMapIcon, Satellite, Layers, Mountain, Globe,
+  Maximize2, Ruler, Compass, PenLine, type LucideIcon,
 } from "lucide-react";
 import type { MapMode, MapTool } from "./types";
 
 export const DEFAULT_CENTER: [number, number] = [16.0, 106.0];
 export const DEFAULT_ZOOM = 5;
 
+export interface MapTileConfig {
+  url: string;
+  overlayUrl?: string;
+  attribution: string;
+  subdomains?: string;
+  maxNativeZoom?: number;
+  className?: string;
+}
+
 export const MAP_MODE_OPTIONS: { value: MapMode; label: string; icon: LucideIcon }[] = [
-  { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
+  { value: "light", label: "Light", icon: Sun },
   { value: "street", label: "Street", icon: MapIcon },
+  { value: "osm", label: "OpenStreetMap", icon: CompassMapIcon },
   { value: "satellite", label: "Satellite", icon: Satellite },
+  { value: "hybrid", label: "Hybrid", icon: Layers },
   { value: "terrain", label: "Terrain", icon: Mountain },
   { value: "google", label: "Google Maps", icon: Globe },
 ];
 
-// src/pages/map/constants.ts
-export const MAP_TILE_CONFIG: Record<MapMode, { url: string; attribution: string; className?: string }> = {
-  light: { /* unchanged */ url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, FAO, NOAA, USGS" },
-  dark: { /* unchanged */ url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, FAO, NOAA, USGS", className: "map-tiles-deepdark" },
-  street: { /* unchanged */ url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' },
-  satellite: { /* unchanged */ url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics" },
-  terrain: { /* unchanged */ url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)' },
+export const MAP_TILE_CONFIG: Record<MapMode, MapTileConfig> = {
+  dark: {
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: "abcd",
+    maxNativeZoom: 20,
+    className: "map-tiles-deepdark",
+  },
+  light: {
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: "abcd",
+    maxNativeZoom: 20,
+  },
+  street: {
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: "abcd",
+    maxNativeZoom: 20,
+  },
+  osm: {
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxNativeZoom: 19,
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics",
+    maxNativeZoom: 18,
+  },
+  hybrid: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    overlayUrl: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png",
+    attribution: "Tiles &copy; Esri &amp; CARTO",
+    subdomains: "abcd",
+    maxNativeZoom: 18,
+  },
+  terrain: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri — Esri, HERE, Garmin, Intermap, USGS, METI/NASA",
+    maxNativeZoom: 18,
+  },
   // Unused — "google" mode renders an <iframe> in MapCanvas instead of a
   // Leaflet TileLayer, so this entry exists only to satisfy the Record type.
   google: { url: "", attribution: "" },
@@ -39,8 +86,8 @@ export const MAP_TOOLS_KEY = "evol_map_tools";
 
 export function readMapMode(): MapMode {
   try {
-    const raw = localStorage.getItem(MAP_MODE_KEY);
-    return (raw as MapMode) || "dark";
+    const raw = localStorage.getItem(MAP_MODE_KEY) as MapMode | null;
+    return raw && raw in MAP_TILE_CONFIG ? raw : "dark";
   } catch {
     return "dark";
   }
