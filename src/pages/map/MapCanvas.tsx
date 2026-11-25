@@ -465,13 +465,14 @@ export default function MapCanvas({
       >
         {(() => {
           const tileConfig = MAP_TILE_CONFIG[mapMode];
+          const subdomainsProp = tileConfig.subdomains ? { subdomains: tileConfig.subdomains } : {};
           return (
             <>
               <TileLayer
                 key={mapMode}
                 url={tileConfig.url}
                 attribution={tileConfig.attribution}
-                subdomains={tileConfig.subdomains ?? "abc"}
+                {...subdomainsProp}
                 maxNativeZoom={tileConfig.maxNativeZoom ?? 19}
                 maxZoom={20}
                 className={tileConfig.className}
@@ -482,8 +483,8 @@ export default function MapCanvas({
                 <TileLayer
                   key={`${mapMode}-overlay`}
                   url={tileConfig.overlayUrl}
-                  subdomains={tileConfig.subdomains ?? "abcd"}
-                  maxNativeZoom={20}
+                  {...subdomainsProp}
+                  maxNativeZoom={tileConfig.overlayMaxNativeZoom ?? tileConfig.maxNativeZoom ?? 19}
                   maxZoom={20}
                   updateWhenZooming={false}
                   keepBuffer={4}

@@ -309,8 +309,13 @@ export default function Galaxy({
 
     function handleMouseMove(e: MouseEvent) {
       const rect = ctn.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
       const x = (e.clientX - rect.left) / rect.width;
       const y = 1.0 - (e.clientY - rect.top) / rect.height;
+      if (x < 0 || x > 1 || y < 0 || y > 1) {
+        targetMouseActive.current = 0.0;
+        return;
+      }
       targetMousePos.current = { x, y };
       targetMouseActive.current = 1.0;
     }
@@ -320,16 +325,18 @@ export default function Galaxy({
     }
 
     if (mouseInteraction) {
-      ctn.addEventListener('mousemove', handleMouseMove);
-      ctn.addEventListener('mouseleave', handleMouseLeave);
+      window.addEventListener('mousemove', handleMouseMove, { passive: true });
+      document.documentElement.addEventListener('mouseleave', handleMouseLeave);
+      window.addEventListener('blur', handleMouseLeave);
     }
 
     return () => {
       cancelAnimationFrame(animateId);
       window.removeEventListener('resize', resize);
       if (mouseInteraction) {
-        ctn.removeEventListener('mousemove', handleMouseMove);
-        ctn.removeEventListener('mouseleave', handleMouseLeave);
+        window.removeEventListener('mousemove', handleMouseMove);
+        document.documentElement.removeEventListener('mouseleave', handleMouseLeave);
+        window.removeEventListener('blur', handleMouseLeave);
       }
       ctn.removeChild(gl.canvas);
       gl.getExtension('WEBGL_lose_context')?.loseContext();
