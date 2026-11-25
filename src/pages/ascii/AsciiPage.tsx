@@ -16,6 +16,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { asciiAudio } from "./asciiAudio";
+import HelpTip from "../../components/HelpTip";
 import {
   createAsteroidCluster,
   createCanyonMonolithGeometry,
@@ -1200,8 +1201,7 @@ export function AsciiPage() {
           ) : (
             <div className="ascii-hud-strip">
               <span className="ascii-hud-title">Gyro Reactor · Color ASCII 3D</span>
-              <span className="ascii-hud-sep" />
-              <span className="ascii-hud-label">Drag to orbit · Scroll to zoom · Compare ASCII vs Raw 3D</span>
+              <HelpTip content="Drag to orbit · Scroll to zoom · Compare ASCII vs Raw 3D" />
             </div>
           )}
 
@@ -1255,11 +1255,13 @@ export function AsciiPage() {
           <div className="ascii-center-prompt">
             {hud.phase === "ready" && (
               <>
-                <h3>Orbital Trench</h3>
-                <p>
-                  Real-time 3D WebGL scene rendered through a colored ASCII glyph shader.
-                  Steer with WASD, Arrow keys, or pointer drag. Hold Shift to boost and collect energy cores.
-                </p>
+                <h3 style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 14 }}>
+                  <span>Orbital Trench</span>
+                  <HelpTip
+                    size="md"
+                    content="Real-time 3D WebGL scene rendered through a colored ASCII glyph shader. Steer with WASD, Arrow keys, or pointer drag. Hold Shift to boost and collect energy cores."
+                  />
+                </h3>
                 <div className="ascii-prompt-actions">
                   <button type="button" className="ascii-primary-btn" onClick={() => actionsRef.current?.startGame()}>
                     <Play size={15} /> Start Flight
@@ -1270,8 +1272,13 @@ export function AsciiPage() {
 
             {hud.phase === "paused" && (
               <>
-                <h3>Flight Paused</h3>
-                <p>Adjust ASCII palettes, glyph sets, or cell size below, then resume.</p>
+                <h3 style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 14 }}>
+                  <span>Flight Paused</span>
+                  <HelpTip
+                    size="md"
+                    content="Adjust ASCII palettes, glyph sets, or cell size below, then resume."
+                  />
+                </h3>
                 <div className="ascii-prompt-actions">
                   <button type="button" className="ascii-primary-btn" onClick={() => actionsRef.current?.togglePause()}>
                     <Play size={15} /> Resume

@@ -4,6 +4,7 @@ import { Search, Music2, Plus, Play, ExternalLink } from "lucide-react";
 import * as musicService from "../../lib/musicService";
 import { searchSongs, SearchSongResult } from "../../lib/youtube";
 import VideoPreviewModal from "../../components/VideoPreviewModal";
+import HelpTip from "../../components/HelpTip";
 
 const MAX_RESULTS_CAP = 30;
 
@@ -38,9 +39,7 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
 
   return (
     <div>
-            <p className="evol-card-meta">Search for a song to add to playlist.</p>
-
-      <div className="detail-row">
+      <div className="detail-row" style={{ alignItems: "center" }}>
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -52,6 +51,7 @@ export default function AddBySearch({ playlistId, addedBy, onAdded }: { playlist
           <InputNumber size="middle" min={1} max={MAX_RESULTS_CAP} value={maxResults} onChange={(v) => setMaxResults(v ?? 8)} style={{ width: 64 }} />
         </Tooltip>
         <Button className="btn-glow" loading={searching} disabled={!query.trim()} onClick={handleSearch}>Search</Button>
+        <HelpTip content="Search for a song to add to this playlist." />
       </div>
       <div className="search-result-list">
         {searching ? (

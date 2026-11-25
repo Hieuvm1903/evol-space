@@ -10,7 +10,7 @@
   overflow: hidden;
 }
 
-.music-shell-header { margin-bottom: 4px; flex-shrink: 0; }
+.music-shell-header { margin-bottom: 14px; flex-shrink: 0; }
 .music-title {
   display: flex; align-items: center; gap: 10px; margin: 0 0 2px;
   background: linear-gradient(90deg, var(--evol-green), var(--evol-green-light) 45%, var(--evol-accent-pink));

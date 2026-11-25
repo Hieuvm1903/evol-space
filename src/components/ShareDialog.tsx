@@ -3,6 +3,7 @@ import { Modal, Input, Button, Switch } from "antd";
 import { Copy, Share2, Link2 } from "lucide-react";
 import { shareUrl, type ShareKind } from "../lib/shareService";
 import { notify } from "../lib/notify";
+import HelpTip from "./HelpTip";
 
 interface Props {
   open: boolean;
@@ -35,11 +36,20 @@ export default function ShareDialog({ open, onClose, title, kind, token, onEnabl
     <Modal open={open} onCancel={onClose} footer={null} centered width={440}
       title={<span style={{ display: "flex", alignItems: "center", gap: 8 }}><Share2 size={16} /> Share "{title}"</span>}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "8px 0 14px" }}>
-        <span>Anyone with the link can view</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span>Anyone with the link can view</span>
+          <HelpTip
+            content={
+              url
+                ? `Viewers can see the ${kind === "album" ? "tracks" : "places"} and save their own copy. Turn sharing off to invalidate this link.`
+                : "Switch sharing on to create a link."
+            }
+          />
+        </span>
         <Switch checked={!!token} loading={busy} onChange={toggle} />
       </div>
 
-      {url ? (
+      {url && (
         <>
           <div className="detail-row">
             <Input value={url} readOnly prefix={<Link2 size={13} />} onFocus={(e) => e.target.select()} />
@@ -50,13 +60,7 @@ export default function ShareDialog({ open, onClose, title, kind, token, onEnabl
               Share via…
             </Button>
           )}
-          <p className="evol-card-meta" style={{ marginTop: 10 }}>
-            Viewers can see the {kind === "album" ? "tracks" : "places"} and save their own copy.
-            Turn sharing off to invalidate this link.
-          </p>
         </>
-      ) : (
-        <p className="evol-card-meta">Sharing is off. Switch it on to create a link.</p>
       )}
     </Modal>
   );

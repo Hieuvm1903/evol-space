@@ -5,6 +5,7 @@ import { childrenIndex, descendantsOf } from "../../lib/sceneMath";
 import type { JointDef, LightProps, SceneObjectData, Vec3 } from "../../lib/workTypes";
 import { assetToProfileId, parseScript, ROBOT_SCRIPT_TEMPLATES, SCRIPT_TEMPLATES } from "./script";
 import ScriptEditorModal from "./ScriptEditorModal";
+import HelpTip from "../../components/HelpTip";
 
 interface Props {
   object: SceneObjectData;
@@ -89,7 +90,10 @@ export default function WorkInspector(p: Props) {
           <InputNumber size="small" step={0.1} min={0.01} max={50} value={o.scale}
             onChange={(v) => p.onChange({ scale: v ?? 1 }, `scale:${o.id}`)} /></label>
       </div>
-      <div className="work-vec-label">Parent <em>(position is relative to it)</em></div>
+      <div className="work-vec-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span>Parent</span>
+        <HelpTip content="Position is relative to parent." />
+      </div>
       <Select size="small" showSearch optionFilterProp="label" style={{ width: "100%" }}
         value={o.parentId ?? ""} options={parentOptions} onChange={(v) => p.onReparent(v || null)} />
     </>
@@ -169,10 +173,6 @@ export default function WorkInspector(p: Props) {
         <span>Editor lighting</span>
         <Switch size="small" checked={p.defaultLight} onChange={p.onToggleDefaultLight} />
       </div>
-      <div className="work-light-guide">
-        <div><b>Aiming:</b> {o.light.type === "point" ? "Point emits 360° in all directions." : "Shines along local −Y (arrow). Press E or edit Rotation X/Z to aim."}</div>
-        <div><b>Headlight tip:</b> Set <b>Parent</b> above to a robot/drone so the light moves with it.</div>
-      </div>
     </>
   );
 
@@ -227,7 +227,34 @@ export default function WorkInspector(p: Props) {
     { key: "t", label: "Transform", children: transform },
     ...(flags ? [{ key: "f", label: "Rendering", children: flags }] : []),
     ...(p.joints.length ? [{ key: "j", label: `Joints (${p.joints.length})`, children: <>{jointUi}</> }] : []),
-    ...(lightUi ? [{ key: "l", label: "Light", children: lightUi }] : []),
+    ...(lightUi
+      ? [
+          {
+            key: "l",
+            label: (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span>Light</span>
+                <HelpTip
+                  content={
+                    <div>
+                      <div>
+                        <b>Aiming:</b>{" "}
+                        {o.light?.type === "point"
+                          ? "Point emits 360° in all directions."
+                          : "Shines along local −Y (arrow). Press E or edit Rotation X/Z to aim."}
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <b>Headlight tip:</b> Set <b>Parent</b> above to a robot/drone so the light moves with it.
+                      </div>
+                    </div>
+                  }
+                />
+              </span>
+            ),
+            children: lightUi,
+          },
+        ]
+      : []),
     ...(behaviour ? [{ key: "b", label: "Behaviour script", children: behaviour }] : []),
   ];
 

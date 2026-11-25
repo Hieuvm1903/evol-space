@@ -7,6 +7,7 @@ import ImportPanel from "./ImportPanel";
 import type { LongPressSelect } from "../../hooks/useLongPressSelect";
 import SelectCheckbox from "../../components/SelectCheckbox";
 import LongPressRing from "../../components/LongPressRing";
+import HelpTip from "../../components/HelpTip";
 
 export default function AlbumPickerPane({
   playlists, loadingPlaylists, selectedPlaylistId, onSelect,
@@ -41,7 +42,11 @@ export default function AlbumPickerPane({
     <div className="music-pane music-pane-left album-picker-pane">
       <div className="album-picker-fixed">
         <div className="album-picker-header">
-          <h3 className="album-picker-title"><ListMusic size={15} /> Albums</h3>
+          <h3 className="album-picker-title">
+            <ListMusic size={15} />
+            Albums
+            <HelpTip content="Hold an album to select several." />
+          </h3>
           {!longPress.selectMode && (
             <div className="album-picker-actions">
               <Tooltip title="New playlist">
@@ -89,10 +94,6 @@ export default function AlbumPickerPane({
         )}
 
         {showImport && <ImportPanel userId={userId} onImported={onImported} />}
-
-        {!longPress.selectMode && playlists.length > 0 && (
-          <div className="album-list-hint">Hold an album to select several</div>
-        )}
       </div>
 
       {loadingPlaylists ? (

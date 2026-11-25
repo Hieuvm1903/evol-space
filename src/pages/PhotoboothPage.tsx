@@ -40,6 +40,7 @@ import { useLongPressSelect } from "../hooks/useLongPressSelect";
 import LongPressRing from "../components/LongPressRing";
 import SelectCheckbox from "../components/SelectCheckbox";
 import SelectionToolbar from "../components/SelectionToolbar";
+import HelpTip from "../components/HelpTip";
 import "./music/MusicPage.css";
 import "./PhotoboothPage.css";
 
@@ -1147,12 +1148,18 @@ export function PhotoboothPage() {
       <div className="music-shell-header fade-in-up">
         <div className="pb-header-row">
           <div>
-            <h2 className="music-title"><Camera size={20} className="music-title-icon" /> Photobooth</h2>
-            <p className="music-subtitle">
-              {user
-                ? "Snap a pic, compose a 4-cut strip with per-shot editing, zoom, API frames, and gesture capture."
-                : "Snap a pic, edit each shot individually, add frames, and export in full quality."}
-            </p>
+            <h2 className="music-title">
+              <Camera size={20} className="music-title-icon" />
+              Photobooth
+              <HelpTip
+                size="md"
+                content={
+                  user
+                    ? "Snap a pic, compose a 4-cut strip with per-shot editing, zoom, API frames, and gesture capture."
+                    : "Snap a pic, edit each shot individually, add frames, and export in full quality."
+                }
+              />
+            </h2>
           </div>
           <Button
             icon={<Upload size={14} />}
@@ -1336,7 +1343,12 @@ export function PhotoboothPage() {
                   ))}
                 </div>
 
-                <div className="pb-motion-hint">{activeMotionMeta.hint}</div>
+                <div className="pb-motion-setting-row">
+                  <span className="pb-strip-layout-label" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span>{activeMotionMeta.label}</span>
+                    <HelpTip content={activeMotionMeta.hint} />
+                  </span>
+                </div>
 
                 <div className="pb-motion-setting-row">
                   <span className="pb-strip-layout-label">Delay after trigger</span>
@@ -1622,8 +1634,9 @@ export function PhotoboothPage() {
                     }}
                   >
                     <Upload size={26} style={{ color: "#8b6ff5", marginBottom: 8 }} />
-                    <p className="placeholder-note">
-                      Capture from the camera (single or 4-cut strip), or drop an image here to start editing.
+                    <p className="placeholder-note" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span>No photo loaded</span>
+                      <HelpTip content="Capture from the camera (single or 4-cut strip), or drop an image here to start editing." />
                     </p>
                     <Button
                       size="small"
@@ -1653,7 +1666,12 @@ export function PhotoboothPage() {
                     <Empty
                       className="fade-in"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={<span style={{ color: "#9c97b8" }}>No photos yet. Take or upload one and save it!</span>}
+                      description={
+                        <span style={{ color: "#9c97b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span>No photos yet.</span>
+                          <HelpTip content="Take or upload a photo and save it!" />
+                        </span>
+                      }
                     />
                   </div>
                 ) : (

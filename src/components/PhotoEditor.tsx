@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Input, Slider, Segmented, Tooltip } from "antd";
 import {
   Sliders, Wand2, Frame, Sticker as StickerIcon, Pencil, Trash2, Undo2, Type,
-  Crop, RotateCw, FlipHorizontal2, Eye, RotateCcw, ZoomIn, ZoomOut, Search, X, Sparkles, Move,
+  Crop, RotateCw, FlipHorizontal2, Eye, RotateCcw, ZoomIn, ZoomOut, Search, X, Sparkles,
 } from "lucide-react";
 import {
   ASPECT_OPTIONS, DEFAULT_ADJ, DEFAULT_TRANSFORM, FILTER_PRESETS, FRAME_OPTIONS,
@@ -14,6 +14,7 @@ import {
   type ApiFrameMotif,
 } from "../lib/frameApi";
 import { notify } from "../lib/notify";
+import HelpTip from "./HelpTip";
 import "./PhotoEditor.css";
 
 type Tab = "adjust" | "filter" | "crop" | "frame" | "stickers" | "draw";
@@ -357,9 +358,7 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
             />
             {(cropZoom > 1 || transform.aspect !== "original") && (
               <div className="pe-chip-grid" style={{ alignItems: "center" }}>
-                <span className="pe-hint" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <Move size={12} /> Drag photo to pan
-                </span>
+                <HelpTip content="Drag photo to pan." />
                 {(transform.panX !== 0 || transform.panY !== 0) && (
                   <Button
                     size="small"
@@ -429,7 +428,7 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
                 value={state.frame.color}
                 onChange={(e) => patch({ frame: { ...state.frame, color: e.target.value } })}
               />
-              <span className="pe-hint">(Film, Neon & Galaxy use themed colours)</span>
+              <HelpTip content="Film, Neon & Galaxy use themed colours." />
             </label>
 
             <div className="pe-api-frame-section">
@@ -569,9 +568,12 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
                 onPressEnter={() => addSticker("text", textInput)} placeholder="Add text…" prefix={<Type size={13} />} />
               <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} title="Text colour" />
               <Button size="small" type="primary" disabled={!textInput.trim()} onClick={() => addSticker("text", textInput)}>Add</Button>
+              {!selected && (
+                <HelpTip content="Tap a sticker on the photo to move, resize or rotate it. Press Delete to remove." />
+              )}
             </div>
 
-            {selected ? (
+            {selected && (
               <>
                 <Row label="Size" value={selected.size} min={0.03} max={0.6} step={0.01}
                   onChange={(v) => updateSticker(selected.id, { size: v })} />
@@ -585,8 +587,6 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
                 )}
                 <Button size="small" danger icon={<Trash2 size={13} />} onClick={removeSelected}>Delete sticker</Button>
               </>
-            ) : (
-              <p className="pe-hint">Tap a sticker on the photo to move, resize or rotate it. Press Delete to remove.</p>
             )}
           </>
         )}
@@ -597,13 +597,13 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
               <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} />
             </label>
             <Row label="Thickness" value={penWidth} min={0.003} max={0.04} step={0.001} onChange={setPenWidth} />
-            <div className="pe-chip-grid">
+            <div className="pe-chip-grid" style={{ alignItems: "center" }}>
               <Button size="small" icon={<Undo2 size={13} />} disabled={!state.strokes.length}
                 onClick={() => patch({ strokes: state.strokes.slice(0, -1) })}>Undo stroke</Button>
               <Button size="small" danger disabled={!state.strokes.length}
                 onClick={() => patch({ strokes: [] })}>Clear drawing</Button>
+              <HelpTip content="Drag on the photo to draw." />
             </div>
-            <p className="pe-hint">Drag on the photo to draw.</p>
           </>
         )}
       </div>

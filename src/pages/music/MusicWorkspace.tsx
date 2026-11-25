@@ -9,6 +9,7 @@ import { useLongPressSelect } from "../../hooks/useLongPressSelect";
 import SelectionToolbar from "../../components/SelectionToolbar";
 import AlbumPickerPane from "./AlbumPickerPane";
 import PlaylistPane from "./PlaylistPane";
+import HelpTip from "../../components/HelpTip";
 
 export default function MusicWorkspace({ userId }: { userId: string }) {
   const { message } = App.useApp();
@@ -145,8 +146,14 @@ async function loadTracks() {
   return (
     <div className="page music-page-shell">
       <div className="music-shell-header fade-in-up">
-        <h2 className="music-title"><Sparkles size={20} className="music-title-icon" /> Music</h2>
-        <p className="music-subtitle">Your galaxy of playlists — swap an album, then dive into the tracklist.</p>
+        <h2 className="music-title">
+          <Sparkles size={20} className="music-title-icon" />
+          Music
+          <HelpTip
+            size="md"
+            content="Your galaxy of playlists — swap an album, then dive into the tracklist."
+          />
+        </h2>
       </div>
 
       {playlists.length === 0 && !loadingPlaylists ? (
@@ -169,7 +176,16 @@ async function loadTracks() {
             longPress={albumLongPress}
           />
           <div className="music-pane music-pane-right">
-            <Empty className="fade-in music-empty-state" description="No playlists yet — tap + on the left to create one." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            <Empty
+              className="fade-in music-empty-state"
+              description={
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  No playlists yet
+                  <HelpTip content="Tap + on the left to create a playlist." />
+                </span>
+              }
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
           </div>
         </div>
       ) : (

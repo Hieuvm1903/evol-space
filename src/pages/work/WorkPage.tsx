@@ -25,6 +25,7 @@ import { useGLTF } from "@react-three/drei";
 import { useAuth } from "../../contexts/AuthContext";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { PanelEdgeToggle } from "../../components/PanelEdgeToggle";
+import HelpTip from "../../components/HelpTip";
 import { notify } from "../../lib/notify";
 import { fetchLayout, fileUrl, getModelSet, listModelSets, meshAssets } from "../../lib/modelsService";
 import { deleteScene, getScene, listScenes, saveScene } from "../../lib/scenesService";
@@ -1109,15 +1110,18 @@ export function WorkPage() {
   return (
     <div className="page work-page-shell">
       <div className="work-heading">
-        <h2>
-          <Briefcase size={20} style={{ verticalAlign: -4, marginRight: 8, color: "#8b6ff5" }} />
-          Work · {workspaceMode === "twin" ? "sand3d Digital Twin" : "Scene Author"}
+        <h2 style={{ gap: 8 }}>
+          <Briefcase size={20} style={{ color: "#8b6ff5" }} />
+          <span>Work · {workspaceMode === "twin" ? "sand3d Digital Twin" : "Scene Author"}</span>
+          <HelpTip
+            size="md"
+            content={
+              workspaceMode === "twin"
+                ? "Live warehouse telemetry, fault injection, camera presets & 60s replay · V camera projection · H hide panels"
+                : "W move · E rotate · G snap · V camera projection · Ctrl+Z undo · Ctrl+S save · Ctrl+D duplicate · Del delete · H hide panels"
+            }
+          />
         </h2>
-        <p className="evol-card-meta">
-          {workspaceMode === "twin"
-            ? "Live warehouse telemetry, fault injection, camera presets & 60s replay · V camera projection · H hide panels"
-            : "W move · E rotate · G snap · V camera projection · Ctrl+Z undo · Ctrl+S save · Ctrl+D duplicate · Del delete · H hide panels"}
-        </p>
       </div>
 
       <div className={`work-layout${!showUi || !ui.side ? " side-collapsed" : ""}`}>

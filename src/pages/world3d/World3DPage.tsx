@@ -23,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import HelpTip from "../../components/HelpTip";
 import { createMonument, type MonumentHandle } from "./worldModels";
 import {
   createAsciiScreenTexture,
@@ -807,10 +808,7 @@ export function World3DPage() {
       <div className="world3d-top-hud">
         <div className="world3d-title-strip">
           <span className="world3d-brand-title">EVOL Space · 3D Hub</span>
-          <span className="world3d-hud-sep" />
-          <span className="world3d-hud-hint">
-            Click any 3D monument or path marker to open page · Drag to orbit · WASD to roam
-          </span>
+          <HelpTip content="Click any 3D monument or path marker to open page · Drag to orbit · WASD to roam" />
         </div>
 
         <div className="world3d-top-actions">
@@ -881,7 +879,7 @@ export function World3DPage() {
                   {hoveredNode.subtitle}
                 </>
               ) : (
-                "Hover or click a monument to travel"
+                <HelpTip placement="top" content="Hover or click a monument to travel" />
               )}
             </span>
           </div>

@@ -13,6 +13,7 @@ import {
   type RobotScriptTemplate,
 } from "./script";
 import ScriptDemoScene, { type DemoPlaybackState } from "./ScriptDemoScene";
+import HelpTip from "../../components/HelpTip";
 
 interface Props {
   open: boolean;
@@ -151,10 +152,16 @@ export default function ScriptEditorModal({
       }
       footer={
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-          <span className="work-hint" style={{ margin: 0 }}>
-            {object.static
-              ? "Note: this object is Static. Untick Static in Rendering to animate motion in Play mode."
-              : "Scripts run safely line-by-line in Play mode."}
+          <span className="work-hint" style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {object.static && <span>Static object</span>}
+            <HelpTip
+              placement="topLeft"
+              content={
+                object.static
+                  ? "Note: this object is Static. Untick Static in Rendering to animate motion in Play mode."
+                  : "Scripts run safely line-by-line in Play mode."
+              }
+            />
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <Button
@@ -185,7 +192,10 @@ export default function ScriptEditorModal({
         {/* Left pane: robot selector, templates, joint chips & code editor */}
         <div className="work-script-studio-left">
           <div>
-            <div className="work-field-label">Robot type</div>
+            <div className="work-field-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span>Robot type</span>
+              <HelpTip content={activeProfileMeta.subtitle} />
+            </div>
             <Select
               size="small"
               style={{ width: "100%" }}
@@ -196,7 +206,6 @@ export default function ScriptEditorModal({
                 label: `${p.label}${p.id === initialProfile ? " (Current)" : ""}`,
               }))}
             />
-            <div className="work-hint">{activeProfileMeta.subtitle}</div>
           </div>
 
           <div>
@@ -226,7 +235,10 @@ export default function ScriptEditorModal({
 
           {availableJoints.length > 0 && (
             <div>
-              <div className="work-field-label">Click joint to insert</div>
+              <div className="work-field-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span>Joints</span>
+                <HelpTip content="Click a joint chip to insert its command into the script." />
+              </div>
               <div className="work-script-chips">
                 {availableJoints.map((j) => {
                   const target =
@@ -359,9 +371,16 @@ export default function ScriptEditorModal({
                 onJointsDetected={setDemoJoints}
               />
             )}
-            <div className="work-script-demo-overlay">
-              <span>Demo landmarks: <b>R0-3</b> (-2.2, -1.6) · <b>CV-1</b> (2.4, 1.4) · <b>tote</b></span>
-              <span>Drag to orbit · Scroll to zoom</span>
+            <div className="work-script-demo-overlay" style={{ justifyContent: "flex-end" }}>
+              <HelpTip
+                placement="topRight"
+                content={
+                  <div>
+                    <div>Demo landmarks: <b>R0-3</b> (-2.2, -1.6) · <b>CV-1</b> (2.4, 1.4) · <b>tote</b></div>
+                    <div>Drag to orbit · Scroll to zoom</div>
+                  </div>
+                }
+              />
             </div>
           </div>
         </div>

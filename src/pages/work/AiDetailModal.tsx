@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { Button, Input, Modal, Segmented, Select, Switch, Tooltip } from "antd";
 import { AlertCircle, Cog, ImagePlus, Lock, Sparkles, Trash2 } from "lucide-react";
 import type { AiGenerateOptions } from "../../lib/workTypes";
+import HelpTip from "../../components/HelpTip";
 
 interface Props {
   open: boolean;
@@ -195,7 +196,10 @@ export default function AiDetailModal({
         </div>
 
         <div>
-          <div className="work-field-label">Reference Image (Optional)</div>
+          <div className="work-field-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span>Reference Image (Optional)</span>
+            <HelpTip content="Gemini will inspect this image for proportions, parts & colors." />
+          </div>
           <div className="work-ai-img-row">
             <label
               className="work-ai-img-drop"
@@ -228,7 +232,6 @@ export default function AiDetailModal({
             {refImage && (
               <div className="work-ai-img-meta">
                 <div className="work-list-title" title={refImage.name}>{refImage.name}</div>
-                <div className="work-hint">Gemini will inspect this image for proportions, parts & colors.</div>
                 <Button
                   size="small"
                   danger

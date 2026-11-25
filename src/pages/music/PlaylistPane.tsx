@@ -14,6 +14,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import { notify } from "../../lib/notify";
 import { Share2 } from "lucide-react";           // add to the existing lucide import
 import ShareDialog from "../../components/ShareDialog";
+import HelpTip from "../../components/HelpTip";
 import { newShareToken, setPlaylistShareToken } from "../../lib/shareService";
 type SortMode = "default" | "name-asc" | "name-desc" | "artist-asc" | "artist-desc";
 
@@ -257,10 +258,10 @@ export default function PlaylistPane({
         </SpotlightCard>
       )}
 
-      <div className="playlist-track-count">
-        {tracks.length} track{tracks.length === 1 ? "" : "s"}
+      <div className="playlist-track-count" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span>{tracks.length} track{tracks.length === 1 ? "" : "s"}</span>
         {!longPress.selectMode && tracks.length > 0 && (
-          <span className="playlist-track-count-hint"> · hold a track to select several</span>
+          <HelpTip content="Hold a track to select several." />
         )}
       </div>
 
@@ -271,7 +272,16 @@ export default function PlaylistPane({
           <Empty
             className="fade-in"
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={tracks.length === 0 ? "No tracks yet — tap + above to add some." : "No tracks match your search."}
+            description={
+              tracks.length === 0 ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  No tracks yet
+                  <HelpTip content="Tap + above to add tracks." />
+                </span>
+              ) : (
+                "No tracks match your search."
+              )
+            }
           />
         ) : (
           filteredTracks.map((t, i) => (

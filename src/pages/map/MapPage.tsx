@@ -15,6 +15,7 @@ import { notify } from "../../lib/notify";
 import { useLongPressSelect } from "../../hooks/useLongPressSelect";
 import SelectionToolbar from "../../components/SelectionToolbar";
 import { PanelEdgeToggle } from "../../components/PanelEdgeToggle";
+import HelpTip from "../../components/HelpTip";
 
 import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./constants";
 import type { MapMode, MapTool, FormState, SortOption } from "./types";
@@ -444,16 +445,15 @@ export function MapPage() {
     <div className="page map-page-shell">
       <TargetCursor targetSelector=".cursor-target" />
       <div className="map-page-header">
-        <div>
-          <div className="map-page-heading">
-            <Title level={3} style={{ margin: 0 }}>
-              <MapPin size={22} style={{ verticalAlign: -4, marginRight: 8, color: "#8b6ff5" }} />
-              Places
-            </Title>
-          </div>
-          <p className="map-page-sub">
-            Search any address on the map, right-click to drop a pin, or organize places into shareable lists.
-          </p>
+        <div className="map-page-heading">
+          <Title level={3} style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            <MapPin size={22} style={{ color: "#8b6ff5" }} />
+            <span>Places</span>
+            <HelpTip
+              size="md"
+              content="Search any address on the map, right-click to drop a pin, or organize places into shareable lists."
+            />
+          </Title>
         </div>
       </div>
 

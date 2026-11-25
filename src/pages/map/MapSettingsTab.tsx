@@ -2,6 +2,7 @@ import React from "react";
 import { Switch, Typography } from "antd";
 import { MAP_MODE_OPTIONS, MAP_TOOL_OPTIONS } from "./constants";
 import type { MapMode, MapTool } from "./types";
+import HelpTip from "../../components/HelpTip";
 
 const { Text } = Typography;
 
@@ -33,7 +34,10 @@ export default function MapSettingsTab({ mapMode, onMapModeChange, activeTools, 
         })}
       </div>
 
-      <Text style={{ fontSize: 12, color: "#9c97b8", display: "block", marginTop: 18 }}>Map tools</Text>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 18 }}>
+        <Text style={{ fontSize: 12, color: "#9c97b8" }}>Map tools</Text>
+        <HelpTip content="Measure: click points on the map, double-click to clear. Draw: click-drag on the map to sketch; panning is disabled while it's on." />
+      </div>
       <div className="map-tool-list">
         {MAP_TOOL_OPTIONS.map((opt) => {
           const Icon = opt.icon;
@@ -55,10 +59,6 @@ export default function MapSettingsTab({ mapMode, onMapModeChange, activeTools, 
           );
         })}
       </div>
-
-      <Text style={{ fontSize: 11.5, color: "#7d78a0", display: "block", marginTop: 10 }}>
-        Measure: click points on the map, double-click to clear. Draw: click-drag on the map to sketch; panning is disabled while it's on.
-      </Text>
     </div>
   );
 }

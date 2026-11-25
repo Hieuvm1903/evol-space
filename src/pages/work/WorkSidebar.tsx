@@ -27,6 +27,7 @@ import type {
 import AiDetailModal from "./AiDetailModal";
 import AreasSidebarTab from "./AreasSidebarTab";
 import TwinSidebarTab from "./TwinSidebarTab";
+import HelpTip from "../../components/HelpTip";
 
 export const DRAG_MIME = "application/x-work-asset";
 const NODE_MIME = "application/x-work-node";
@@ -492,7 +493,10 @@ function ModelsTab(p: Props) {
         </div>
       )}
 
-      <div className="work-field-label" style={{ marginTop: 14 }}>Drag onto the scene, or click +</div>
+      <div className="work-field-label" style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 6 }}>
+        <span>Models</span>
+        <HelpTip content="Drag onto the scene, or click +." />
+      </div>
       <div className="work-asset-grid">
         {filteredSetAssets.map((a) => (
           <div key={a} className="work-asset-card cursor-target" draggable
@@ -512,7 +516,16 @@ function ModelsTab(p: Props) {
         )}
       </div>
 
-      <div className="work-field-label" style={{ marginTop: 14 }}>Other objects</div>
+      <div className="work-field-label" style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 6 }}>
+        <span>Other objects</span>
+        <HelpTip
+          content={
+            <>
+              Tip: Turn off <b>View → Editor lighting</b> to preview your own lights and shadows cleanly.
+            </>
+          }
+        />
+      </div>
       <div className="work-btn-row">
         <Button size="small" icon={<FolderPlus size={13} />} onClick={p.onAddGroup}>Group</Button>
         <Dropdown
@@ -528,9 +541,6 @@ function ModelsTab(p: Props) {
         >
           <Button size="small" icon={<Lightbulb size={13} />}>Light ▾</Button>
         </Dropdown>
-      </div>
-      <div className="work-hint">
-        Tip: Turn off <b>View → Editor lighting</b> to preview your own lights and shadows cleanly.
       </div>
 
       {p.hasLayout && (
@@ -647,13 +657,19 @@ function HierarchyTab(p: Props) {
       </div>
       <div
         className={`work-tree-root${dropId === "root" ? " drop" : ""}`}
+        style={{ display: "flex", alignItems: "center", gap: 6 }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes(NODE_MIME)) { e.preventDefault(); setDropId("root"); } }}
         onDragLeave={() => setDropId((d) => (d === "root" ? null : d))}
         onDrop={(e) => { e.preventDefault(); drop(null); }}
       >
-        {q
-          ? `${matchedIds.size} match${matchedIds.size === 1 ? "" : "es"} of ${p.objects.length} objects`
-          : `${p.objects.length} objects · drag a row onto another to make it a child, or here to unparent`}
+        <span>
+          {q
+            ? `${matchedIds.size} match${matchedIds.size === 1 ? "" : "es"} of ${p.objects.length} objects`
+            : `${p.objects.length} objects`}
+        </span>
+        {!q && (
+          <HelpTip content="Drag a row onto another to make it a child, or here to unparent." />
+        )}
       </div>
       {p.objects.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Scene is empty" />}
       {p.objects.length > 0 && q && matchedIds.size === 0 && (
@@ -724,7 +740,10 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
   );
   return (
     <div className="work-side-body">
-      <div className="work-field-label">Renderer</div>
+      <div className="work-field-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span>Renderer</span>
+        <HelpTip content="3D viewport uses WebGL2 so PBR, shadows, and GLSL shaders run across all browsers even when WebGPU is unavailable." />
+      </div>
       <div className="work-pref-row">
         <span>Active backend</span>
         <Tag color={backend.startsWith("error") ? "red" : backend ? "green" : "gold"} style={{ marginRight: 0 }}>
@@ -736,9 +755,6 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
         <Tag color={webgpuStatus === "Available" ? "cyan" : "default"} style={{ marginRight: 0 }}>
           {webgpuStatus}
         </Tag>
-      </div>
-      <div className="work-hint">
-        3D viewport uses WebGL2 so PBR, shadows, and GLSL shaders run across all browsers even when WebGPU is unavailable.
       </div>
 
       <div className="work-field-label" style={{ marginTop: 12 }}>Performance</div>

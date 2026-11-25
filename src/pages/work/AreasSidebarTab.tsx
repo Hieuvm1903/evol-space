@@ -3,6 +3,7 @@ import { Button, ColorPicker, Empty, Input, InputNumber, Select, Switch, Tag, To
 import { Layers, PenTool, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import type { WorkspaceMode, ZoneDef } from "../../lib/workTypes";
 import { ZONE_PALETTE } from "./TwinOverlays";
+import HelpTip from "../../components/HelpTip";
 
 interface Props {
   zones: ZoneDef[];
@@ -102,13 +103,8 @@ export default function AreasSidebarTab({
         <Tooltip title="Restore default facility areas">
           <Button size="small" icon={<RotateCcw size={13} />} onClick={onResetZones} />
         </Tooltip>
+        <HelpTip content="Draw on Floor: click two opposite corners on the 3D floor to place a new area. Press Esc to cancel." />
       </div>
-
-      {drawingArea && (
-        <div className="work-area-draw-banner">
-          Click two opposite corners on the 3D floor to place a new area. Press Esc to cancel.
-        </div>
-      )}
 
       {workspaceMode === "author" && (
         <div className="work-pref-row" style={{ marginBottom: 8 }}>

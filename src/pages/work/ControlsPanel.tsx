@@ -1,6 +1,7 @@
 import React from "react";
 import { SlidersHorizontal, Gamepad2, RotateCcw } from "lucide-react";
 import type { BehaviorState, TransformState } from "./types";
+import HelpTip from "../../components/HelpTip";
 
 const RAD = Math.PI / 180;
 
@@ -13,10 +14,23 @@ interface Props {
   onReset: () => void;
 }
 
-function Toggle({ active, onChange, label }: { active: boolean; onChange: (v: boolean) => void; label: string }) {
+function Toggle({
+  active,
+  onChange,
+  label,
+  help,
+}: {
+  active: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  help?: React.ReactNode;
+}) {
   return (
     <div className="work-toggle-row">
-      <span className="work-toggle-label">{label}</span>
+      <span className="work-toggle-label" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span>{label}</span>
+        {help && <HelpTip content={help} />}
+      </span>
       <button type="button" className={`work-toggle${active ? " active" : ""}`} onClick={() => onChange(!active)}>
         <span className="work-toggle-dot" />
       </button>
@@ -94,12 +108,16 @@ export default function ControlsPanel({ transform, behavior, disabled, onTransfo
         </>
       )}
 
-      <Toggle label="Drive mode" active={behavior.driveEnabled} onChange={(v) => onBehaviorChange({ ...behavior, driveEnabled: v })} />
+      <Toggle
+        label="Drive mode"
+        help="W/↑ forward · S/↓ back · A/D or ←/→ strafe · Q/E turn"
+        active={behavior.driveEnabled}
+        onChange={(v) => onBehaviorChange({ ...behavior, driveEnabled: v })}
+      />
       {behavior.driveEnabled && (
         <>
           <Slider label="Drive speed" value={behavior.driveSpeed} min={0.2} max={5} step={0.1} unit=" u/s" onChange={(v) => onBehaviorChange({ ...behavior, driveSpeed: v })} />
           <Slider label="Turn speed" value={behavior.turnSpeed} min={0.2} max={5} step={0.1} unit=" rad/s" onChange={(v) => onBehaviorChange({ ...behavior, turnSpeed: v })} />
-          <p className="work-hint">W/↑ forward · S/↓ back · A/D or ←/→ strafe · Q/E turn</p>
         </>
       )}
 

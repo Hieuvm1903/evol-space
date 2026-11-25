@@ -9,6 +9,7 @@ import { iconForName, splitIcon } from "../../content/placeIcons";
 import ShareDialog from "../../components/ShareDialog";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { notify } from "../../lib/notify";
+import HelpTip from "../../components/HelpTip";
 
 interface Props {
   userId: string;
@@ -156,13 +157,13 @@ export default function ListsTab({ userId, places, draftIds, onDraftConsumed, on
   // ---------------- index ----------------
   return (
     <div className="map-sidebar-body" style={{ paddingTop: 14 }}>
-      <Button type="primary" block className="btn-glow" icon={<ListPlus size={14} />}
-        onClick={() => startEdit(null)} disabled={places.length === 0}>
-        New list from my places
-      </Button>
-      <p className="evol-card-meta" style={{ margin: "8px 0" }}>
-        Tip: hold a place in Browse for 1.5s, select several, then tap “New list”.
-      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <Button type="primary" block className="btn-glow" icon={<ListPlus size={14} />}
+          onClick={() => startEdit(null)} disabled={places.length === 0} style={{ flex: 1 }}>
+          New list from my places
+        </Button>
+        <HelpTip content='Tip: hold a place in Browse for 1.5s, select several, then tap “New list”.' />
+      </div>
 
       {loading ? (
         <p className="placeholder-note">Loading…</p>

@@ -1,6 +1,7 @@
 import React from "react";
 import { Music2 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import HelpTip from "../../components/HelpTip";
 import MusicWorkspace from "./MusicWorkspace";
 import "./MusicPage.css";
 
@@ -21,8 +22,13 @@ export function MusicPage() {
       <div className="page">
         <div className="music-guest-gate fade-in-up">
           <Music2 size={40} className="music-guest-icon" />
-          <h2>Music</h2>
-          <p>Log in first (see the Login tab) to build playlists and listen to music.</p>
+          <h2 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span>Music</span>
+            <HelpTip
+              size="md"
+              content="Log in first (see the Login tab) to build playlists and listen to music."
+            />
+          </h2>
         </div>
       </div>
     );

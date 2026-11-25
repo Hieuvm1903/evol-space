@@ -6,6 +6,7 @@ import { isPlaylistLink as isPlaylistUrl, extractVideoId, normalizeUrl, fetchMet
 import { openImportNotification } from "./useImportNotification";
 import VideoPreviewModal from "../../components/VideoPreviewModal";
 import PlaylistDetailModal from "./PlaylistDetailModal";
+import HelpTip from "../../components/HelpTip";
 
 export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId: number; addedBy: string; onAdded: () => void }) {
   const { message } = App.useApp();
@@ -77,8 +78,7 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
 
   return (
     <div>
-      <p className="evol-card-meta">Paste a single video link, or a playlist link to add every track at once.</p>
-      <div className="detail-row">
+      <div className="detail-row" style={{ alignItems: "center" }}>
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -88,6 +88,7 @@ export default function AddByLink({ playlistId, addedBy, onAdded }: { playlistId
           allowClear = {true}
         />
         <Button className="btn-glow" loading={busy} disabled={!trimmed} onClick={handleSubmit}>Add</Button>
+        <HelpTip content="Paste a single video link, or a playlist link to add every track at once." />
       </div>
 
       {videoId && (previewLoading || preview) && (

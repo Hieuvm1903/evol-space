@@ -811,3 +811,71 @@ form button:disabled { opacity: 0.6; cursor: default; }
     transform: translate(-50%, -50%) scale(0.92);
   }
 }
+
+/* ---------- Inline "?" HelpTip Trigger & Popover ---------- */
+button.help-tip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(196, 181, 253, 0.3);
+  background: rgba(139, 111, 245, 0.14);
+  color: #c4b5fd;
+  -webkit-text-fill-color: #c4b5fd;
+  font-family: inherit;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  vertical-align: middle;
+  transition: border-color 0.16s var(--ease), background-color 0.16s var(--ease), color 0.16s var(--ease), box-shadow 0.16s var(--ease), transform 0.12s var(--ease);
+}
+
+button.help-tip-btn-sm {
+  width: 17px;
+  height: 17px;
+  font-size: 11px;
+}
+
+button.help-tip-btn-md {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+}
+
+button.help-tip-btn:hover,
+button.help-tip-btn:focus-visible {
+  outline: none;
+  border-color: var(--evol-green-light);
+  background: rgba(34, 211, 238, 0.18);
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.22);
+}
+
+button.help-tip-btn:active {
+  transform: scale(0.94);
+}
+
+.help-tip-popover .ant-popover-inner {
+  background: #1a1830 !important;
+  border: 1px solid rgba(196, 181, 253, 0.22);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.65);
+}
+
+.help-tip-content {
+  font-size: 0.78rem;
+  line-height: 1.48;
+  color: var(--evol-text);
+  font-weight: 400;
+  white-space: normal;
+}
+
+.help-tip-content b,
+.help-tip-content strong {
+  color: #ffffff;
+  font-weight: 600;
+}

@@ -10,6 +10,7 @@ import type { SortOption } from "./types";
 import type { LongPressSelect } from "../../hooks/useLongPressSelect";
 import LongPressRing from "../../components/LongPressRing";
 import SelectCheckbox from "../../components/SelectCheckbox";
+import HelpTip from "../../components/HelpTip";
 
 interface Props {
   loading: boolean;
@@ -185,8 +186,13 @@ export default function BrowseTab({
         ) : places.length === 0 ? (
           <Empty
             description={
-              <span style={{ color: "#9c97b8" }}>
-                {hasFilters ? "No places match your filters." : "No places saved yet. Right-click the map to add one."}
+              <span style={{ color: "#9c97b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {hasFilters ? "No places match your filters." : (
+                  <>
+                    <span>No places saved yet.</span>
+                    <HelpTip content="Right-click the map to add a place." />
+                  </>
+                )}
               </span>
             }
             image={Empty.PRESENTED_IMAGE_SIMPLE}

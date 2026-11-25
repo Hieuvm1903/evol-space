@@ -10,6 +10,7 @@ import { usePlayerStore } from "../features/player/store";
 import type { Track } from "../features/player/types";
 import { fetchSharedPlaylist, importSharedPlaylist, type SharedPlaylist } from "../lib/shareService";
 import { notify } from "../lib/notify";
+import HelpTip from "../components/HelpTip";
 import "./music/MusicPage.css";
 
 type SortMode = "default" | "name-asc" | "name-desc" | "artist-asc" | "artist-desc";
@@ -111,10 +112,14 @@ export function SharedAlbumPage() {
   return (
     <div className="page music-page-shell">
       <div className="music-shell-header fade-in-up">
-        <h2 className="music-title"><Sparkles size={20} className="music-title-icon" /> Shared album</h2>
-        <p className="music-subtitle">
-          {data.owner ? `Shared by ${data.owner}` : "Shared with you"} — play it here, or save a copy to your own albums.
-        </p>
+        <h2 className="music-title">
+          <Sparkles size={20} className="music-title-icon" />
+          Shared album
+          <HelpTip size="md" content="Play it here, or save a copy to your own albums." />
+        </h2>
+        {data.owner && (
+          <p className="music-subtitle" style={{ marginBottom: 0 }}>Shared by {data.owner}</p>
+        )}
       </div>
 
       <div className="music-workspace" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>

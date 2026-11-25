@@ -16,6 +16,7 @@ import type { MapMode, MapTool, FormState } from "./types";
 import PlaceMarkers from "./PlaceMarkers";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { notify } from "../../lib/notify";
+import HelpTip from "../../components/HelpTip";
 
 export interface GeoSearchResult {
   place_id: number;
@@ -331,11 +332,14 @@ export default function MapCanvas({
           {activeTools.includes("measure") && (
             <div className="map-hud-row">
               <Ruler size={13} color="#22d3ee" />
-              <span>
-                {measurePoints.length < 2
-                  ? "Click map to measure"
-                  : formatDistance(measuredDistanceKm)}
-              </span>
+              {measurePoints.length < 2 ? (
+                <>
+                  <span>Measure</span>
+                  <HelpTip placement="top" content="Click points on the map to measure distance, or double-click to clear." />
+                </>
+              ) : (
+                <span>{formatDistance(measuredDistanceKm)}</span>
+              )}
               <button type="button" className="map-hud-action" onClick={onAddMeasurePointFromLocation}>
                 <LocateFixed size={12} /> +Me
               </button>
@@ -350,9 +354,14 @@ export default function MapCanvas({
           {activeTools.includes("draw") && (
             <div className="map-hud-row">
               <PenLine size={13} color="#e879f9" />
-              <span>
-                {activeSketch ? `Drawing (${activeSketch.length} pts)` : "Drag to sketch"}
-              </span>
+              {activeSketch ? (
+                <span>Drawing ({activeSketch.length} pts)</span>
+              ) : (
+                <>
+                  <span>Draw</span>
+                  <HelpTip placement="top" content="Click and drag on the map to sketch; panning is disabled while Draw is on." />
+                </>
+              )}
               <button type="button" className="map-hud-action magenta" onClick={onAddSketchPointFromLocation}>
                 <LocateFixed size={12} /> +Me
               </button>

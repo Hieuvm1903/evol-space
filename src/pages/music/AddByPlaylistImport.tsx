@@ -5,6 +5,7 @@ import * as musicService from "../../lib/musicService";
 import { searchPlaylists, SearchPlaylistResult } from "../../lib/youtube";
 import { openImportNotification } from "./useImportNotification";
 import PlaylistDetailModal from "./PlaylistDetailModal";
+import HelpTip from "../../components/HelpTip";
 
 const MAX_RESULTS_CAP = 30;
 
@@ -50,9 +51,7 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
 
   return (
     <div>
-      <p className="evol-card-meta">Search for a playlist to add every track at once.</p>
-
-      <div className="detail-row">
+      <div className="detail-row" style={{ alignItems: "center" }}>
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -64,6 +63,7 @@ export default function AddByPlaylistImport({ playlistId, addedBy, onAdded }: { 
           <InputNumber size="middle" min={1} max={MAX_RESULTS_CAP} value={maxResults} onChange={(v) => setMaxResults(v ?? 8)} style={{ width: 64 }} />
         </Tooltip>
         <Button className="btn-glow" loading={searching} disabled={!query.trim()} onClick={handleSearch}>Search</Button>
+        <HelpTip content="Search for a playlist to add every track at once." />
       </div>
 
       <div className="search-result-list">
