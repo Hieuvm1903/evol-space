@@ -23,6 +23,8 @@ import StaticBatches, { type LiveDrag, type PerfCounters } from "./StaticBatches
 import { DynNode, StaticProxy, type NodeCtx, type VisEntry } from "./SceneNodes";
 import { FloorAreaDrawOverlay, StudioEnvironment, TwinCameraController, TwinOverlays } from "./TwinOverlays";
 import type { TwinEngine } from "./twinEngine";
+import { useTheme } from "../../contexts/ThemeContext";
+import { resolveCanvasBackdrop } from "./canvasBackdrop";
 
 /** Keeps a canvas failure from blanking the whole page: shows the error and a retry button instead. */
 class CanvasErrorBoundary extends React.Component<
@@ -55,17 +57,43 @@ class CanvasErrorBoundary extends React.Component<
   }
 }
 
-function ViewGrid() {
+function ViewGrid({
+  fineCenter,
+  fineGrid,
+  fineOpacity,
+  coarseCenter,
+  coarseGrid,
+  coarseOpacity,
+}: {
+  fineCenter: number;
+  fineGrid: number;
+  fineOpacity: number;
+  coarseCenter: number;
+  coarseGrid: number;
+  coarseOpacity: number;
+}) {
   const grids = useMemo(() => {
-    const fine = new THREE.GridHelper(80, 160, 0x2a2740, 0x1d1a30);
-    const coarse = new THREE.GridHelper(80, 16, 0x8b6ff5, 0x4a3fa0);
+    const fine = new THREE.GridHelper(80, 160, fineCenter, fineGrid);
+    const coarse = new THREE.GridHelper(80, 16, coarseCenter, coarseGrid);
     coarse.position.y = 0.002;
     for (const g of [fine, coarse]) {
       const m = g.material as THREE.LineBasicMaterial;
-      m.transparent = true; m.depthWrite = false; m.opacity = g === fine ? 0.7 : 0.45;
+      m.transparent = true;
+      m.depthWrite = false;
+      m.opacity = g === fine ? fineOpacity : coarseOpacity;
     }
     return [fine, coarse];
-  }, []);
+  }, [fineCenter, fineGrid, fineOpacity, coarseCenter, coarseGrid, coarseOpacity]);
+
+  useEffect(() => {
+    return () => {
+      for (const g of grids) {
+        g.geometry.dispose();
+        (g.material as THREE.Material).dispose();
+      }
+    };
+  }, [grids]);
+
   return <>{grids.map((g, i) => <primitive key={i} object={g} />)}</>;
 }
 
@@ -426,8 +454,14 @@ function WorkCanvasInner(p: WorkCanvasProps) {
     () => (sel && selIsStatic && worlds.get(sel.id) ? worlds.get(sel.id)!.clone().invert() : null), [sel, selIsStatic, worlds]);
   const subtree = useMemo(() => (sel && selIsStatic ? descendantsOf(objects, sel.id) : null), [sel, selIsStatic, objects]);
 
+  const { themeId } = useTheme();
+  const backdrop = useMemo(
+    () => resolveCanvasBackdrop(prefs.canvasBg, themeId),
+    [prefs.canvasBg, themeId],
+  );
+
   return (
-    <div className="work-canvas-fill">
+    <div className="work-canvas-fill" style={{ background: backdrop.bg }}>
       <Canvas
         shadows
       dpr={[1, 2]}
@@ -451,12 +485,16 @@ function WorkCanvasInner(p: WorkCanvasProps) {
       // Clicking the transform gizmo counts as "clicking nothing" to r3f — ignore that.
       onPointerMissed={() => { if (!gizmoBusy.current) p.onSelect(null); }}
     >
-      <color attach="background" args={["#07060f"]} />
-      <StudioEnvironment />
+      <color attach="background" args={[backdrop.bg]} />
+      <StudioEnvironment
+        fogColor={backdrop.fogColor}
+        fogDensity={backdrop.fogDensity}
+        envIntensity={backdrop.envIntensity}
+      />
       {prefs.defaultLight ? (
         <>
-          <ambientLight intensity={0.45} color="#8f84e0" />
-          <hemisphereLight args={["#22d3ee", "#14121f", 0.25]} />
+          <ambientLight intensity={backdrop.ambientIntensity} color={backdrop.ambientColor} />
+          <hemisphereLight args={[backdrop.hemiSky, backdrop.hemiGround, backdrop.hemiIntensity]} />
           <directionalLight
             position={[10, 16, 10]} intensity={1.15} castShadow={prefs.shadows}
             shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
@@ -467,7 +505,14 @@ function WorkCanvasInner(p: WorkCanvasProps) {
         <ambientLight intensity={0.04} />
       )}
 
-      <ViewGrid />
+      <ViewGrid
+        fineCenter={backdrop.fineCenter}
+        fineGrid={backdrop.fineGrid}
+        fineOpacity={backdrop.fineOpacity}
+        coarseCenter={backdrop.coarseCenter}
+        coarseGrid={backdrop.coarseGrid}
+        coarseOpacity={backdrop.coarseOpacity}
+      />
       {prefs.showGizmos && p.workspaceMode === "author" && <axesHelper args={[1.2]} />}
 
       <StaticBatches
@@ -566,7 +611,13 @@ function WorkCanvasInner(p: WorkCanvasProps) {
 
       {prefs.showGizmos && (
         <GizmoHelper alignment="bottom-right" margin={[84, 84]}>
-          <GizmoViewcube color="#1a1830" strokeColor="#8b6ff5" textColor="#e8e6f5" hoverColor="#22d3ee" opacity={0.95} />
+          <GizmoViewcube
+            color={backdrop.cubeColor}
+            strokeColor={backdrop.cubeStroke}
+            textColor={backdrop.cubeText}
+            hoverColor={backdrop.cubeHover}
+            opacity={0.95}
+          />
         </GizmoHelper>
       )}
 

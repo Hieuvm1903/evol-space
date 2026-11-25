@@ -626,7 +626,16 @@
 .work-empty-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #9c97b8; font-size: .9rem; pointer-events: none; }
 
 /* ---------- Areas / Zones editor ---------- */
-.work-area-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.work-area-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.work-area-actions .help-tip-btn { margin-left: auto; }
+.work-bg-opt { display: inline-flex; align-items: center; gap: 6px; }
+.work-bg-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--evol-border-strong);
+  flex-shrink: 0;
+}
 .work-area-draw-banner {
   padding: 7px 10px; margin-bottom: 10px; border-radius: 9px;
   border: 1px solid var(--evol-green-light); background: color-mix(in srgb, var(--evol-green-light) 12%, transparent);

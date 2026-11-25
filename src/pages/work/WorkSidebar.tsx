@@ -12,6 +12,7 @@ import type {
   AiGenerateOptions,
   AssetTelemetry,
   CameraMode,
+  CanvasBgMode,
   LightType,
   ModelSetRow,
   PerfStats,
@@ -28,6 +29,7 @@ import AiDetailModal from "./AiDetailModal";
 import AreasSidebarTab from "./AreasSidebarTab";
 import TwinSidebarTab from "./TwinSidebarTab";
 import HelpTip from "../../components/HelpTip";
+import { CANVAS_BG_OPTIONS } from "./canvasBackdrop";
 
 export const DRAG_MIME = "application/x-work-asset";
 const NODE_MIME = "application/x-work-node";
@@ -777,6 +779,25 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
       {sw("Shadows", "shadows")}
 
       <div className="work-field-label" style={{ marginTop: 12 }}>Viewport</div>
+      <div className="work-pref-row">
+        <span>Canvas background</span>
+        <Select
+          size="small"
+          value={prefs.canvasBg ?? "auto"}
+          onChange={(v) => onPrefs({ canvasBg: v as CanvasBgMode })}
+          popupMatchSelectWidth={false}
+          style={{ width: 120 }}
+          options={CANVAS_BG_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: (
+              <span className="work-bg-opt">
+                <span className="work-bg-dot" style={{ background: opt.dot }} />
+                {opt.label}
+              </span>
+            ),
+          }))}
+        />
+      </div>
       <div className="work-pref-row">
         <span>Camera projection</span>
         <Segmented

@@ -23,6 +23,7 @@ import {
 import type * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
 import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { PanelEdgeToggle } from "../../components/PanelEdgeToggle";
 import HelpTip from "../../components/HelpTip";
@@ -47,6 +48,7 @@ import type {
   AssetTelemetry,
   CameraMode,
   CameraPreset,
+  CanvasBgMode,
   CanvasBridge,
   FacilityKpis,
   FaultKind,
@@ -87,6 +89,7 @@ import WorkSidebar, { DRAG_MIME } from "./WorkSidebar";
 import { TwinControlsBar, TwinKpiStrip } from "./TwinHud";
 import TwinInspectorPanel from "./TwinInspectorPanel";
 import { DEFAULT_ZONES } from "./TwinOverlays";
+import { CANVAS_BG_OPTIONS, resolveCanvasBackdrop } from "./canvasBackdrop";
 import "./WorkPage.css";
 
 const LAST_SCENE_KEY = "evol_work_last_scene";
@@ -107,6 +110,7 @@ const DEFAULT_PREFS: ViewPrefs = {
   shadows: true,
   space: "world",
   cameraMode: "perspective",
+  canvasBg: "auto",
   focusSelection: true,
   forceWebGL: false,
 };
@@ -139,6 +143,7 @@ const snap01 = (n: number) => Math.round(n * 10) / 10;
 
 export function WorkPage() {
   const { user, isAdmin } = useAuth();
+  const { themeId } = useTheme();
   const confirmDialog = useConfirm();
 
   // --- workspace mode
@@ -1218,6 +1223,7 @@ export function WorkPage() {
 
         <div
           className="work-stage"
+          style={{ background: resolveCanvasBackdrop(prefs.canvasBg, themeId).bg }}
           onDragOver={(e) => {
             if (workspaceMode === "author" && e.dataTransfer.types.includes(DRAG_MIME)) e.preventDefault();
           }}
@@ -1316,6 +1322,24 @@ export function WorkPage() {
                             ),
                           },
                         ]}
+                      />
+                    </Tooltip>
+                    <Tooltip title="Canvas background mode">
+                      <Select
+                        size="small"
+                        value={prefs.canvasBg ?? "auto"}
+                        onChange={(v) => updatePrefs({ canvasBg: v as CanvasBgMode })}
+                        popupMatchSelectWidth={false}
+                        style={{ width: 108 }}
+                        options={CANVAS_BG_OPTIONS.map((opt) => ({
+                          value: opt.value,
+                          label: (
+                            <span className="work-bg-opt">
+                              <span className="work-bg-dot" style={{ background: opt.dot }} />
+                              {opt.label}
+                            </span>
+                          ),
+                        }))}
                       />
                     </Tooltip>
                     <span className="work-toolbar-sep" />
@@ -1518,7 +1542,12 @@ export function WorkPage() {
           </button>
 
           {!loadingSets && sets.length === 0 && (
-            <div className="work-empty-hint">No model sets yet — run the GitHub Action in your models repo first.</div>
+            <div
+              className="work-empty-hint"
+              style={{ color: resolveCanvasBackdrop(prefs.canvasBg, themeId).isLight ? "#4b486b" : "#9c97b8" }}
+            >
+              No model sets yet — run the GitHub Action in your models repo first.
+            </div>
           )}
         </div>
       </div>

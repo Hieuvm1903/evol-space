@@ -63,7 +63,15 @@ export const DEFAULT_ZONES: ZoneDef[] = [
 ];
 
 /** Procedural PBR studio environment map + matching depth fog. */
-export function StudioEnvironment() {
+export function StudioEnvironment({
+  fogColor = "#07060f",
+  fogDensity = 0.011,
+  envIntensity = 0.48,
+}: {
+  fogColor?: string;
+  fogDensity?: number;
+  envIntensity?: number;
+}) {
   const scene = useThree((s) => s.scene);
   const gl = useThree((s) => s.gl);
 
@@ -74,7 +82,6 @@ export function StudioEnvironment() {
     const rt = pmrem.fromScene(env, 0.04);
     const prevEnv = scene.environment;
     scene.environment = rt.texture;
-    scene.environmentIntensity = 0.48;
     return () => {
       scene.environment = prevEnv;
       rt.dispose();
@@ -83,7 +90,11 @@ export function StudioEnvironment() {
     };
   }, [gl, scene]);
 
-  return <fogExp2 attach="fog" args={["#07060f", 0.011]} />;
+  useEffect(() => {
+    scene.environmentIntensity = envIntensity;
+  }, [scene, envIntensity]);
+
+  return <fogExp2 attach="fog" args={[fogColor, fogDensity]} />;
 }
 
 /** Damped camera preset transitions + optional robot follow-cam, yielding cleanly to user OrbitControls drag. */

@@ -133,6 +133,7 @@ export interface CanvasBridge {
 
 /** Editor/view preferences (stored in localStorage, not in the scene). */
 export type CameraMode = "perspective" | "orthographic";
+export type CanvasBgMode = "auto" | "space" | "studio" | "warm" | "blueprint";
 
 export interface ViewPrefs {
   instancing: boolean;      // draw static objects through InstancedMesh
@@ -148,6 +149,7 @@ export interface ViewPrefs {
   focusSelection: boolean;  // orbit around the selected object
   forceWebGL: boolean;      // skip WebGPU and use the WebGL2 backend (troubleshooting)
   cameraMode: CameraMode;   // perspective (depth) vs orthographic (parallel projection)
+  canvasBg: CanvasBgMode;   // 3D viewport background mode
 }
 
 export interface PerfStats {
