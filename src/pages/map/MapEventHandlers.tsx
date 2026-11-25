@@ -1,13 +1,22 @@
 import { useEffect, useRef } from "react";
 import { useMapEvents, useMap } from "react-leaflet";
 
-export function MapEvents({ onRightClick, onLeftClick }: {
+export function MapEvents({ onRightClick, onLeftClick, onViewChange }: {
   onRightClick: (lat: number, lon: number) => void;
   onLeftClick: () => void;
+  onViewChange?: (center: [number, number], zoom: number) => void;
 }) {
-  useMapEvents({
+  const map = useMapEvents({
     contextmenu(e) { onRightClick(e.latlng.lat, e.latlng.lng); },
     click() { onLeftClick(); },
+    moveend() {
+      const c = map.getCenter();
+      onViewChange?.([c.lat, c.lng], map.getZoom());
+    },
+    zoomend() {
+      const c = map.getCenter();
+      onViewChange?.([c.lat, c.lng], map.getZoom());
+    },
   });
   return null;
 }

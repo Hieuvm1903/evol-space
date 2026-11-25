@@ -2,7 +2,7 @@ import {
   Sun, Moon, MapIcon, Compass as CompassMapIcon, Satellite, Layers, Mountain, Globe,
   Maximize2, Ruler, Compass, PenLine, type LucideIcon,
 } from "lucide-react";
-import type { MapMode, MapTool } from "./types";
+import type { MapMode, MapTool, MapView } from "./types";
 
 export const DEFAULT_CENTER: [number, number] = [16.0, 106.0];
 export const DEFAULT_ZOOM = 5;
@@ -85,6 +85,7 @@ export const MAP_TOOL_OPTIONS: { value: MapTool; label: string; icon: LucideIcon
 
 export const MAP_MODE_KEY = "evol_map_mode";
 export const MAP_TOOLS_KEY = "evol_map_tools";
+export const MAP_VIEW_KEY = "evol_map_view";
 
 export function readMapMode(): MapMode {
   try {
@@ -102,4 +103,53 @@ export function readMapTools(): MapTool[] {
   } catch {
     return [];
   }
+}
+
+export function readMapView(): MapView {
+  try {
+    const raw = localStorage.getItem(MAP_VIEW_KEY);
+    if (!raw) return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
+    const parsed = JSON.parse(raw) as Partial<MapView>;
+    const lat = parsed?.center?.[0];
+    const lon = parsed?.center?.[1];
+    const zoom = parsed?.zoom;
+    if (
+      typeof lat === "number" && Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+      typeof lon === "number" && Number.isFinite(lon) && lon >= -180 && lon <= 180 &&
+      typeof zoom === "number" && Number.isFinite(zoom) && zoom >= 2 && zoom <= 20
+    ) {
+      return { center: [lat, lon], zoom };
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
+}
+
+export function writeMapView(view: MapView): void {
+  try {
+    localStorage.setItem(MAP_VIEW_KEY, JSON.stringify(view));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function computeViewForPoints(points: [number, number][], maxZoom = 15): MapView {
+  if (!points.length) return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  for (const [lat, lon] of points) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+  }
+  const center: [number, number] = [(minLat + maxLat) / 2, (minLon + maxLon) / 2];
+  const span = Math.max(maxLat - minLat, maxLon - minLon);
+  if (span <= 0.0005) return { center, zoom: maxZoom };
+  const estimated = Math.floor(Math.log2(360 / span));
+  const zoom = Math.max(2, Math.min(maxZoom, estimated));
+  return { center, zoom };
 }

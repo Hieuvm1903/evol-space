@@ -18,17 +18,20 @@ import MapSettingsTab from "./map/MapSettingsTab";
 import MapCanvas from "./map/MapCanvas";
 import { usePlaceFilters } from "./map/usePlaceFilters";
 import { emptyForm } from "./map/formHelpers";
-import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./map/constants";
-import type { MapMode, MapTool } from "./map/types";
+import { DEFAULT_CENTER, DEFAULT_ZOOM, MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools, computeViewForPoints } from "./map/constants";
+import type { MapMode, MapTool, MapView } from "./map/types";
 import "./map/MapPage.css";
 
 const { Title } = Typography;
 
-function FitBounds({ points }: { points: [number, number][] }) {
+function FitBounds({ points, fittedRef }: { points: [number, number][]; fittedRef: React.MutableRefObject<boolean> }) {
   const map = useMap();
   useEffect(() => {
-    if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [50, 50], maxZoom: 15 });
-  }, [points, map]);
+    if (points.length && !fittedRef.current) {
+      fittedRef.current = true;
+      map.fitBounds(L.latLngBounds(points), { padding: [50, 50], maxZoom: 15 });
+    }
+  }, [points, map, fittedRef]);
   return null;
 }
 
@@ -44,6 +47,8 @@ export function SharedPlacesPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [mapMode, setMapMode] = useState<MapMode>(readMapMode);
+  const [mapView, setMapView] = useState<MapView>({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
+  const fittedRef = useRef(false);
   const [activeTools, setActiveTools] = useState<MapTool[]>(readMapTools);
   const [fullscreen, setFullscreen] = useState(false);
   const [cursorLatLng, setCursorLatLng] = useState<{ lat: number; lng: number } | null>(null);
@@ -68,6 +73,12 @@ export function SharedPlacesPage() {
     [data],
   );
   const points = useMemo(() => places.map((p) => [p.lat, p.lon] as [number, number]), [places]);
+  useEffect(() => {
+    if (points.length && !fittedRef.current) {
+      setMapView(computeViewForPoints(points, 15));
+      if (mapMode === "google") fittedRef.current = true;
+    }
+  }, [points, mapMode]);
   const filters = usePlaceFilters(places);
   const blankForm = useMemo(() => emptyForm(), []);
   const selectedPlace = useMemo(
@@ -134,11 +145,13 @@ export function SharedPlacesPage() {
   function fitAll() {
     if (!filters.result.length) return;
     const pts = filters.result.map((p) => [p.lat, p.lon] as [number, number]);
+    setMapView(computeViewForPoints(pts, 15));
     mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [54, 54], maxZoom: 15 });
   }
 
   function selectAndFly(p: Place) {
     setSelectedId(p.id);
+    setMapView({ center: [p.lat, p.lon], zoom: 15 });
     mapRef.current?.flyTo([p.lat, p.lon], 15, { duration: 0.6 });
   }
 
@@ -261,6 +274,8 @@ export function SharedPlacesPage() {
           mapRef={mapRef}
           fullscreen={fullscreen}
           mapMode={mapMode}
+          mapView={mapView}
+          onMapViewChange={setMapView}
           activeTools={activeTools}
           onExitFullscreen={() => updateActiveTools(activeTools.filter((t) => t !== "fullscreen"))}
           cursorLatLng={cursorLatLng}
@@ -296,6 +311,7 @@ export function SharedPlacesPage() {
           onUseMyLocationOnMap={() =>
             withLocation((lat, lng) => {
               setMyLocation([lat, lng]);
+              setMapView({ center: [lat, lng], zoom: 13 });
               mapRef.current?.flyTo([lat, lng], 13, { duration: 0.7 });
             })
           }
@@ -303,7 +319,7 @@ export function SharedPlacesPage() {
           onOpenAdd={() => {}}
           selectedId={selectedId}
         >
-          <FitBounds points={points} />
+          <FitBounds points={points} fittedRef={fittedRef} />
         </MapCanvas>
       </div>
     </div>

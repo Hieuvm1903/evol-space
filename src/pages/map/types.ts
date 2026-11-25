@@ -12,3 +12,8 @@ export interface FormState {
   tags: string;
 }
 export type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "distance";
+
+export interface MapView {
+  center: [number, number];
+  zoom: number;
+}

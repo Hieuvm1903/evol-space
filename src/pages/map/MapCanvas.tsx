@@ -11,8 +11,8 @@ import type { Place } from "../../lib/placesService";
 import { iconForName, splitIcon } from "../../content/placeIcons";
 import { glowDivIcon } from "./mapIcons";
 import { MapEvents, MapDragLock, CursorCoordinatesTool, MeasureTool, SketchTool } from "./MapEventHandlers";
-import { DEFAULT_CENTER, DEFAULT_ZOOM, MAP_TILE_CONFIG } from "./constants";
-import type { MapMode, MapTool, FormState } from "./types";
+import { MAP_TILE_CONFIG, readMapView, writeMapView } from "./constants";
+import type { MapMode, MapTool, MapView, FormState } from "./types";
 import PlaceMarkers from "./PlaceMarkers";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { notify } from "../../lib/notify";
@@ -31,6 +31,8 @@ interface Props {
   mapMode: MapMode;
   activeTools: MapTool[];
   onExitFullscreen: () => void;
+  mapView?: MapView;
+  onMapViewChange?: (view: MapView) => void;
 
   cursorLatLng: { lat: number; lng: number } | null;
   onCursorMove: (lat: number, lng: number) => void;
@@ -84,6 +86,7 @@ function formatDistance(km: number): string {
 
 export default function MapCanvas({
   mapRef, fullscreen, mapMode, activeTools, onExitFullscreen,
+  mapView, onMapViewChange,
   cursorLatLng, onCursorMove,
   measurePoints, measuredDistanceKm, onMeasureAddPoint, onMeasureClear, onAddMeasurePointFromLocation,
   sketchLines, activeSketch, onSketchStart, onSketchExtend, onSketchEnd, onAddSketchPointFromLocation, onClearSketches,
@@ -99,7 +102,19 @@ export default function MapCanvas({
   const [searchResults, setSearchResults] = useState<GeoSearchResult[]>([]);
   const [searchPin, setSearchPin] = useState<{ lat: number; lon: number; label: string } | null>(null);
   const [copiedCoords, setCopiedCoords] = useState(false);
+  const [internalView, setInternalView] = useState<MapView>(readMapView);
   const abortRef = useRef<AbortController | null>(null);
+
+  const activeView = mapView ?? internalView;
+
+  function updateView(next: MapView) {
+    if (onMapViewChange) {
+      onMapViewChange(next);
+    } else {
+      setInternalView(next);
+      writeMapView(next);
+    }
+  }
 
   useEffect(() => {
     setCopiedCoords(false);
@@ -138,6 +153,7 @@ export default function MapCanvas({
     const shortName = item.display_name.split(",")[0].trim();
     setSearchPin({ lat, lon, label: shortName });
     setSearchResults([]);
+    updateView({ center: [lat, lon], zoom: 15 });
     mapRef.current?.flyTo([lat, lon], 15, { duration: 0.7 });
   }
 
@@ -154,18 +170,44 @@ export default function MapCanvas({
   }
 
   if (mapMode === "google") {
-    const [lat, lon] = selectedPlace
-      ? [selectedPlace.lat, selectedPlace.lon]
-      : (myLocation ?? DEFAULT_CENTER);
-    const zoom = selectedPlace || myLocation ? 14 : 6;
-    const src = `https://www.google.com/maps?q=${lat},${lon}&z=${zoom}&output=embed`;
+    const [lat, lon] = activeView.center;
+    const zoom = Math.min(20, Math.max(2, Math.round(activeView.zoom)));
+    const matchesCoord = (pLat: number, pLon: number) =>
+      Math.abs(pLat - lat) < 0.002 && Math.abs(pLon - lon) < 0.002;
+    const hasFocusedPin =
+      (selectedPlace && matchesCoord(selectedPlace.lat, selectedPlace.lon)) ||
+      (searchPin && matchesCoord(searchPin.lat, searchPin.lon)) ||
+      (myLocation && matchesCoord(myLocation[0], myLocation[1]));
+    const queryParam = hasFocusedPin
+      ? `q=${lat.toFixed(6)},${lon.toFixed(6)}`
+      : `ll=${lat.toFixed(6)},${lon.toFixed(6)}`;
+    const src = `https://www.google.com/maps?${queryParam}&z=${zoom}&output=embed`;
 
     return (
       <div className={`map-canvas-wrap${fullscreen ? " map-canvas-fullscreen" : ""}`}>
         <div className="map-floating-controls">
+          <Tooltip title="Zoom in" placement="left">
+            <Button
+              shape="circle"
+              icon={<ZoomIn size={16} />}
+              onClick={() => updateView({ center: [lat, lon], zoom: Math.min(20, zoom + 1) })}
+            />
+          </Tooltip>
+          <Tooltip title="Zoom out" placement="left">
+            <Button
+              shape="circle"
+              icon={<ZoomOut size={16} />}
+              onClick={() => updateView({ center: [lat, lon], zoom: Math.max(2, zoom - 1) })}
+            />
+          </Tooltip>
           <Tooltip title="My location" placement="left">
             <Button shape="circle" icon={<LocateFixed size={16} />} onClick={onUseMyLocationOnMap} />
           </Tooltip>
+          {displayedPlaces.length > 0 && (
+            <Tooltip title="Fit visible pins" placement="left">
+              <Button shape="circle" icon={<Scan size={16} />} onClick={onFitAll} />
+            </Tooltip>
+          )}
           {!readOnly && (
             <Tooltip title="Add place" placement="left">
               <Button shape="circle" icon={<Plus size={16} />} onClick={() => onOpenAdd()} />
@@ -456,8 +498,8 @@ export default function MapCanvas({
 
       <MapContainer
         ref={mapRef}
-        center={DEFAULT_CENTER}
-        zoom={DEFAULT_ZOOM}
+        center={activeView.center}
+        zoom={activeView.zoom}
         minZoom={2}
         maxZoom={20}
         zoomControl={false}
@@ -493,7 +535,11 @@ export default function MapCanvas({
             </>
           );
         })()}
-        <MapEvents onRightClick={readOnly ? () => {} : onRightClickAdd} onLeftClick={onLeftClickDeselect} />
+        <MapEvents
+          onRightClick={readOnly ? () => {} : onRightClickAdd}
+          onLeftClick={onLeftClickDeselect}
+          onViewChange={(center, zoom) => updateView({ center, zoom })}
+        />
         <MapDragLock locked={activeTools.includes("draw")} />
 
         {activeTools.includes("coordinates") && (

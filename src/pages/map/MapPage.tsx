@@ -17,8 +17,8 @@ import SelectionToolbar from "../../components/SelectionToolbar";
 import { PanelEdgeToggle } from "../../components/PanelEdgeToggle";
 import HelpTip from "../../components/HelpTip";
 
-import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools } from "./constants";
-import type { MapMode, MapTool, FormState, SortOption } from "./types";
+import { MAP_MODE_KEY, MAP_TOOLS_KEY, readMapMode, readMapTools, readMapView, writeMapView, computeViewForPoints } from "./constants";
+import type { MapMode, MapTool, MapView, FormState, SortOption } from "./types";
 import { emptyForm, formFromPlace } from "./formHelpers";
 import BrowseTab from "./BrowseTab";
 import PlaceFormTab from "./PlaceFormTab";
@@ -40,6 +40,7 @@ export function MapPage() {
   const [loading, setLoading] = useState(true);
   const [savingPlace, setSavingPlace] = useState(false);
   const [mapMode, setMapMode] = useState<MapMode>(readMapMode);
+  const [mapView, setMapView] = useState<MapView>(readMapView);
   const [activeTools, setActiveTools] = useState<MapTool[]>(readMapTools);
   const [fullscreen, setFullscreen] = useState(false);
   const [cursorLatLng, setCursorLatLng] = useState<{ lat: number; lng: number } | null>(null);
@@ -200,7 +201,10 @@ export function MapPage() {
     }
     if (ids && ids.length) {
       const pts = places.filter((p) => ids.includes(p.id)).map((p) => [p.lat, p.lon] as [number, number]);
-      if (pts.length) mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 15 });
+      if (pts.length) {
+        updateMapView(computeViewForPoints(pts, 15));
+        mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 15 });
+      }
     }
   }
 
@@ -260,6 +264,7 @@ export function MapPage() {
       }
       closeForm();
       await load();
+      updateMapView({ center: [lat, lon], zoom: 15 });
       mapRef.current?.flyTo([lat, lon], 15, { duration: 0.6 });
     } catch {
       notify.error("Couldn't save place", "Please try again.");
@@ -314,6 +319,11 @@ export function MapPage() {
   function updateMapMode(mode: MapMode) {
     setMapMode(mode);
     try { localStorage.setItem(MAP_MODE_KEY, mode); } catch { }
+  }
+
+  function updateMapView(view: MapView) {
+    setMapView(view);
+    writeMapView(view);
   }
 
   function updateActiveTools(tools: MapTool[]) {
@@ -411,6 +421,7 @@ export function MapPage() {
       (pos) => {
         const c: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setMyLocation(c);
+        updateMapView({ center: c, zoom: 13 });
         mapRef.current?.flyTo(c, 13, { duration: 0.7 });
       },
       (err) => notify.error("Couldn't get your location", err.message),
@@ -420,6 +431,7 @@ export function MapPage() {
   function fitAllDisplayedPlaces() {
     if (!displayedPlaces.length) return;
     const pts = displayedPlaces.map((p) => [p.lat, p.lon] as [number, number]);
+    updateMapView(computeViewForPoints(pts, 15));
     mapRef.current?.fitBounds(L.latLngBounds(pts), { padding: [54, 54], maxZoom: 15 });
   }
 
@@ -434,6 +446,7 @@ export function MapPage() {
 
   function selectAndFly(p: Place) {
     setSelectedId(p.id);
+    updateMapView({ center: [p.lat, p.lon], zoom: 15 });
     mapRef.current?.flyTo([p.lat, p.lon], 15, { duration: 0.6 });
   }
 
@@ -554,6 +567,8 @@ export function MapPage() {
           mapRef={mapRef}
           fullscreen={fullscreen}
           mapMode={mapMode}
+          mapView={mapView}
+          onMapViewChange={updateMapView}
           activeTools={activeTools}
           onExitFullscreen={() => updateActiveTools(activeTools.filter((t) => t !== "fullscreen"))}
           cursorLatLng={cursorLatLng}
