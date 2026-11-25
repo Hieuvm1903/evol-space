@@ -822,6 +822,7 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
       <div className="work-field-label" style={{ marginTop: 12 }}>Live stats</div>
       {stats ? (
         <div className="work-stats">
+          <span>FPS / Frame</span><b>{stats.fps} fps · {stats.frameMs.toFixed(1)} ms</b>
           <span>Draw calls</span><b>{stats.calls}</b>
           <span>Triangles</span><b>{stats.triangles.toLocaleString()}</b>
           <span>Instances</span><b>{stats.instTotal}</b>
@@ -830,6 +831,8 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
           <span>· LOD 2 (calc far)</span><b>{stats.instFar}</b>
           <span>· culled</span><b>{stats.instCulled}</b>
           <span>Dynamic nodes</span><b>{stats.dynamic}</b>
+          <span>Geo / Textures</span><b>{stats.geometries} / {stats.textures}</b>
+          {stats.heapMb !== undefined && <><span>JS Heap</span><b>{stats.heapMb} MB</b></>}
         </div>
       ) : <div className="work-list-sub">Waiting for the first frames…</div>}
     </div>

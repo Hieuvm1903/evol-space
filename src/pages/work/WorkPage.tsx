@@ -8,6 +8,7 @@ import {
   ChevronsUp,
   Eye,
   EyeOff,
+  Gauge,
   Magnet,
   Move,
   Pause,
@@ -87,6 +88,7 @@ import WorkCanvas from "./WorkCanvas";
 import WorkInspector from "./WorkInspector";
 import WorkSidebar, { DRAG_MIME } from "./WorkSidebar";
 import { TwinControlsBar, TwinKpiStrip } from "./TwinHud";
+import TelemetryHud from "./TelemetryHud";
 import TwinInspectorPanel from "./TwinInspectorPanel";
 import { DEFAULT_ZONES } from "./TwinOverlays";
 import { CANVAS_BG_OPTIONS, resolveCanvasBackdrop } from "./canvasBackdrop";
@@ -114,7 +116,7 @@ const DEFAULT_PREFS: ViewPrefs = {
   focusSelection: true,
   forceWebGL: false,
 };
-const DEFAULT_UI = { all: true, side: true, toolbar: true, inspector: true, log: true };
+const DEFAULT_UI = { all: true, side: true, toolbar: true, inspector: true, log: true, telemetry: true, telemetryExpanded: true };
 const DEFAULT_OVERLAYS: TwinOverlayPrefs = {
   statusHalos: true,
   pathTrails: true,
@@ -1271,6 +1273,7 @@ export function WorkPage() {
 
           {showUi && (
             <div className="work-top-hud">
+              <div className="work-top-hud-row">
               <div className={`work-toolbar evol-glass-card${ui.toolbar ? "" : " compact"}`}>
                 <Segmented
                   size="small"
@@ -1452,6 +1455,17 @@ export function WorkPage() {
                   }}
                 />
               )}
+              </div>
+
+              {ui.telemetry && (
+                <TelemetryHud
+                  stats={stats}
+                  backend={backend}
+                  expanded={ui.telemetryExpanded}
+                  onToggleExpanded={() => updateUi({ telemetryExpanded: !ui.telemetryExpanded })}
+                  onClose={() => updateUi({ telemetry: false })}
+                />
+              )}
             </div>
           )}
 
@@ -1532,14 +1546,26 @@ export function WorkPage() {
             </div>
           )}
 
-          <button
-            type="button"
-            className="work-ui-toggle"
-            onClick={() => updateUi({ all: !ui.all })}
-            title="Show / hide all panels (H)"
-          >
-            {showUi ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
+          <div className="work-stage-toggles">
+            {showUi && (
+              <button
+                type="button"
+                className={`work-ui-toggle${ui.telemetry ? " active" : ""}`}
+                onClick={() => updateUi({ telemetry: !ui.telemetry })}
+                title={ui.telemetry ? "Hide telemetry HUD" : "Show telemetry HUD (FPS, calls, memory)"}
+              >
+                <Gauge size={14} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="work-ui-toggle"
+              onClick={() => updateUi({ all: !ui.all })}
+              title="Show / hide all panels (H)"
+            >
+              {showUi ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
 
           {!loadingSets && sets.length === 0 && (
             <div

@@ -153,6 +153,8 @@ export interface ViewPrefs {
 }
 
 export interface PerfStats {
+  fps: number;
+  frameMs: number;
   calls: number;
   triangles: number;
   instNear: number;
@@ -161,6 +163,9 @@ export interface PerfStats {
   instCulled: number;
   instTotal: number;
   dynamic: number;
+  geometries: number;
+  textures: number;
+  heapMb?: number;
 }
 
 export type WorkspaceMode = "author" | "twin";

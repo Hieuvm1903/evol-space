@@ -319,12 +319,32 @@ function RuntimeDriver({
 function StatsProbe({ perf, vis, onStats }: {
   perf: React.MutableRefObject<PerfCounters>; vis: React.MutableRefObject<Map<string, VisEntry>>; onStats: (s: PerfStats) => void;
 }) {
-  const gl = useThree((s) => s.gl) as unknown as { info?: { render?: { calls: number; triangles: number } } };
-  const t = useRef(0);
-  useFrame((_, dt) => {
-    t.current += dt;
-    if (t.current < 0.5) return;
-    t.current = 0;
+  const gl = useThree((s) => s.gl) as unknown as {
+    info?: {
+      render?: { calls: number; triangles: number };
+      memory?: { geometries: number; textures: number };
+    };
+  };
+  const frames = useRef(0);
+  const lastSample = useRef<number | null>(null);
+
+  useFrame(() => {
+    frames.current += 1;
+    const now = performance.now();
+    if (lastSample.current === null) {
+      lastSample.current = now;
+      return;
+    }
+    const elapsedMs = now - lastSample.current;
+    if (elapsedMs < 500) return;
+
+    const frameCount = frames.current;
+    frames.current = 0;
+    lastSample.current = now;
+
+    const fps = Math.round((frameCount * 1000) / Math.max(1, elapsedMs));
+    const frameMs = Number((elapsedMs / Math.max(1, frameCount)).toFixed(1));
+
     let instNear = 0, instMid = 0, instFar = 0, instCulled = 0, instTotal = 0;
     for (const v of Object.values(perf.current)) {
       instNear += v.near;
@@ -333,7 +353,13 @@ function StatsProbe({ perf, vis, onStats }: {
       instCulled += v.culled;
       instTotal += v.total;
     }
+
+    const perfMem = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+    const heapMb = perfMem?.usedJSHeapSize ? Math.round(perfMem.usedJSHeapSize / (1024 * 1024)) : undefined;
+
     onStats({
+      fps,
+      frameMs,
       calls: gl.info?.render?.calls ?? 0,
       triangles: gl.info?.render?.triangles ?? 0,
       instNear,
@@ -342,6 +368,9 @@ function StatsProbe({ perf, vis, onStats }: {
       instCulled,
       instTotal,
       dynamic: vis.current.size,
+      geometries: gl.info?.memory?.geometries ?? 0,
+      textures: gl.info?.memory?.textures ?? 0,
+      heapMb,
     });
   });
   return null;
