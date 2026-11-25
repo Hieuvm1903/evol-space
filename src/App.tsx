@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { App as AntdApp, ConfigProvider, theme as antdTheme } from "antd";
+import { App as AntdApp, ConfigProvider } from "antd";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PlayerProvider } from "./features/player/PlayerProvider";
@@ -23,27 +23,9 @@ import { World3DPage } from "./pages/world3d/World3DPage";
 import { SharedPlacesPage } from "./pages/SharedPlacesPage";
 import { SharedAlbumPage } from "./pages/SharedAlbumPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
-// inside <Routes>
-
-// One dark theme for every antd component in the app (buttons, inputs,
-// cards, skeletons, alerts, toasts, ...) instead of re-declaring
-// ConfigProvider per-page. NowPlaying.tsx still wraps itself too — nested
-// ConfigProviders are fine and let that widget stay fully self-contained.
-const evolAntdTheme = {
-  algorithm: antdTheme.darkAlgorithm,
-  token: {
-    colorPrimary: "#8b6ff5",
-    colorInfo: "#22d3ee",
-    colorBgContainer: "#14121f",
-    colorBgElevated: "#1a1830",
-    colorBorder: "#2a2740",
-    colorTextBase: "#e8e6f5",
-    borderRadius: 10,
-    fontFamily: `"Be Vietnam Pro", sans-serif`,
-  },
-};
 function AppBody() {
   const location = useLocation();
   const is3DMode = location.pathname === "/3d";
@@ -69,12 +51,13 @@ function AppBody() {
           <Route path="/ascii" element={<AsciiPage />} />
           <Route path="/3d" element={<World3DPage />} />
           <Route path="/share/album/:token" element={<SharedAlbumPage />} />
-<Route path="/share/places/:token" element={<SharedPlacesPage />} />
+          <Route path="/share/places/:token" element={<SharedPlacesPage />} />
         </Routes>
       </main>
     </>
   );
 }
+
 function AntdFeedbackBridge() {
   const { notification, message } = AntdApp.useApp();
   useEffect(() => {
@@ -83,9 +66,10 @@ function AntdFeedbackBridge() {
   return null;
 }
 
-export default function App() {
+function ThemedApp() {
+  const { theme } = useTheme();
   return (
-    <ConfigProvider theme={evolAntdTheme}>
+    <ConfigProvider theme={theme.antd}>
       <AntdApp>
         <AntdFeedbackBridge />
         {/* ConfirmProvider wraps everything so useConfirm() works from any
@@ -106,5 +90,13 @@ export default function App() {
         </ConfirmProvider>
       </AntdApp>
     </ConfigProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <ThemedApp />
+    </ThemeProvider>
   );
 }

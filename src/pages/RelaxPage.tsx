@@ -85,7 +85,7 @@ export function RelaxPage() {
       {loading ? (
         <p className="placeholder-note">Loading…</p>
       ) : notes.length === 0 ? (
-        <Empty className="fade-in" description={<span style={{ color: "#9c97b8" }}>No thoughts shared yet.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty className="fade-in" description={<span style={{ color: "var(--evol-muted)" }}>No thoughts shared yet.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         notes.map((note, i) => (
           <div className="evol-card stagger-item" style={{ animationDelay: `${Math.min(i, 15) * 40}ms` }} key={note.id}>

@@ -11,7 +11,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  color: #9c97b8;
+  color: var(--evol-muted);
 }
 
 .elastic-slider-track-wrap {
@@ -32,7 +32,7 @@
   position: relative;
   width: 100%;
   border-radius: 999px;
-  background: #2a2740;
+  background: var(--evol-border);
   overflow: visible;
 }
 
@@ -42,7 +42,7 @@
   left: 0;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #8b6ff5, #22d3ee);
+  background: linear-gradient(90deg, var(--evol-green), var(--evol-green-light));
   pointer-events: none;
 }
 

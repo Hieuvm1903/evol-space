@@ -135,7 +135,7 @@ export function ProfilePage() {
     }
   }
 
-  const grey = { color: "#9c97b8" };
+  const grey = { color: "var(--evol-muted)" };
   const seg = (I: typeof UserRound, label: string) => (
     <span style={{ whiteSpace: "nowrap" }}>
       <I size={13} style={{ verticalAlign: -2, marginRight: 5 }} />

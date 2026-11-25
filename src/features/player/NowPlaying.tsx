@@ -19,6 +19,7 @@ import QueueList from "./QueueList";
 
 import "./NowPlaying.css";
 import BorderGlow from "../../components/BorderGlow";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export type { Track } from "./types";
 
@@ -54,6 +55,7 @@ function youtubeErrorReason(code: number): string {
 }
 
 export default function NowPlaying({ drag, onPersistLyrics }: Props) {
+  const { theme } = useTheme();
   const queue = usePlayerStore((s) => s.queue);
   const currentIdx = usePlayerStore((s) => s.currentIdx);
   const mode = usePlayerStore((s) => s.mode);
@@ -376,13 +378,13 @@ export default function NowPlaying({ drag, onPersistLyrics }: Props) {
           edgeSensitivity={30}
           className="np-panel-borderglow"
           glowColor="40 80 80"
-          backgroundColor="#120F17"
+          backgroundColor={theme.playerPanelBg}
           borderRadius={28}
           glowRadius={40}
           glowIntensity={1}
           coneSpread={25}
           animated={false}
-          colors={GLOW_COLORS}
+          colors={theme.playerGlowColors}
         >
           <div className="panel-inner">
 

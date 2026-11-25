@@ -149,7 +149,7 @@ export function LoginPage() {
                   help={usernameInvalid ? "No spaces or @." : undefined}
                 >
                   <Input
-                    prefix={<UserOutlined style={{ color: "#9c97b8" }} />}
+                    prefix={<UserOutlined style={{ color: "var(--evol-muted)" }} />}
                     placeholder="Handle (no spaces or @)"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -161,7 +161,7 @@ export function LoginPage() {
                 {tab === "signup" && (
                   <Form.Item label="Display name (optional)">
                     <Input
-                      prefix={<SmileOutlined style={{ color: "#9c97b8" }} />}
+                      prefix={<SmileOutlined style={{ color: "var(--evol-muted)" }} />}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       maxLength={40}
@@ -173,7 +173,7 @@ export function LoginPage() {
 
                 <Form.Item label="Password">
                   <Input.Password
-                    prefix={<LockOutlined style={{ color: "#9c97b8" }} />}
+                    prefix={<LockOutlined style={{ color: "var(--evol-muted)" }} />}
                     placeholder={tab === "signup" ? "6+ characters" : "Password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -189,7 +189,7 @@ export function LoginPage() {
                       help={confirmPassword && !passwordsMatch ? "Doesn't match." : undefined}
                     >
                       <Input.Password
-                        prefix={<LockOutlined style={{ color: "#9c97b8" }} />}
+                        prefix={<LockOutlined style={{ color: "var(--evol-muted)" }} />}
                         placeholder="Repeat password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}

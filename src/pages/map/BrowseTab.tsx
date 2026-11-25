@@ -64,7 +64,7 @@ export default function BrowseTab({
       <div className="map-sidebar-fixed">
         <div className="map-search-row">
           <Input
-            prefix={<Search size={14} color="#9c97b8" />}
+            prefix={<Search size={14} color="var(--evol-muted)" />}
             value={nameFilter}
             onChange={(e) => onNameFilterChange(e.target.value)}
             placeholder="Filter saved places…"
@@ -186,7 +186,7 @@ export default function BrowseTab({
         ) : places.length === 0 ? (
           <Empty
             description={
-              <span style={{ color: "#9c97b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: "var(--evol-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {hasFilters ? "No places match your filters." : (
                   <>
                     <span>No places saved yet.</span>

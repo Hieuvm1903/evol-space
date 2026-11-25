@@ -101,7 +101,7 @@
   color: var(--evol-text);
 }
 .confirm-btn-cancel:hover {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: var(--evol-border-strong);
 }
 
 .confirm-btn-primary {

@@ -1667,7 +1667,7 @@ export function PhotoboothPage() {
                       className="fade-in"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                       description={
-                        <span style={{ color: "#9c97b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ color: "var(--evol-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <span>No photos yet.</span>
                           <HelpTip content="Take or upload a photo and save it!" />
                         </span>
@@ -1679,7 +1679,7 @@ export function PhotoboothPage() {
                     <div className="pb-gallery-toolbar">
                       <Input
                         size="small"
-                        prefix={<Search size={13} color="#9c97b8" />}
+                        prefix={<Search size={13} color="var(--evol-muted)" />}
                         value={galleryQuery}
                         onChange={(e) => setGalleryQuery(e.target.value)}
                         placeholder="Search captions or filters…"
@@ -1711,7 +1711,7 @@ export function PhotoboothPage() {
                       <div className="pb-empty-center">
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description={<span style={{ color: "#9c97b8" }}>No matching photos.</span>}
+                          description={<span style={{ color: "var(--evol-muted)" }}>No matching photos.</span>}
                         />
                       </div>
                     ) : (

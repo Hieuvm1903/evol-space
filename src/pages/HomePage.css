@@ -41,7 +41,7 @@
 }
 
 .home-kicker-accent {
-  color: var(--evol-green-light);
+  color: var(--evol-accent-text);
   font-weight: 600;
 }
 
@@ -52,7 +52,7 @@
   line-height: 1.2;
   letter-spacing: -0.02em;
   text-wrap: balance;
-  background: linear-gradient(95deg, #f3f1ff 15%, #c4b5fd 60%, #22d3ee 100%);
+  background: var(--evol-heading-grad);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -61,8 +61,8 @@
 /* Signature poetic quote block */
 .home-quote-block {
   padding: 12px 0;
-  border-top: 1px solid rgba(196, 181, 253, 0.1);
-  border-bottom: 1px solid rgba(196, 181, 253, 0.1);
+  border-top: 1px solid var(--evol-divider);
+  border-bottom: 1px solid var(--evol-divider);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,7 +81,7 @@
   font-style: italic;
   font-size: clamp(0.88rem, 1.3vw, 1.02rem);
   line-height: 1.55;
-  color: #e4e1f7;
+  color: var(--evol-text);
   white-space: pre-line;
 }
 
@@ -101,8 +101,8 @@
 }
 
 .home-quote-replay:hover {
-  color: var(--evol-text);
-  border-color: rgba(139, 111, 245, 0.55);
+  color: var(--evol-text-strong);
+  border-color: var(--evol-green);
 }
 
 /* Hero actions */
@@ -120,7 +120,7 @@
   padding: 8px 16px;
   border-radius: 9px;
   background: linear-gradient(135deg, var(--evol-green), var(--evol-green-light));
-  color: #07060f;
+  color: var(--evol-on-accent);
   font-size: 0.84rem;
   font-weight: 700;
   text-decoration: none;
@@ -130,7 +130,7 @@
 }
 
 .home-primary-cta:hover {
-  color: #07060f;
+  color: var(--evol-on-accent);
   transform: translateY(-1px);
   box-shadow: var(--evol-glow);
 }
@@ -142,20 +142,20 @@
   padding: 8px 14px;
   border-radius: 9px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   color: var(--evol-text);
   font-size: 0.84rem;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease), color 0.15s var(--ease);
 }
 
 .home-secondary-cta:hover {
-  border-color: rgba(34, 211, 238, 0.55);
-  background: rgba(34, 211, 238, 0.08);
-  color: #fff;
+  border-color: var(--evol-green-light);
+  background: var(--evol-surface-hover);
+  color: var(--evol-text-strong);
 }
 
 /* ---- Right memory pane (exact fit, no title) ---- */
@@ -165,7 +165,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #161616;
+  background: var(--evol-card);
   align-self: center;
 }
 
@@ -193,15 +193,17 @@
   padding: 14px 16px;
   border-radius: 14px;
   border: 1px solid var(--evol-glass-border);
-  background: rgba(20, 18, 33, 0.84);
+  background: var(--evol-glass-solid);
   color: var(--evol-text);
-  transition: border-color 0.18s var(--ease), transform 0.18s var(--ease);
+  box-shadow: var(--evol-shadow-soft);
+  transition: border-color 0.18s var(--ease), transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 
 .home-space-card:hover {
-  border-color: rgba(139, 111, 245, 0.5);
+  border-color: var(--evol-green);
   transform: translateY(-2px);
-  color: #fff;
+  color: var(--evol-text-strong);
+  box-shadow: var(--evol-glow);
 }
 
 .home-space-top {
@@ -219,7 +221,7 @@
 }
 
 .home-space-icon {
-  color: var(--evol-green-light);
+  color: var(--evol-accent-text);
   flex-shrink: 0;
 }
 
@@ -241,7 +243,7 @@
 
 .home-space-card:hover .home-space-arrow {
   transform: translate(2px, -2px);
-  color: var(--evol-text);
+  color: var(--evol-text-strong);
 }
 
 .home-space-meta {

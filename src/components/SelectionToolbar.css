@@ -30,7 +30,7 @@
   flex-shrink: 0;
   transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
 }
-.selection-toolbar-cancel:hover { color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.selection-toolbar-cancel:hover { color: var(--evol-text-strong); border-color: var(--evol-border-strong); }
 
 .selection-toolbar-count {
   font-size: 0.82rem;
@@ -46,7 +46,7 @@
   padding: 7px 13px;
   border-radius: 999px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   color: var(--evol-text);
   font-size: 0.8rem;
   font-weight: 600;

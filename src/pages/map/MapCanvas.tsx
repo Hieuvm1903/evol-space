@@ -212,7 +212,7 @@ export default function MapCanvas({
         <div className="map-geo-search-box">
           <Input
             size="middle"
-            prefix={<Search size={14} color="#9c97b8" />}
+            prefix={<Search size={14} color="var(--evol-muted)" />}
             placeholder="Jump to city, street, or landmark…"
             value={searchQuery}
             onChange={(e) => {

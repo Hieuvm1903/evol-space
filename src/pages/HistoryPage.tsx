@@ -13,7 +13,7 @@ function videoIdFromUrl(url: string): string | null {
 
 function PlaylistTab({ playlist }: { playlist: [string, string][] }) {
   if (!playlist.length) {
-    return <Empty description={<span style={{ color: "#9c97b8" }}>Nothing here yet.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+    return <Empty description={<span style={{ color: "var(--evol-muted)" }}>Nothing here yet.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
   return (
     <div>

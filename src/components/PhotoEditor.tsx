@@ -450,7 +450,7 @@ export default function PhotoEditor({ base, state, onChange }: Props) {
                   onChange={(e) => setMotifQuery(e.target.value)}
                   onPressEnter={() => void runMotifSearch(motifQuery)}
                   placeholder="Search motifs (sparkle, floral, ribbon…)"
-                  prefix={<Search size={12} color="#9c97b8" />}
+                  prefix={<Search size={12} color="var(--evol-muted)" />}
                   allowClear
                 />
                 <Button size="small" type="primary" loading={motifsLoading} onClick={() => void runMotifSearch(motifQuery)}>

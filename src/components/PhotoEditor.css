@@ -9,14 +9,14 @@
   width: 100%;
   border-radius: 14px;
   border: 1px solid var(--evol-border);
-  background: #08070f;
+  background: var(--evol-stage-bg);
   overflow: hidden;
 }
 .pe-canvas-viewport.zoomed {
   max-height: 44vh;
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: #8b6ff5 transparent;
+  scrollbar-color: var(--evol-green) transparent;
 }
 .pe-canvas {
   width: 100%;
@@ -48,7 +48,7 @@
   padding: 4px 10px;
   border-radius: 8px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   color: var(--evol-muted);
   font-size: 0.74rem;
   font-weight: 500;
@@ -57,10 +57,10 @@
   user-select: none;
   transition: border-color 0.15s var(--ease), color 0.15s var(--ease), background 0.15s var(--ease);
 }
-.pe-compare-btn:hover { color: var(--evol-text); border-color: rgba(139, 111, 245, 0.55); }
+.pe-compare-btn:hover { color: var(--evol-text-strong); border-color: var(--evol-green); }
 .pe-compare-btn.active {
-  color: #07060f;
-  background: #22d3ee;
+  color: var(--evol-on-accent);
+  background: var(--evol-green-light);
   border-color: transparent;
   font-weight: 600;
 }
@@ -70,7 +70,7 @@
   align-items: center;
   border-radius: 8px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   overflow: hidden;
 }
 .pe-zoom-btn,
@@ -95,8 +95,8 @@
 }
 .pe-zoom-btn:hover:not(:disabled),
 .pe-zoom-readout:hover {
-  color: var(--evol-text);
-  background: rgba(139, 111, 245, 0.18);
+  color: var(--evol-text-strong);
+  background: color-mix(in srgb, var(--evol-green) 16%, transparent);
 }
 .pe-zoom-btn:disabled {
   opacity: 0.35;
@@ -117,22 +117,22 @@
 .pe-panel { display: flex; flex-direction: column; gap: 6px; }
 .pe-row { display: flex; align-items: center; gap: 10px; }
 .pe-row-label { width: 82px; font-size: 0.76rem; color: var(--evol-muted); flex-shrink: 0; }
-.pe-row-val { width: 52px; text-align: right; font-size: 0.72rem; color: #22d3ee; font-variant-numeric: tabular-nums; }
+.pe-row-val { width: 52px; text-align: right; font-size: 0.72rem; color: var(--evol-accent-text); font-variant-numeric: tabular-nums; }
 .pe-chip-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .pe-emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 4px; }
 .pe-emoji {
   font-size: 1.3rem; padding: 4px 0; border-radius: 8px; cursor: pointer;
-  background: rgba(255,255,255,0.03); border: 1px solid var(--evol-border);
+  background: var(--evol-surface-subtle); border: 1px solid var(--evol-border);
   transition: transform 0.12s var(--ease), border-color 0.12s var(--ease);
 }
-.pe-emoji:hover { transform: scale(1.12); border-color: #8b6ff5; }
+.pe-emoji:hover { transform: scale(1.12); border-color: var(--evol-green); }
 .pe-text-row { display: flex; gap: 6px; align-items: center; }
 .pe-color-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--evol-muted); flex-wrap: wrap; }
 .pe-color-row input[type="color"], .pe-text-row input[type="color"] {
   width: 30px; height: 24px; padding: 0; border: 1px solid var(--evol-border);
   border-radius: 6px; background: none; cursor: pointer;
 }
-.pe-hint { font-size: 0.72rem; color: #7d78a0; margin: 2px 0; }
+.pe-hint { font-size: 0.72rem; color: var(--evol-muted); margin: 2px 0; }
 
 /* ---- API Frame & Motif Picker ---- */
 .pe-api-frame-section {
@@ -177,7 +177,7 @@
   padding: 6px;
   border-radius: 8px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -186,12 +186,12 @@
 }
 .pe-motif-btn:hover {
   transform: scale(1.06);
-  border-color: #8b6ff5;
-  background: rgba(139, 111, 245, 0.12);
+  border-color: var(--evol-green);
+  background: color-mix(in srgb, var(--evol-green) 14%, transparent);
 }
 .pe-motif-btn.active {
-  border-color: #22d3ee;
-  background: rgba(34, 211, 238, 0.16);
+  border-color: var(--evol-green-light);
+  background: color-mix(in srgb, var(--evol-green-light) 16%, transparent);
 }
 .pe-motif-btn img {
   width: 22px;

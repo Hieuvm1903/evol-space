@@ -29,7 +29,7 @@
   color: var(--evol-muted);
 }
 .evol-notice .ant-notification-notice-close:hover {
-  color: #fff;
+  color: var(--evol-text-strong);
 }
 
 .evol-notice-success { border-left-color: var(--evol-green-light); }

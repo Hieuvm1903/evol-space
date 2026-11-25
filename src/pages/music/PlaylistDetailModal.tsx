@@ -136,7 +136,7 @@ export default function PlaylistDetailModal({ open, onClose, playlistUrl, title,
       {loading ? (
         <Skeleton active paragraph={{ rows: 6 }} />
       ) : !videos || videos.length === 0 ? (
-        <Empty description={<span style={{ color: "#9c97b8" }}>No tracks found.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description={<span style={{ color: "var(--evol-muted)" }}>No tracks found.</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <>
           {canImport && (

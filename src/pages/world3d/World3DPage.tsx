@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import HelpTip from "../../components/HelpTip";
+import ThemeSwitcher from "../../components/ThemeSwitcher";
 import { createMonument, type MonumentHandle } from "./worldModels";
 import {
   createAsciiScreenTexture,
@@ -812,6 +813,7 @@ export function World3DPage() {
         </div>
 
         <div className="world3d-top-actions">
+          <ThemeSwitcher compact />
           <button
             type="button"
             className="world3d-action-btn"

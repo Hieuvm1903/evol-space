@@ -16,7 +16,7 @@ interface Props {
 export default function MapSettingsTab({ mapMode, onMapModeChange, activeTools, onActiveToolsChange }: Props) {
   return (
     <div className="map-sidebar-body" style={{ paddingTop: 14 }}>
-      <Text style={{ fontSize: 12, color: "#9c97b8" }}>Map mode</Text>
+      <Text style={{ fontSize: 12, color: "var(--evol-muted)" }}>Map mode</Text>
       <div className="map-mode-grid">
         {MAP_MODE_OPTIONS.map((opt) => {
           const Icon = opt.icon;
@@ -35,7 +35,7 @@ export default function MapSettingsTab({ mapMode, onMapModeChange, activeTools, 
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 18 }}>
-        <Text style={{ fontSize: 12, color: "#9c97b8" }}>Map tools</Text>
+        <Text style={{ fontSize: 12, color: "var(--evol-muted)" }}>Map tools</Text>
         <HelpTip content="Measure: click points on the map, double-click to clear. Draw: click-drag on the map to sketch; panning is disabled while it's on." />
       </div>
       <div className="map-tool-list">

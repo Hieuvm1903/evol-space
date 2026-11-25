@@ -3,6 +3,7 @@ import { Play, Pause } from "lucide-react";
 import type { Track } from "../types";
 import GlassSurface from "../../../components/GlassSurface";
 import FoldText from "../../../components/FoldText";
+import { useTheme } from "../../../contexts/ThemeContext";
 
 interface Props {
   track: Track;
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function PillView({ track, playing, visible, onPointerDownDrag, onTap, onTogglePlayPause }: Props) {
+  const { theme } = useTheme();
   return (
     <div id="pill-wrap" style={{ display: visible ? "block" : "none" }}>
       <div id="pill" title="Drag to move · tap to expand" onPointerDown={onPointerDownDrag} onClick={onTap}>
@@ -40,7 +42,7 @@ export default function PillView({ track, playing, visible, onPointerDownDrag, o
             creaseShading={0.55}
             fontSize={10}
             fontWeight={800}
-            color="#f7f2e8"
+            color={theme.pillTitleColor}
           /></span>
           <span className="spin-disk-wrap spin-disk-sm">
             <span

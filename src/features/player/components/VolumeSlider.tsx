@@ -10,7 +10,7 @@ export default function VolumeSlider({ volume, onChange }: Props) {
   const Icon = volume === 0 ? VolumeX : volume < 33 ? Volume : volume < 66 ? Volume1 : Volume2;
   return (
     <div id="volume-row">
-      <Icon size={14} color="#9c97b8" />
+      <Icon size={14} color="var(--evol-muted)" />
       <input
         type="range"
         className="np-range"

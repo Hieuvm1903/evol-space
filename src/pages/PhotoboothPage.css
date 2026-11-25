@@ -66,7 +66,7 @@
   flex-shrink: 0;
   border-radius: 14px;
   overflow: hidden;
-  background: #08070f;
+  background: var(--evol-stage-bg);
   border: 1px solid var(--evol-glass-border);
   box-shadow: var(--evol-shadow-soft);
 }
@@ -277,7 +277,7 @@
   padding: 6px 6px;
   border-radius: 8px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   color: var(--evol-muted);
   font-size: 0.74rem;
   font-weight: 500;
@@ -286,12 +286,12 @@
   transition: border-color 0.15s var(--ease), color 0.15s var(--ease), background 0.15s var(--ease);
 }
 .pb-trigger-chip:hover:not(:disabled) {
-  color: var(--evol-text);
-  border-color: rgba(139, 111, 245, 0.55);
+  color: var(--evol-text-strong);
+  border-color: var(--evol-green);
 }
 .pb-trigger-chip.active {
-  color: #07060f;
-  background: #22d3ee;
+  color: var(--evol-on-accent);
+  background: var(--evol-green-light);
   border-color: transparent;
   font-weight: 600;
 }
@@ -431,13 +431,13 @@
   justify-content: center;
   border-radius: 14px;
   border: 1px dashed var(--evol-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--evol-surface-subtle);
   padding: 20px;
   transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
 }
 .pb-preview-frame.drag-over {
-  border-color: #22d3ee;
-  background: rgba(34, 211, 238, 0.08);
+  border-color: var(--evol-green-light);
+  background: color-mix(in srgb, var(--evol-green-light) 10%, transparent);
 }
 .pb-preview-frame .placeholder-note { padding: 0 20px; text-align: center; margin: 0; }
 
@@ -454,11 +454,11 @@
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: #8b6ff5 transparent;
+  scrollbar-color: var(--evol-green) transparent;
 }
 .pb-gallery-scroll::-webkit-scrollbar { width: 6px; }
 .pb-gallery-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #8b6ff5, #22d3ee);
+  background: linear-gradient(180deg, var(--evol-green), var(--evol-green-light));
   border-radius: 4px;
 }
 .pb-gallery-grid {
@@ -475,12 +475,12 @@
   transition: border-color 0.15s var(--ease), transform 0.15s var(--ease);
 }
 .pb-gallery-card:hover {
-  border-color: rgba(139, 111, 245, 0.55);
+  border-color: var(--evol-green);
   transform: translateY(-1px);
 }
 .pb-gallery-card.bulk-selected {
-  border-color: #22d3ee;
-  background: rgba(34, 211, 238, 0.08);
+  border-color: var(--evol-green-light);
+  background: color-mix(in srgb, var(--evol-green-light) 10%, transparent);
 }
 .pb-gallery-thumb-wrap {
   position: relative;
@@ -499,7 +499,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   border: 1px dashed var(--evol-border);
   color: var(--evol-muted);
   font-size: 0.74rem;
@@ -605,11 +605,11 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: var(--evol-text);
+  color: #f8fafc;
 }
 .pb-lightbox-meta span {
   font-size: 0.78rem;
-  color: var(--evol-muted);
+  color: #cbd5e1;
   font-variant-numeric: tabular-nums;
 }
 .pb-lightbox-actions {
@@ -667,7 +667,7 @@
   padding: 10px;
   border-radius: 12px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--evol-surface-subtle);
 }
 .pb-strip-slots-row {
   display: grid;
@@ -683,20 +683,20 @@
   padding: 4px;
   border-radius: 9px;
   border: 1px solid var(--evol-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--evol-surface-subtle);
   color: var(--evol-muted);
   cursor: pointer;
   transition: border-color 0.15s var(--ease), background 0.15s var(--ease), transform 0.12s var(--ease);
 }
 .pb-slot-card:hover {
-  border-color: rgba(139, 111, 245, 0.6);
-  color: var(--evol-text);
+  border-color: var(--evol-green);
+  color: var(--evol-text-strong);
   transform: translateY(-1px);
 }
 .pb-slot-card.active {
-  border-color: #22d3ee;
-  background: rgba(34, 211, 238, 0.12);
-  color: #22d3ee;
+  border-color: var(--evol-green-light);
+  background: color-mix(in srgb, var(--evol-green-light) 12%, transparent);
+  color: var(--evol-accent-text);
 }
 .pb-slot-card img {
   width: 100%;
@@ -746,6 +746,6 @@
 .pb-slot-editing-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #22d3ee;
+  color: var(--evol-accent-text);
   white-space: nowrap;
 }

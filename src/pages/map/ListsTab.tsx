@@ -118,7 +118,7 @@ export default function ListsTab({ userId, places, draftIds, onDraftConsumed, on
           </div>
         </div>
 
-        <Input size="small" prefix={<Search size={13} color="#9c97b8" />} value={q}
+        <Input size="small" prefix={<Search size={13} color="var(--evol-muted)" />} value={q}
           onChange={(e) => setQ(e.target.value)} placeholder="Search your places…" allowClear />
         <div className="evol-card-meta" style={{ margin: "8px 0 6px" }}>
           {picked.length} of {places.length} selected
@@ -169,7 +169,7 @@ export default function ListsTab({ userId, places, draftIds, onDraftConsumed, on
         <p className="placeholder-note">Loading…</p>
       ) : lists.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<span style={{ color: "#9c97b8" }}>No lists yet.</span>} />
+          description={<span style={{ color: "var(--evol-muted)" }}>No lists yet.</span>} />
       ) : (
         lists.map((l) => {
           const viewing = activeListId === l.id;

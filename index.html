@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon-no-border.svg" />
     <title>EVOL Space</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("evol.theme");
+          var valid = ["evol", "light", "warm", "hc-dark", "hc-light"];
+          if (!t || valid.indexOf(t) === -1) t = "evol";
+          var dark = t === "evol" || t === "hc-dark";
+          var root = document.documentElement;
+          root.dataset.theme = t;
+          root.classList.toggle("dark", dark);
+          root.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

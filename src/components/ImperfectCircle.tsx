@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
 
 /**
  * GalaxyRing
@@ -20,6 +20,7 @@ const GalaxyRing = ({
   showGlow = true,
 }) => {
   const [animKey, setAnimKey] = useState(0);
+  const uid = useId().replace(/:/g, "");
   useEffect(() => {
     setAnimKey((k) => k + 1);
   }, [trigger]);
@@ -58,8 +59,8 @@ const GalaxyRing = ({
   const totalGlow = duration + fadeTail;
   const drawFraction = ((duration / totalGlow) * 100).toFixed(2);
 
-  const gradientId = "galaxy-ring-grad";
-  const glowFilterId = "galaxy-ring-glow-blur";
+  const gradientId = `galaxy-ring-grad-${uid}`;
+  const glowFilterId = `galaxy-ring-glow-blur-${uid}`;
 
   return (
     <div className={className} style={{ position: "relative", width: size, display: "inline-block" }}>

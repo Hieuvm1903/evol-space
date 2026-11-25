@@ -1,8 +1,10 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, LogIn, Music2, Clock, Wind, Map as MapIcon, Camera, KeyRound, type LucideIcon, Hammer, Terminal, UserRound, Orbit } from "lucide-react";
+import { Sparkles, LogIn, Music2, Map as MapIcon, Camera, KeyRound, type LucideIcon, Hammer, Terminal, UserRound, Orbit } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import GalaxyRing from "./ImperfectCircle";
+import ThemeSwitcher from "./ThemeSwitcher";
 
 const NAV_ITEMS: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Home", path: "/", icon: Sparkles },
@@ -17,35 +19,35 @@ const NAV_ITEMS: { label: string; path: string; icon: LucideIcon }[] = [
 
 export function NavBar() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const location = useLocation();
-const items = [
-  NAV_ITEMS[0], // Home
-  user
-    ? { label: "Profile", path: "/profile", icon: UserRound }
-    : { label: "Login", path: "/login", icon: LogIn },
-  ...NAV_ITEMS.slice(1),
-];
+  const items = [
+    NAV_ITEMS[0], // Home
+    user
+      ? { label: "Profile", path: "/profile", icon: UserRound }
+      : { label: "Login", path: "/login", icon: LogIn },
+    ...NAV_ITEMS.slice(1),
+  ];
   return (
     <nav className="navbar">
       <span className="navbar-brand">
-        <Sparkles size={16} style={{ verticalAlign: -2, marginRight: 6, color: "#22d3ee" }} />
+        <Sparkles size={16} style={{ verticalAlign: -2, marginRight: 6, color: "var(--evol-green-light)" }} />
         <span aria-label="EVOL Space">
           <span aria-hidden="true">
             EV
-            <span className="navbar-logo-o" >
-                  <GalaxyRing
-                trigger={location.pathname}
+            <span className="navbar-logo-o">
+              <GalaxyRing
+                trigger={`${location.pathname}-${theme.id}`}
                 size={16}
                 strokeWidth={2}
                 minRadius={4.4}
                 duration={2.2}
                 glowBlur={1}
-                lineColor="#432aff"
-                finalColor="#fff"
+                lineColor={theme.navRingLine}
+                finalColor={theme.navRingFinal}
                 className="navbar-o-ring"
                 showGlow={false}
               />
-             
             </span>
             L Space
           </span>
@@ -62,7 +64,10 @@ const items = [
           );
         })}
       </div>
-      {user && <span className="navbar-user">{user.name}</span>}
+      <div className="navbar-actions">
+        <ThemeSwitcher />
+        {user && <span className="navbar-user">{user.name}</span>}
+      </div>
     </nav>
   );
 }
