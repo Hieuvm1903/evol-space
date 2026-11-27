@@ -3,17 +3,19 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type {
-  AssetTelemetry,
-  CameraPreset,
-  HealthStatus,
-  SceneObjectData,
-  TwinOverlayPrefs,
-  Vec3,
-  WorkspaceMode,
-  ZoneDef,
+import {
+  getEntityAsset,
+  type AssetTelemetry,
+  type CameraPreset,
+  type HealthStatus,
+  type SceneObjectData,
+  type TwinOverlayPrefs,
+  type Vec3,
+  type WorkspaceMode,
+  type ZoneDef,
 } from "../../lib/workTypes";
 import type { Runtime } from "./runtime";
+import type { RosBridgeClient } from "./rosBridge";
 import { BASE_ORTHO_SPAN, BASE_PERSP_FOV } from "./lodCompute";
 
 const STATUS_COLORS: Record<HealthStatus, string> = {
@@ -22,18 +24,6 @@ const STATUS_COLORS: Record<HealthStatus, string> = {
   fault: "#ef4444",
   offline: "#64748b",
 };
-
-const OVERLAY_ASSETS = new Set([
-  "robot",
-  "drone",
-  "robot_arm",
-  "robot_transfer",
-  "humanoid",
-  "truck",
-  "conveyor",
-  "station",
-  "charger",
-]);
 
 const CAMERA_PRESETS: Record<CameraPreset, { pos: Vec3; target: Vec3 }> = {
   overview: { pos: [14.5, 11.5, 17.5], target: [0.0, 1.0, 2.2] },
@@ -255,7 +245,7 @@ export function ZoneHeatmapOverlay({
     const objPos = new Map<string, [number, number]>();
     const v = new THREE.Vector3();
     for (const o of objects) {
-      if (o.kind !== "model") continue;
+      if (o.kind !== "robot" && o.kind !== "obstacle") continue;
       const e = runtime.byId.get(o.id);
       if (e) {
         objPos.set(o.id, [e.pos.x, e.pos.z]);
@@ -265,7 +255,7 @@ export function ZoneHeatmapOverlay({
           v.setFromMatrixPosition(wm);
           objPos.set(o.id, [v.x, v.z]);
         } else {
-          objPos.set(o.id, [o.position[0], o.position[2]]);
+          objPos.set(o.id, [o.transform.position[0], o.transform.position[2]]);
         }
       }
     }
@@ -276,7 +266,7 @@ export function ZoneHeatmapOverlay({
       for (const [id, [px, pz]] of objPos.entries()) {
         if (px >= z.x[0] && px <= z.x[1] && pz >= z.z[0] && pz <= z.z[1]) {
           const tm = tMap.get(id);
-          if (tm && OVERLAY_ASSETS.has(tm.asset ?? "")) inside.push(tm);
+          if (tm) inside.push(tm);
         }
       }
       if (inside.length > 0) {
@@ -529,14 +519,15 @@ function AssetTwinOverlay({
   const haloRef = useRef<THREE.Group>(null);
   const labelRef = useRef<THREE.Group>(null);
   const tmpV = useMemo(() => new THREE.Vector3(), []);
-  const radius = overlayRadius(obj.asset);
-  const labelY = overlayLabelY(obj.asset);
+  const asset = getEntityAsset(obj);
+  const radius = overlayRadius(asset);
+  const labelY = overlayLabelY(asset);
 
   useFrame(() => {
     const entity = runtime.byId.get(obj.id);
-    let px = obj.position[0];
-    let py = obj.position[1];
-    let pz = obj.position[2];
+    let px = obj.transform.position[0];
+    let py = obj.transform.position[1];
+    let pz = obj.transform.position[2];
     if (entity) {
       px = entity.pos.x;
       py = entity.pos.y;
@@ -561,15 +552,15 @@ function AssetTwinOverlay({
       const v = new THREE.Vector3().setFromMatrixPosition(world);
       return [v.x, v.y, v.z];
     }
-    return obj.position;
-  }, [world, obj.position]);
+    return obj.transform.position;
+  }, [world, obj.transform.position]);
 
   const metricText =
     telemetry.status === "fault"
       ? "FAULT"
-      : obj.asset === "robot" || obj.asset === "drone"
+      : asset === "robot" || asset === "drone"
         ? `${telemetry.speedMps.toFixed(1)} m/s · ${Math.round(telemetry.batteryPct)}%`
-        : obj.asset === "humanoid" || obj.asset === "truck"
+        : asset === "humanoid" || telemetry.speedMps > 0.05
           ? `${telemetry.speedMps.toFixed(1)} m/s · ${Math.round(telemetry.utilizationPct)}%`
           : `${Math.round(telemetry.utilizationPct)}% load`;
 
@@ -672,7 +663,7 @@ export function TwinOverlays({
       )}
       {workspaceMode === "twin" &&
         objects
-          .filter((o) => o.kind === "model" && OVERLAY_ASSETS.has(o.asset ?? ""))
+          .filter((o) => o.kind === "robot")
           .map((o) => {
             const t = telemetryById.get(o.id);
             if (!t) return null;
@@ -691,3 +682,152 @@ export function TwinOverlays({
     </>
   );
 }
+
+const MAX_LIDAR_PTS = 256;
+
+/** Live 3D point cloud rendering incoming ROS2 sensor_msgs/LaserScan (/amr_1/scan). */
+export function RosLidarOverlay({
+  rosClient,
+  runtime,
+  enabled,
+}: {
+  rosClient: RosBridgeClient;
+  runtime: Runtime;
+  enabled: boolean;
+}) {
+  const geom = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const positions = new Float32Array(MAX_LIDAR_PTS * 3);
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    g.setDrawRange(0, 0);
+    return g;
+  }, []);
+
+  useEffect(() => () => geom.dispose(), [geom]);
+
+  useFrame(() => {
+    if (!enabled || rosClient.getStatus() !== "connected") {
+      if (geom.drawRange.count !== 0) geom.setDrawRange(0, 0);
+      return;
+    }
+    const scan = rosClient.scans.get("AMR-1");
+    if (!scan || scan.ranges.length === 0) {
+      if (geom.drawRange.count !== 0) geom.setDrawRange(0, 0);
+      return;
+    }
+
+    // Use live entity pose if present in runtime, else ROS pose
+    let ox = 0;
+    let oy = 0.24;
+    let oz = 0;
+    let yaw = 0;
+    let found = false;
+    for (const e of runtime.byId.values()) {
+      if (e.label === scan.id) {
+        ox = e.pos.x;
+        oy = e.pos.y + 0.24;
+        oz = e.pos.z;
+        yaw = e.yaw;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      const rp = rosClient.poses.get(scan.id);
+      if (!rp) return;
+      ox = rp.pos[0];
+      oy = rp.pos[1] + 0.24;
+      oz = rp.pos[2];
+      yaw = rp.yaw;
+    }
+
+    const attr = geom.getAttribute("position") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    let count = 0;
+    const step = Math.max(1, Math.floor(scan.ranges.length / MAX_LIDAR_PTS));
+    for (let i = 0; i < scan.ranges.length && count < MAX_LIDAR_PTS; i += step) {
+      const r = scan.ranges[i];
+      if (!Number.isFinite(r) || r < scan.rangeMin || r >= scan.rangeMax - 0.05) continue;
+      const a = yaw + scan.angleMin + i * scan.angleIncrement;
+      const base = count * 3;
+      arr[base] = ox + Math.cos(a) * r;
+      arr[base + 1] = oy;
+      arr[base + 2] = oz - Math.sin(a) * r;
+      count++;
+    }
+    attr.needsUpdate = true;
+    geom.setDrawRange(0, count);
+  });
+
+  if (!enabled) return null;
+
+  return (
+    <points geometry={geom} frustumCulled={false}>
+      <pointsMaterial color="#34d399" size={0.14} sizeAttenuation transparent opacity={0.92} depthWrite={false} />
+    </points>
+  );
+}
+
+/** Interactive floor picker for sending ROS2 PoseStamped Nav2 goals. */
+export function RosNavGoalOverlay({
+  active,
+  activeGoal,
+  onPickGoal,
+}: {
+  active: boolean;
+  activeGoal: [number, number] | null;
+  onPickGoal: (x: number, z: number) => void;
+}) {
+  const [hoverPt, setHoverPt] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    if (!active) setHoverPt(null);
+  }, [active]);
+
+  return (
+    <group>
+      {active && (
+        <mesh
+          position={[0, 0.006, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onPointerMove={(e) => {
+            e.stopPropagation();
+            setHoverPt([Number(e.point.x.toFixed(2)), Number(e.point.z.toFixed(2))]);
+          }}
+          onClick={(e) => {
+            if (e.delta > 4) return;
+            e.stopPropagation();
+            onPickGoal(Number(e.point.x.toFixed(2)), Number(e.point.z.toFixed(2)));
+          }}
+        >
+          <planeGeometry args={[160, 160]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
+
+      {active && hoverPt && (
+        <group position={[hoverPt[0], 0.025, hoverPt[1]]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.24, 0.34, 28]} />
+            <meshBasicMaterial color="#34d399" transparent opacity={0.9} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
+          <Html center position={[0, 0.25, 0]} style={{ pointerEvents: "none" }}>
+            <div className="work-area-badge-3d" style={{ borderColor: "#34d399" }}>
+              NavGoal [{hoverPt[0].toFixed(1)}, {(-hoverPt[1]).toFixed(1)}] ROS
+            </div>
+          </Html>
+        </group>
+      )}
+
+      {activeGoal && (
+        <group position={[activeGoal[0], 0.02, activeGoal[1]]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.18, 0.28, 24]} />
+            <meshBasicMaterial color="#22d3ee" transparent opacity={0.85} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
+        </group>
+      )}
+    </group>
+  );
+}
+

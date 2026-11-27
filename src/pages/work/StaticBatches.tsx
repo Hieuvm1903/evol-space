@@ -240,12 +240,13 @@ export default function StaticBatches({
   const groups = useMemo(() => {
     const g = new Map<string, BatchItem[]>();
     for (const o of statics) {
-      if (o.kind !== "model" || !o.asset || !assetUrls[o.asset]) continue;
+      const asset = o.components.renderer?.asset;
+      if (!asset || !assetUrls[asset]) continue;
       const m = worlds.get(o.id);
       if (!m) continue;
-      const list = g.get(o.asset);
+      const list = g.get(asset);
       if (list) list.push({ id: o.id, m });
-      else g.set(o.asset, [{ id: o.id, m }]);
+      else g.set(asset, [{ id: o.id, m }]);
     }
     return g;
   }, [statics, worlds, assetUrls]);

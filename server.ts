@@ -1,6 +1,8 @@
 import express, { type Request, type Response } from "express";
+import http from "node:http";
 import path from "node:path";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { VirtualRosRuntime } from "./server/rosRuntime";
 
 try {
   // Load .env variables (e.g. VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) if present locally
@@ -589,6 +591,8 @@ async function startServer() {
 
   app.use(express.json({ limit: "8mb" }));
 
+  const rosRuntime = new VirtualRosRuntime();
+
   app.get("/api/health", (_req: Request, res: Response) => {
     const hasKey = Boolean(
       process.env.GEMINI_API_KEY?.trim() ||
@@ -598,7 +602,12 @@ async function startServer() {
     res.json({
       ok: true,
       geminiConfigured: hasKey,
+      rosBridge: rosRuntime.getStatus().running,
     });
+  });
+
+  app.get("/api/ros/status", (_req: Request, res: Response) => {
+    res.json(rosRuntime.getStatus());
   });
 
   app.post("/api/work/generate-model", async (req: Request, res: Response) => {
@@ -686,8 +695,11 @@ async function startServer() {
     });
   }
 
-  app.listen(port, "0.0.0.0", () => {
-    console.log(`[EVOL Space] server listening on http://0.0.0.0:${port}`);
+  const server = http.createServer(app);
+  rosRuntime.attach(server);
+
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`[EVOL Space] server listening on http://0.0.0.0:${port} (ROS bridge at /ws/ros)`);
   });
 }
 

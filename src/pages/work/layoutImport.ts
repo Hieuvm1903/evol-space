@@ -1,5 +1,5 @@
 import { newId } from "../../lib/sceneMath";
-import type { SceneObjectData, ZoneDef } from "../../lib/workTypes";
+import type { SceneObjectData, Vec3, ZoneDef } from "../../lib/workTypes";
 import { SCRIPT_TEMPLATES } from "./script";
 
 export function extractZones(layout: any): ZoneDef[] {
@@ -9,53 +9,115 @@ export function extractZones(layout: any): ZoneDef[] {
   );
 }
 
-/** Turns model-sand3d layout.json (v1 or v2) into a scene hierarchy:
- *    Facility > warehouse, track, chargers              (static instanced)
- *    Warehouse > Row-n > rack > totes                   (static instanced)
- *    Equipment > conveyor, station, ARM-1, XFER-1       (conveyor + workcells)
- *    Cargo > pallet, goods, bag                         (belt items dynamic, dock items static)
- *    Fleet > AMR-n, DR-n drones, HM-1 worker, TR-1      (dynamic scripted actors)
+/** Turns model-sand3d layout.json (v1 or v2) into a Unity-style Entity hierarchy:
+ *    Facility > warehouse, track, chargers        (obstacles: Transform + MeshRenderer)
+ *    Warehouse > Row-n > rack > totes             (obstacles: Transform + MeshRenderer)
+ *    Equipment > conveyor, station                (obstacles: Transform + MeshRenderer)
+ *    Equipment > ARM-1, XFER-1                    (robots: Transform + MeshRenderer + RobotScript)
+ *    Cargo > pallet, goods, bag                   (obstacles: Transform + MeshRenderer)
+ *    Robots & Fleet > AMR-n, DR-n, HM-1           (robots: Transform + MeshRenderer + RobotScript)
  */
 export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[] {
   const out: SceneObjectData[] = [];
-  const mk = (p: Partial<SceneObjectData> & { label: string }): SceneObjectData => {
+
+  const mkGroup = (label: string, parentId: string | null = null, position: Vec3 = [0, 0, 0]): SceneObjectData => {
     const o: SceneObjectData = {
       id: newId(),
       kind: "group",
-      asset: null,
-      parentId: null,
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      scale: 1,
-      joints: {},
-      static: true,
-      ...p,
+      label,
+      parentId,
+      transform: { position, rotation: [0, 0, 0], scale: 1 },
+      components: {},
     };
     out.push(o);
     return o;
   };
+
+  const mkObstacle = (p: {
+    asset: string;
+    label: string;
+    parentId: string | null;
+    position: Vec3;
+    rotation?: Vec3;
+    static?: boolean;
+  }): SceneObjectData => {
+    const o: SceneObjectData = {
+      id: newId(),
+      kind: "obstacle",
+      label: p.label,
+      parentId: p.parentId,
+      transform: {
+        position: p.position,
+        rotation: p.rotation ?? [0, 0, 0],
+        scale: 1,
+      },
+      components: {
+        renderer: {
+          asset: p.asset,
+          static: p.static ?? true,
+          joints: {},
+        },
+      },
+    };
+    out.push(o);
+    return o;
+  };
+
+  const mkRobot = (p: {
+    asset: string;
+    label: string;
+    parentId: string | null;
+    position: Vec3;
+    rotation?: Vec3;
+    script: string;
+  }): SceneObjectData => {
+    const o: SceneObjectData = {
+      id: newId(),
+      kind: "robot",
+      label: p.label,
+      parentId: p.parentId,
+      transform: {
+        position: p.position,
+        rotation: p.rotation ?? [0, 0, 0],
+        scale: 1,
+      },
+      components: {
+        renderer: {
+          asset: p.asset,
+          static: false,
+          joints: {},
+        },
+        robot: {
+          script: p.script,
+        },
+      },
+    };
+    out.push(o);
+    return o;
+  };
+
   const inst = layout.instances ?? {};
 
-  // --- Structural shell, tracks & charging bays
+  // --- Structural shell, tracks & charging bays (obstacles)
   if (["warehouse", "track", "charger"].some((a) => assets.includes(a) && (inst[a]?.length ?? 0) > 0)) {
-    const facility = mk({ label: "Facility" });
+    const facility = mkGroup("Facility");
     for (const asset of ["warehouse", "track", "charger"]) {
       if (!assets.includes(asset)) continue;
       for (const it of inst[asset] ?? []) {
-        mk({
-          kind: "model",
+        mkObstacle({
           asset,
           label: it.id,
           parentId: facility.id,
           position: it.position,
           rotation: [0, it.rotationY ?? 0, 0],
+          static: true,
         });
       }
     }
   }
 
-  // --- Storage racks & totes
-  const warehouse = mk({ label: "Warehouse" });
+  // --- Storage racks & totes (obstacles)
+  const warehouse = mkGroup("Warehouse");
   const rows = new Map<number, SceneObjectData>();
   const racks = new Map<string, SceneObjectData>();
   if (assets.includes("rack")) {
@@ -64,19 +126,19 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
       const row =
         rows.get(z) ??
         (() => {
-          const g = mk({ label: `Row-${rows.size}`, parentId: warehouse.id, position: [0, 0, z] });
+          const g = mkGroup(`Row-${rows.size}`, warehouse.id, [0, 0, z]);
           rows.set(z, g);
           return g;
         })();
       racks.set(
         r.id,
-        mk({
-          kind: "model",
+        mkObstacle({
           asset: "rack",
           label: r.id,
           parentId: row.id,
           position: [r.position[0], 0, 0],
           rotation: [0, r.rotationY ?? 0, 0],
+          static: true,
         }),
       );
     }
@@ -85,45 +147,40 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
     for (const t of inst.tote ?? []) {
       const rack = racks.get(t.rack);
       if (!rack) continue;
-      mk({
-        kind: "model",
+      mkObstacle({
         asset: "tote",
         label: t.id,
         parentId: rack.id,
-        position: [t.position[0] - rack.position[0], t.position[1], 0],
+        position: [t.position[0] - rack.transform.position[0], t.position[1], 0],
+        static: true,
       });
     }
   }
 
-  // --- Equipment & Robotic Workcells
-  const equipment = mk({ label: "Equipment" });
+  // --- Equipment (obstacles) & Robotic Workcells (robots)
+  const equipment = mkGroup("Equipment");
   for (const asset of ["conveyor", "station"]) {
     if (!assets.includes(asset)) continue;
     for (const it of inst[asset] ?? []) {
-      mk({
-        kind: "model",
+      mkObstacle({
         asset,
         label: it.id,
         parentId: equipment.id,
         position: it.position,
         rotation: [0, it.rotationY ?? 0, 0],
-        // Keep station dynamic so status tower lamps can be individually driven
-        static: asset === "conveyor",
-        script: asset === "conveyor" ? `belt ${it.beltSpeedMps ?? 0.4} 2 0.64 0.75\n` : undefined,
+        static: true,
       });
     }
   }
 
   if (assets.includes("robot_arm")) {
     for (const it of inst.robot_arm ?? []) {
-      mk({
-        kind: "model",
+      mkRobot({
         asset: "robot_arm",
         label: it.id,
         parentId: equipment.id,
         position: it.position,
         rotation: [0, it.rotationY ?? 0, 0],
-        static: false,
         script: [
           "loop",
           "  joint base_yaw 0.0",
@@ -149,14 +206,12 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
 
   if (assets.includes("robot_transfer")) {
     for (const it of inst.robot_transfer ?? []) {
-      mk({
-        kind: "model",
+      mkRobot({
         asset: "robot_transfer",
         label: it.id,
         parentId: equipment.id,
         position: it.position,
         rotation: [0, it.rotationY ?? 0, 0],
-        static: false,
         script: [
           "loop",
           "  joint travel_slide 0.2",
@@ -176,14 +231,15 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
     }
   }
 
-  // --- Cargo (pallets, goods, bags)
-  if (["pallet", "goods", "bag"].some((a) => assets.includes(a) && (inst[a]?.length ?? 0) > 0)) {
-    const cargo = mk({ label: "Cargo" });
+  // --- Cargo (pallets, goods, bags, dock trucks — obstacles)
+  const hasCargo = ["pallet", "goods", "bag"].some((a) => assets.includes(a) && (inst[a]?.length ?? 0) > 0);
+  const hasTrucks = assets.includes("truck") && (layout.vehicles?.length ?? 0) > 0;
+  if (hasCargo || hasTrucks) {
+    const cargo = mkGroup("Cargo & Obstacles");
     for (const asset of ["pallet", "goods", "bag"]) {
       if (!assets.includes(asset)) continue;
       for (const it of inst[asset] ?? []) {
-        mk({
-          kind: "model",
+        mkObstacle({
           asset,
           label: it.id,
           parentId: cargo.id,
@@ -193,10 +249,23 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
         });
       }
     }
+    if (assets.includes("truck")) {
+      for (const v of layout.vehicles ?? []) {
+        const p1 = v.path?.[1] ?? [0, -8.8];
+        mkObstacle({
+          asset: "truck",
+          label: v.id,
+          parentId: cargo.id,
+          position: [p1[0], 0, p1[1]],
+          rotation: [0, v.rotationY ?? 90, 0],
+          static: true,
+        });
+      }
+    }
   }
 
-  // --- Mobile Fleet (AMRs, Drones, Operators, Dock Vehicles)
-  const fleet = mk({ label: "Robots & Fleet" });
+  // --- Robots & Fleet (AMRs, Drones, Humanoid Operators)
+  const fleet = mkGroup("Robots");
 
   if (assets.includes("robot")) {
     (layout.robots ?? []).forEach((r: any, i: number) => {
@@ -206,13 +275,11 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
         (i === 0
           ? SCRIPT_TEMPLATES[0].script
           : `speed ${r.speedMps ?? 1}\nloop\n${loop.map(([x, z]) => `  goto ${x} ${z}`).join("\n")}\nend\n`);
-      mk({
-        kind: "model",
+      mkRobot({
         asset: "robot",
         label: r.id,
         parentId: fleet.id,
         position: r.start,
-        static: false,
         script,
       });
     });
@@ -228,13 +295,11 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
         ...loop.map(([x, z]) => `  goto ${x} ${z}`),
         "end",
       ].join("\n");
-      mk({
-        kind: "model",
+      mkRobot({
         asset: "drone",
         label: d.id,
         parentId: fleet.id,
         position: [d.pad?.[0] ?? 0, 0, d.pad?.[1] ?? 0],
-        static: false,
         script,
       });
     }
@@ -250,39 +315,11 @@ export function layoutToObjects(layout: any, assets: string[]): SceneObjectData[
         ...loop.map(([x, z]) => `  goto ${x} ${z}\n  wait 0.4`),
         "end",
       ].join("\n");
-      mk({
-        kind: "model",
+      mkRobot({
         asset: "humanoid",
         label: w.id,
         parentId: fleet.id,
         position: [start[0], 0, start[1]],
-        static: false,
-        script,
-      });
-    }
-  }
-
-  if (assets.includes("truck")) {
-    for (const v of layout.vehicles ?? []) {
-      const p0 = v.path?.[0] ?? [0, -14];
-      const p1 = v.path?.[1] ?? [0, -8.8];
-      const script = [
-        `speed ${v.speedMps ?? 1.8}`,
-        "loop",
-        `  goto ${p1[0]} ${p1[1]}`,
-        "  wait 6",
-        `  goto ${p0[0]} ${p0[1]}`,
-        "  wait 2",
-        "end",
-      ].join("\n");
-      mk({
-        kind: "model",
-        asset: "truck",
-        label: v.id,
-        parentId: fleet.id,
-        position: [p1[0], 0, p1[1]],
-        rotation: [0, v.rotationY ?? 90, 0],
-        static: false,
         script,
       });
     }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Modal, Segmented, Select, Tag, Tooltip } from "antd";
 import { Code2, Pause, Play, RotateCcw, Sparkles } from "lucide-react";
-import type { JointDef, SceneObjectData } from "../../lib/workTypes";
+import { getEntityAsset, getEntityScript, type JointDef, type SceneObjectData } from "../../lib/workTypes";
 import {
   assetToProfileId,
   buildCustomJointTemplate,
@@ -32,9 +32,12 @@ export default function ScriptEditorModal({
   onClose,
   onApply,
 }: Props) {
-  const initialProfile = assetToProfileId(object.asset);
+  const asset = getEntityAsset(object);
+  const currentScript = getEntityScript(object) ?? "";
+  const isStatic = Boolean(object.components.renderer?.static);
+  const initialProfile = assetToProfileId(asset);
   const [profile, setProfile] = useState<RobotProfileId>(initialProfile);
-  const [draft, setDraft] = useState(object.script ?? "");
+  const [draft, setDraft] = useState(currentScript);
   const [playing, setPlaying] = useState(true);
   const [speedMult, setSpeedMult] = useState(1);
   const [resetToken, setResetToken] = useState(0);
@@ -48,11 +51,11 @@ export default function ScriptEditorModal({
 
   useEffect(() => {
     if (!open) return;
-    const p = assetToProfileId(object.asset);
+    const p = assetToProfileId(asset);
     setProfile(p);
     setDemoJoints(joints);
-    if (object.script?.trim()) {
-      setDraft(object.script);
+    if (currentScript.trim()) {
+      setDraft(currentScript);
     } else {
       const first =
         buildCustomJointTemplate(joints) ??
@@ -70,14 +73,14 @@ export default function ScriptEditorModal({
   );
 
   const demoAssetUrl = useMemo(() => {
-    if (profile === initialProfile && object.asset && assetUrls[object.asset]) {
-      return assetUrls[object.asset];
+    if (profile === initialProfile && asset && assetUrls[asset]) {
+      return assetUrls[asset];
     }
     if (activeProfileMeta.assetKey && assetUrls[activeProfileMeta.assetKey]) {
       return assetUrls[activeProfileMeta.assetKey];
     }
     return undefined;
-  }, [profile, initialProfile, object.asset, assetUrls, activeProfileMeta]);
+  }, [profile, initialProfile, asset, assetUrls, activeProfileMeta]);
 
   const availableJoints = useMemo(() => {
     if (demoJoints.length > 0) return demoJoints;
@@ -153,12 +156,12 @@ export default function ScriptEditorModal({
       footer={
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <span className="work-hint" style={{ margin: 0, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            {object.static && <span>Static object</span>}
+            {isStatic && <span>Static entity</span>}
             <HelpTip
               placement="topLeft"
               content={
-                object.static
-                  ? "Note: this object is Static. Untick Static in Rendering to animate motion in Play mode."
+                isStatic
+                  ? "Note: this robot is Static. Untick Static in Mesh Renderer to animate motion in Play mode."
                   : "Scripts run safely line-by-line in Play mode."
               }
             />
@@ -166,7 +169,7 @@ export default function ScriptEditorModal({
           <div style={{ display: "flex", gap: 8 }}>
             <Button
               onClick={() => {
-                setDraft(object.script ?? "");
+                setDraft(currentScript);
                 setResetToken((n) => n + 1);
               }}
             >

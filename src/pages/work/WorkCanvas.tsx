@@ -21,8 +21,9 @@ import { BASE_ORTHO_SPAN, BASE_PERSP_FOV, cameraLodParams, computeLodTier } from
 import type { Runtime } from "./runtime";
 import StaticBatches, { type LiveDrag, type PerfCounters } from "./StaticBatches";
 import { DynNode, StaticProxy, type NodeCtx, type VisEntry } from "./SceneNodes";
-import { FloorAreaDrawOverlay, StudioEnvironment, TwinCameraController, TwinOverlays } from "./TwinOverlays";
+import { FloorAreaDrawOverlay, RosLidarOverlay, RosNavGoalOverlay, StudioEnvironment, TwinCameraController, TwinOverlays } from "./TwinOverlays";
 import type { TwinEngine } from "./twinEngine";
+import type { RosBridgeClient } from "./rosBridge";
 import { useTheme } from "../../contexts/ThemeContext";
 import { resolveCanvasBackdrop } from "./canvasBackdrop";
 
@@ -294,6 +295,8 @@ function CameraRig({ cameraMode }: { cameraMode: CameraMode }) {
 function RuntimeDriver({
   runtime,
   twinEngine,
+  rosClient,
+  rosDriveScene,
   objects,
   worlds,
   playing,
@@ -302,6 +305,8 @@ function RuntimeDriver({
 }: {
   runtime: Runtime;
   twinEngine: TwinEngine;
+  rosClient: RosBridgeClient;
+  rosDriveScene: boolean;
   objects: SceneObjectData[];
   worlds: Map<string, THREE.Matrix4>;
   playing: boolean;
@@ -311,7 +316,8 @@ function RuntimeDriver({
   useFrame((_, dt) => {
     const clamped = Math.min(dt, 0.05) * timeScale;
     if (playing && !paused) runtime.tick(clamped);
-    twinEngine.tick(clamped, runtime, objects, worlds, playing, paused);
+    runtime.applyRosState(rosClient, clamped, rosDriveScene);
+    twinEngine.tick(clamped, runtime, objects, worlds, playing, paused, rosClient, rosDriveScene);
   });
   return null;
 }
@@ -390,6 +396,12 @@ export interface WorkCanvasProps {
   prefs: ViewPrefs;
   runtime: Runtime;
   twinEngine: TwinEngine;
+  rosClient: RosBridgeClient;
+  rosDriveScene: boolean;
+  rosShowLidar: boolean;
+  rosGoalPick: boolean;
+  rosActiveGoal: [number, number] | null;
+  onPickRosGoal: (x: number, z: number) => void;
   workspaceMode: WorkspaceMode;
   telemetryList: AssetTelemetry[];
   zones: ZoneDef[];
@@ -452,14 +464,19 @@ function WorkCanvasInner(p: WorkCanvasProps) {
   const dyn = useMemo(() => {
     const s = new Set<string>();
     for (const o of objects) {
-      const hasCustomOpacity = o.opacity !== undefined && o.opacity < 0.99;
+      const op = o.components.renderer?.opacity;
+      const hasCustomOpacity = op !== undefined && op < 0.99;
       if (!staticIds.has(o.id) || forced.has(o.id) || hasCustomOpacity) s.add(o.id);
     }
     return s;
   }, [objects, staticIds, forced]);
   const roots = useMemo(() => objects.filter((o) => dyn.has(o.id) && !(o.parentId && dyn.has(o.parentId))), [objects, dyn]);
   const statics = useMemo(
-    () => objects.filter((o) => staticIds.has(o.id) && !(o.opacity !== undefined && o.opacity < 0.99)),
+    () =>
+      objects.filter((o) => {
+        const op = o.components.renderer?.opacity;
+        return staticIds.has(o.id) && !(op !== undefined && op < 0.99);
+      }),
     [objects, staticIds],
   );
 
@@ -579,10 +596,25 @@ function WorkCanvasInner(p: WorkCanvasProps) {
         onComplete={p.onFinishDrawArea}
       />
 
+      <RosLidarOverlay
+        rosClient={p.rosClient}
+        runtime={p.runtime}
+        enabled={p.rosShowLidar && p.rosDriveScene}
+      />
+
+      <RosNavGoalOverlay
+        active={p.rosGoalPick}
+        activeGoal={p.rosActiveGoal}
+        onPickGoal={p.onPickRosGoal}
+      />
+
       {sel && selIsStatic && worlds.get(sel.id) && (
         <StaticProxy
-          o={sel} world={worlds.get(sel.id)!} url={sel.asset ? p.assetUrls[sel.asset] : undefined}
-          register={register} showGizmos={prefs.showGizmos}
+          o={sel}
+          world={worlds.get(sel.id)!}
+          url={sel.components.renderer?.asset ? p.assetUrls[sel.components.renderer.asset] : undefined}
+          register={register}
+          showGizmos={prefs.showGizmos}
         />
       )}
 
@@ -654,6 +686,8 @@ function WorkCanvasInner(p: WorkCanvasProps) {
       <RuntimeDriver
         runtime={p.runtime}
         twinEngine={p.twinEngine}
+        rosClient={p.rosClient}
+        rosDriveScene={p.rosDriveScene}
         objects={objects}
         worlds={worlds}
         playing={p.playing}

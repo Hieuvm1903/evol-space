@@ -14,7 +14,6 @@ import {
   Zap,
 } from "lucide-react";
 import type {
-  CameraMode,
   CameraPreset,
   FacilityKpis,
   ReplayFrame,
@@ -29,6 +28,7 @@ interface KpiStripProps {
   replayIndex: number | null;
   replayTimeSec: number | null;
   streamStatus: StreamStatus;
+  rosStatus?: StreamStatus;
   onAlertClick?: () => void;
 }
 
@@ -39,24 +39,28 @@ export function TwinKpiStrip({
   replayIndex,
   replayTimeSec,
   streamStatus,
+  rosStatus,
   onAlertClick,
 }: KpiStripProps) {
+  const rosLive = rosStatus === "connected";
   const stateLabel =
     replayIndex !== null
       ? `Replay ${replayTimeSec?.toFixed(1) ?? "0.0"}s`
-      : streamStatus === "connected"
-        ? "Live Stream"
-        : playing && !paused
-          ? "Live Sim"
-          : paused
-            ? "Paused"
-            : "Standby";
+      : rosLive
+        ? "ROS 2 Live"
+        : streamStatus === "connected"
+          ? "Live Stream"
+          : playing && !paused
+            ? "Live Sim"
+            : paused
+              ? "Paused"
+              : "Standby";
 
   return (
     <div className="twin-kpi-strip evol-glass-card">
       <div className="twin-kpi-item">
         <span className="twin-kpi-label">State</span>
-        <span className={`twin-kpi-val${replayIndex !== null ? " is-amber" : playing && !paused ? " is-cyan" : ""}`}>
+        <span className={`twin-kpi-val${replayIndex !== null ? " is-amber" : rosLive || (playing && !paused) ? " is-cyan" : ""}`}>
           <Activity size={13} />
           {stateLabel}
         </span>
@@ -100,8 +104,6 @@ export function TwinKpiStrip({
 }
 
 interface ControlsBarProps {
-  cameraMode: CameraMode;
-  onCameraMode: (mode: CameraMode) => void;
   cameraPreset: CameraPreset;
   onCameraPreset: (preset: CameraPreset) => void;
   overlays: TwinOverlayPrefs;
@@ -121,8 +123,6 @@ const PRESETS: { id: CameraPreset; label: string }[] = [
 ];
 
 export function TwinControlsBar({
-  cameraMode,
-  onCameraMode,
   cameraPreset,
   onCameraPreset,
   overlays,
@@ -161,25 +161,6 @@ export function TwinControlsBar({
               onClick={() => onOverlays({ followSelected: !overlays.followSelected })}
             >
               <Crosshair size={12} /> Follow
-            </button>
-          </Tooltip>
-          <span className="work-toolbar-sep" />
-          <Tooltip title="Perspective projection — natural depth perception (V)">
-            <button
-              type="button"
-              className={`twin-dock-btn${cameraMode === "perspective" ? " active" : ""}`}
-              onClick={() => onCameraMode("perspective")}
-            >
-              Perspective
-            </button>
-          </Tooltip>
-          <Tooltip title="Orthogonal projection — parallel CAD view (V)">
-            <button
-              type="button"
-              className={`twin-dock-btn${cameraMode === "orthographic" ? " active" : ""}`}
-              onClick={() => onCameraMode("orthographic")}
-            >
-              Orthogonal
             </button>
           </Tooltip>
         </div>

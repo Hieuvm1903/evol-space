@@ -1,18 +1,20 @@
 import * as THREE from "three";
-import type { SceneObjectData } from "../../lib/workTypes";
+import { getEntityAsset, getEntityScript, type EntityKind, type SceneObjectData } from "../../lib/workTypes";
 import { World } from "./ecs";
 import { applyJoint, type JointRig } from "./rig";
+import type { RosBridgeClient } from "./rosBridge";
 import { parseScript, type Instr } from "./script";
 
 // ---------------------------------------------------------------------------
 // Components. An entity has only the ones that apply to it:
-//   mover    - can drive (any scripted object)         lift     - has a prismatic lift joint
+//   mover    - can drive (scripted robots)             lift     - has a prismatic lift joint
 //   script   - program + interpreter state             carrying / carriedBy - pick & place link
 //   belt     - acts as a conveyor                      movable  - can be picked / carried by a belt
 //   ctl      - the runtime (not the editor) owns its transform now
 // ---------------------------------------------------------------------------
 export interface Entity {
   id: string;
+  kind: EntityKind;
   label: string;
   asset: string | null;
   pos: THREE.Vector3;           // world position
@@ -25,6 +27,7 @@ export interface Entity {
   movable?: true;
   ctl?: true;
   faulted?: boolean;
+  rosDriven?: boolean;
   speedScale?: number;
   targetY?: number;
   gaitPhase?: number;
@@ -82,12 +85,13 @@ export class Runtime {
     this.logs = [];
     this.logVersion++;
     for (const o of objects) {
-      if (o.kind !== "model") continue;
+      if (o.kind !== "robot" && o.kind !== "obstacle") continue;
       const w = worlds.get(o.id);
       if (!w) continue;
       w.decompose(_p, _q, _s);
+      const asset = getEntityAsset(o);
       const e: Entity = {
-        id: o.id, label: o.label, asset: o.asset, pos: _p.clone(),
+        id: o.id, kind: o.kind, label: o.label, asset, pos: _p.clone(),
         yaw: _eu.setFromQuaternion(_q, "YXZ").y, scale: _s.x,
         speedScale: 1,
         targetY: _p.y,
@@ -101,8 +105,9 @@ export class Runtime {
       const n = this.nodes.get(o.id);
       if (n && !isStatic) { e.node = n.group; e.rig = n.rig; }
 
-      if (o.script?.trim()) {
-        const { program, errors } = parseScript(o.script);
+      const scriptText = getEntityScript(o);
+      if (scriptText?.trim()) {
+        const { program, errors } = parseScript(scriptText);
         if (errors.length) {
           for (const er of errors) this.log(`${o.label} line ${er.line}: ${er.message}`);
           continue;
@@ -186,13 +191,92 @@ export class Runtime {
     if (!this.running || dt <= 0) return;
     this.time += dt;
     for (const e of this.world.with("script", "mover")) {
-      if (!e.script!.done && !e.faulted) this.step(e, dt * (e.speedScale ?? 1));
+      if (!e.script!.done && !e.faulted && !e.rosDriven) this.step(e, dt * (e.speedScale ?? 1));
     }
     this.motion(dt);
     this.lifts(dt);
     this.jointMotors(dt);
     this.carry();
     this.belts(dt);
+    this.sync();
+  }
+
+  /** Applies live ROS2 /tf, /odom, and /joint_states onto matching scene entities. */
+  applyRosState(ros: RosBridgeClient, dt: number, enabled = true) {
+    if (!this.running) return;
+    if (!enabled || ros.getStatus() !== "connected") {
+      for (const e of this.world.entities()) {
+        if (e.rosDriven) e.rosDriven = false;
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const alpha = Math.min(1, dt * 16);
+
+    for (const e of this.world.entities()) {
+      if (e.kind !== "robot") continue;
+      const pose = ros.poses.get(e.label);
+      const jState = ros.jointStates.get(e.label);
+      const hasPose = Boolean(pose && now - pose.updatedAt < 5000);
+      const hasJoints = Boolean(jState && now - jState.updatedAt < 5000);
+
+      if (!hasPose && !hasJoints) {
+        if (e.rosDriven) e.rosDriven = false;
+        continue;
+      }
+
+      e.rosDriven = true;
+      this.flag(e, "ctl");
+      this.flag(e, "movable");
+      if (e.staticSource && !e.promoted) {
+        e.promoted = true;
+        this.onPromote?.(e.id);
+      }
+
+      if (hasPose && pose) {
+        const prevX = e.pos.x;
+        const prevZ = e.pos.z;
+        const prevYaw = e.yaw;
+
+        e.pos.x += (pose.pos[0] - e.pos.x) * alpha;
+        e.pos.y += (pose.pos[1] - e.pos.y) * alpha;
+        e.pos.z += (pose.pos[2] - e.pos.z) * alpha;
+        const yawDiff = wrap(pose.yaw - e.yaw);
+        e.yaw = wrap(e.yaw + yawDiff * alpha);
+
+        const dist = Math.hypot(e.pos.x - prevX, e.pos.z - prevZ);
+        const dyaw = wrap(e.yaw - prevYaw);
+
+        if (e.rig) {
+          if (dist > 1e-4 || Math.abs(dyaw) > 1e-4) {
+            const wr = e.asset === "truck" ? 0.5 : WHEEL_R;
+            for (const r of e.rig) {
+              if (!r.def.name.startsWith("wheel")) continue;
+              const v = dist + dyaw * TRACK * r.side;
+              applyJoint(r, r.value + (v / wr) * r.spinSign);
+            }
+          }
+          if (e.asset === "drone" && e.pos.y > 0.15) {
+            for (const r of e.rig) {
+              if (r.def.name.startsWith("rotor_")) {
+                applyJoint(r, r.value + 28 * dt);
+              }
+            }
+          }
+        }
+      }
+
+      if (hasJoints && jState && e.rig) {
+        for (const r of e.rig) {
+          const val = jState.joints[r.def.name];
+          if (typeof val === "number" && Number.isFinite(val)) {
+            applyJoint(r, val);
+          }
+        }
+      }
+    }
+
     this.sync();
   }
 
@@ -350,7 +434,7 @@ export class Runtime {
   // ------------------------------------------------------------------ systems
   private motion(dt: number) {
     for (const e of this.world.with("mover")) {
-      if (e.faulted) continue;
+      if (e.faulted || e.rosDriven) continue;
       const m = e.mover!;
       const scale = e.speedScale ?? 1;
       let dist = 0, dyaw = 0;

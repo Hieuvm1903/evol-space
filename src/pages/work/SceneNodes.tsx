@@ -1,7 +1,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import type { JointDef, LightProps, SceneObjectData, Vec3, ViewPrefs } from "../../lib/workTypes";
+import { getEntityAsset, type JointDef, type LightProps, type SceneObjectData, type Vec3, type ViewPrefs } from "../../lib/workTypes";
 import { useAssetInfo, type AssetInfo } from "./assetInfo";
 import type { LodPart } from "./lodCompute";
 import { applyJoint, buildRig } from "./rig";
@@ -55,10 +55,15 @@ export function DynNode({ id, root, ctx }: { id: string; root: boolean; ctx: Nod
   if (!o) return null;
 
   const selected = ctx.selectedId === id;
-  const url = o.asset ? ctx.assetUrls[o.asset] : undefined;
+  const asset = getEntityAsset(o);
+  const url = asset ? ctx.assetUrls[asset] : undefined;
   const tf = root
     ? worldProps(ctx.worlds.get(id) ?? new THREE.Matrix4())
-    : { position: o.position, rotation: [o.rotation[0] * D2R, o.rotation[1] * D2R, o.rotation[2] * D2R] as Vec3, scale: o.scale };
+    : {
+        position: o.transform.position,
+        rotation: [o.transform.rotation[0] * D2R, o.transform.rotation[1] * D2R, o.transform.rotation[2] * D2R] as Vec3,
+        scale: o.transform.scale,
+      };
   const kids = (ctx.children.get(id) ?? []).filter((c) => ctx.dyn.has(c));
 
   return (
@@ -72,13 +77,13 @@ export function DynNode({ id, root, ctx }: { id: string; root: boolean; ctx: Nod
       }}
     >
       <group ref={contentRef}>
-        {o.kind === "model" && url && (
+        {o.components.renderer && url && (
           <Suspense fallback={null}>
             <ModelContent o={o} url={url} ctx={ctx} groupRef={groupRef} contentRef={contentRef} selected={selected} />
           </Suspense>
         )}
-        {o.kind === "light" && o.light && (
-          <LightContent light={o.light} selected={selected} showGizmo={ctx.prefs.showGizmos} shadows={ctx.prefs.shadows} />
+        {o.kind === "light" && o.components.light && (
+          <LightContent light={o.components.light} selected={selected} showGizmo={ctx.prefs.showGizmos} shadows={ctx.prefs.shadows} />
         )}
         {o.kind === "group" && ctx.prefs.showGizmos && <axesHelper args={[selected ? 0.7 : 0.3]} />}
       </group>
@@ -192,8 +197,10 @@ function ModelRigRenderer({ o, ctx, selected, groupRef, contentRef, scene, info 
     applyCull(lod2Group, false);
   }, [clone, lod1Group, lod2Group, prefs.frustumCull]);
 
-  useEffect(() => { onJointDefs(o.asset!, rig.map((r) => r.def)); }, [rig, o.asset, onJointDefs]);
-  useEffect(() => { for (const r of rig) applyJoint(r, o.joints[r.def.name] ?? 0); }, [rig, o.joints]);
+  const asset = o.components.renderer?.asset;
+  const joints = o.components.renderer?.joints ?? {};
+  useEffect(() => { if (asset) onJointDefs(asset, rig.map((r) => r.def)); }, [rig, asset, onJointDefs]);
+  useEffect(() => { for (const r of rig) applyJoint(r, joints[r.def.name] ?? 0); }, [rig, joints]);
 
   // Let runtime drive joints and visibility system cull / swap calculated LODs
   useEffect(() => {
@@ -218,7 +225,7 @@ function ModelRigRenderer({ o, ctx, selected, groupRef, contentRef, scene, info 
   }, [o.id, rig, clone, lod1Group, lod2Group, info, runtime, vis, groupRef, contentRef]);
 
   // Apply manual per-object opacity from inspector slider
-  const manualOpacity = o.opacity ?? 1;
+  const manualOpacity = o.components.renderer?.opacity ?? 1;
   useEffect(() => {
     const mult = THREE.MathUtils.clamp(manualOpacity, 0, 1);
     const isTranslucent = mult < 0.995;
@@ -298,7 +305,7 @@ export function StaticProxy({ o, world, url, register, showGizmos }: {
   const setRef = useCallback((n: THREE.Group | null) => register(o.id, n), [register, o.id]);
   return (
     <group ref={setRef} {...(tf as any)}>
-      {o.kind === "model" && url ? (
+      {o.components.renderer && url ? (
         <Suspense fallback={null}><ProxyBox url={url} show={showGizmos} /></Suspense>
       ) : (
         showGizmos && <axesHelper args={[0.7]} />

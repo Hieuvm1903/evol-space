@@ -1,18 +1,20 @@
 import * as THREE from "three";
-import type {
-  AssetTelemetry,
-  FacilityKpis,
-  FaultKind,
-  HealthStatus,
-  ReplayEntityPose,
-  ReplayFrame,
-  SceneObjectData,
-  StreamStatus,
-  TwinAlert,
-  TwinScenario,
-  Vec3,
+import {
+  getEntityAsset,
+  type AssetTelemetry,
+  type FacilityKpis,
+  type FaultKind,
+  type HealthStatus,
+  type ReplayEntityPose,
+  type ReplayFrame,
+  type SceneObjectData,
+  type StreamStatus,
+  type TwinAlert,
+  type TwinScenario,
+  type Vec3,
 } from "../../lib/workTypes";
 import type { Entity, Runtime } from "./runtime";
+import { normalizeRosWsUrl, type RosBridgeClient } from "./rosBridge";
 
 const MAX_HISTORY = 30;
 const MAX_TRAIL = 42;
@@ -20,20 +22,7 @@ const MAX_REPLAY_FRAMES = 120; // 60s at 2 Hz
 const REPLAY_INTERVAL = 0.5;
 const MAX_ALERTS = 40;
 
-const MONITORED_ASSETS = new Set([
-  "robot",
-  "drone",
-  "robot_arm",
-  "robot_transfer",
-  "humanoid",
-  "truck",
-  "conveyor",
-  "station",
-  "charger",
-]);
-
-const MOBILE_FLEET_ASSETS = new Set(["robot", "drone", "humanoid", "truck"]);
-const AUTOMATION_FLEET_ASSETS = new Set(["robot", "drone", "robot_arm", "robot_transfer"]);
+const MOBILE_FLEET_ASSETS = new Set(["robot", "drone", "humanoid"]);
 const BATTERY_ASSETS = new Set(["robot", "drone"]);
 
 interface FaultState {
@@ -58,7 +47,7 @@ interface StreamOverride {
 const FAULT_TEXT: Record<FaultKind, { title: string; reason: string; tempSpike?: number; batteryDrop?: number }> = {
   overheat: { title: "Thermal Overload", reason: "Drive motor core > 85°C", tempSpike: 88 },
   battery: { title: "Battery Critical", reason: "Cell pack depleted (< 5%)", batteryDrop: 3 },
-  jam: { title: "Mechanical Jam", reason: "Actuator stall / belt obstruction" },
+  jam: { title: "Mechanical Jam", reason: "Actuator stall / joint obstruction" },
   sensor: { title: "LiDAR / Sensor Fault", reason: "Localization confidence lost" },
 };
 
@@ -146,26 +135,21 @@ export class TwinEngine {
     return Array.from(this.telemetry.values());
   }
 
-  /** Monitored active assets (AMRs, drones, robotic cells, conveyors, stations, chargers, workers, dock trucks). */
+  /** Monitored robot fleet (AMRs, drones, robotic arms, shuttles, humanoids, and custom robots). */
   getFleetList(): AssetTelemetry[] {
     const order: Record<string, number> = {
       robot: 2,
       drone: 3,
       robot_arm: 4,
       robot_transfer: 5,
-      conveyor: 6,
-      station: 7,
-      charger: 8,
-      humanoid: 9,
-      truck: 10,
+      humanoid: 6,
     };
     const rank = (t: AssetTelemetry) => {
       if (t.status === "fault") return 0;
       if (t.status === "warning") return 1;
-      return order[t.asset ?? ""] ?? 11;
+      return order[t.asset ?? ""] ?? 7;
     };
     return Array.from(this.telemetry.values())
-      .filter((t) => MONITORED_ASSETS.has(t.asset ?? "") || t.status !== "nominal")
       .sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
   }
 
@@ -184,7 +168,6 @@ export class TwinEngine {
     title: string,
     detail: string,
   ) {
-    // Avoid duplicating an identical unacknowledged alert for the same object
     const dup = this.alerts.find(
       (a) => a.objectId === objectId && a.title === title && !a.acknowledged,
     );
@@ -223,7 +206,6 @@ export class TwinEngine {
     t.utilizationPct = 0;
     if (spec.tempSpike !== undefined) t.temperatureC = Math.max(t.temperatureC, spec.tempSpike);
     if (spec.batteryDrop !== undefined) t.batteryPct = Math.min(t.batteryPct, spec.batteryDrop);
-    if (t.asset === "station") runtime.setStatusLamp(id, "fault");
     this.pushAlert(id, t.label, "fault", spec.title, spec.reason);
   }
 
@@ -237,7 +219,6 @@ export class TwinEngine {
       t.status = "nominal";
       if (prev?.kind === "overheat") t.temperatureC = 44;
       if (prev?.kind === "battery") t.batteryPct = Math.max(t.batteryPct, 72);
-      if (t.asset === "station") runtime.setStatusLamp(id, "nominal");
     }
   }
 
@@ -260,29 +241,26 @@ export class TwinEngine {
         t.batteryPct = Math.max(t.batteryPct, 82);
         t.temperatureC = Math.min(t.temperatureC, 42);
       }
-      this.pushAlert("facility", "Facility", "info", "Nominal Operations", "All faults cleared and fleet speeds normalized.");
+      this.pushAlert("facility", "Facility", "info", "Nominal Operations", "All faults cleared and robot speeds normalized.");
       return;
     }
 
     if (scenario === "peak_rush") {
       for (const t of all) {
         this.clearFault(t.id, runtime);
-        if (AUTOMATION_FLEET_ASSETS.has(t.asset ?? "") || t.asset === "humanoid") {
-          this.setSpeedScale(t.id, 1.5, runtime);
-        } else if (t.asset === "conveyor") {
-          this.setSpeedScale(t.id, 1.35, runtime);
-        }
+        this.setSpeedScale(t.id, 1.5, runtime);
       }
-      this.pushAlert("facility", "Facility", "warning", "Peak Rush Dispatch", "Fleet & robotic workcells running at 1.5× cadence.");
+      this.pushAlert("facility", "Facility", "warning", "Peak Rush Dispatch", "All robots running at 1.5× cadence.");
       return;
     }
 
-    if (scenario === "conveyor_jam") {
-      const conv = all.find((t) => t.asset === "conveyor");
-      if (conv) {
-        this.injectFault(conv.id, "jam", runtime);
-      } else if (all[0]) {
-        this.injectFault(all[0].id, "jam", runtime);
+    if (scenario === "robot_jam") {
+      const target =
+        all.find((t) => t.asset === "robot_arm") ??
+        all.find((t) => t.asset === "robot_transfer") ??
+        all[0];
+      if (target) {
+        this.injectFault(target.id, "jam", runtime);
       }
       return;
     }
@@ -298,7 +276,7 @@ export class TwinEngine {
     }
   }
 
-  /** Syncs telemetry state cleanly from live Runtime + SceneObjects. */
+  /** Syncs telemetry strictly for Robot entities from live Runtime + optional ROS2 bridge. */
   tick(
     dt: number,
     runtime: Runtime,
@@ -306,6 +284,8 @@ export class TwinEngine {
     worlds: Map<string, THREE.Matrix4>,
     playing: boolean,
     paused: boolean,
+    ros?: RosBridgeClient | null,
+    rosDriveEnabled = true,
   ) {
     const active = playing && !paused;
     if (active) this.simUptime += dt;
@@ -314,8 +294,9 @@ export class TwinEngine {
     const nowMs = Date.now();
 
     for (const o of objects) {
-      if (o.kind !== "model") continue;
+      if (o.kind !== "robot") continue;
       presentIds.add(o.id);
+      const asset = getEntityAsset(o);
 
       let t = this.telemetry.get(o.id);
       if (!t) {
@@ -323,12 +304,12 @@ export class TwinEngine {
         t = {
           id: o.id,
           label: o.label,
-          asset: o.asset,
-          kind: o.kind,
+          asset,
+          kind: "robot",
           status: "nominal",
           utilizationPct: 0,
           speedMps: 0,
-          batteryPct: BATTERY_ASSETS.has(o.asset ?? "") ? Math.round(78 + (seedOffset % 18)) : 100,
+          batteryPct: BATTERY_ASSETS.has(asset ?? "") ? Math.round(78 + (seedOffset % 18)) : 100,
           temperatureC: 34 + (seedOffset % 6),
           powerKw: 0.08,
           cyclesCompleted: 0,
@@ -343,6 +324,7 @@ export class TwinEngine {
         this.telemetry.set(o.id, t);
       } else {
         t.label = o.label;
+        t.asset = asset;
       }
 
       const entity: Entity | undefined = runtime.byId.get(o.id);
@@ -356,7 +338,7 @@ export class TwinEngine {
         }
       }
 
-      let pos: Vec3 = o.position;
+      let pos: Vec3 = o.transform.position;
       if (entity) {
         pos = [entity.pos.x, entity.pos.y, entity.pos.z];
       } else {
@@ -369,13 +351,14 @@ export class TwinEngine {
 
       const prev = this.prevPos.get(o.id);
       let speedMps = 0;
+      const trackTrail = MOBILE_FLEET_ASSETS.has(asset ?? "") || Boolean(entity?.mover?.goal);
       if (active && prev && dt > 1e-4) {
         const distXZ = Math.hypot(pos[0] - prev[0], pos[2] - prev[2]);
         const dist3D = Math.hypot(pos[0] - prev[0], pos[1] - prev[1], pos[2] - prev[2]);
-        speedMps = (o.asset === "drone" ? dist3D : distXZ) / dt;
-        if (MOBILE_FLEET_ASSETS.has(o.asset ?? "")) {
-          const minStep = o.asset === "truck" ? 0.45 : o.asset === "drone" ? 0.35 : 0.22;
-          const trailY = o.asset === "drone" ? Math.max(0.05, pos[1] - 0.08) : 0.03;
+        speedMps = (asset === "drone" ? dist3D : distXZ) / dt;
+        if (trackTrail) {
+          const minStep = asset === "drone" ? 0.35 : 0.22;
+          const trailY = asset === "drone" ? Math.max(0.05, pos[1] - 0.08) : 0.03;
           const lastTrail = t.trail[t.trail.length - 1];
           if (!lastTrail || Math.hypot(pos[0] - lastTrail[0], pos[2] - lastTrail[2]) > minStep) {
             t.trail.push([pos[0], trailY, pos[2]]);
@@ -402,21 +385,17 @@ export class TwinEngine {
 
       if (entity?.script) {
         const pPc = this.prevPc.get(o.id) ?? 0;
-        if (entity.script.pc < pPc && !wasCarrying && MONITORED_ASSETS.has(o.asset ?? "")) {
+        if (entity.script.pc < pPc && !wasCarrying) {
           t.cyclesCompleted++;
         }
         this.prevPc.set(o.id, entity.script.pc);
       }
 
       if (entity?.mover?.goal && !this.faults.has(o.id)) {
-        const goalY = o.asset === "drone" ? Math.max(0.05, pos[1]) : 0.04;
+        const goalY = asset === "drone" ? Math.max(0.05, pos[1]) : 0.04;
         t.goal = [entity.mover.goal.x, goalY, entity.mover.goal.z];
       } else {
         t.goal = null;
-      }
-
-      if (active && entity?.belt && !this.faults.has(o.id)) {
-        speedMps = entity.belt.speed * scale;
       }
 
       const fault = this.faults.get(o.id);
@@ -429,7 +408,7 @@ export class TwinEngine {
         t.currentTask = `HALTED · ${fault.reason}`;
       } else {
         t.faultReason = null;
-        if (o.asset === "robot") {
+        if (asset === "robot") {
           t.speedMps = active ? t.speedMps * 0.65 + speedMps * 0.35 : 0;
           const targetUtil = !active ? 8 : speedMps > 0.05 ? clamp((speedMps / 1.4) * 92, 35, 98) : 28;
           t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 3);
@@ -456,7 +435,7 @@ export class TwinEngine {
             t.status = "nominal";
           }
           t.currentTask = describeTask(entity, playing, paused);
-        } else if (o.asset === "drone") {
+        } else if (asset === "drone") {
           t.speedMps = active ? t.speedMps * 0.6 + speedMps * 0.4 : 0;
           const targetUtil = !active ? 6 : clamp((speedMps / 2.4) * 86, 42, 96);
           t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 3);
@@ -477,7 +456,7 @@ export class TwinEngine {
           }
           const task = describeTask(entity, playing, paused);
           t.currentTask = pos[1] > 0.2 ? `Alt ${pos[1].toFixed(1)}m · ${task}` : task;
-        } else if (o.asset === "robot_arm") {
+        } else if (asset === "robot_arm") {
           t.speedMps = active ? 0.75 * scale : 0;
           const targetUtil = active ? clamp(76 * scale, 30, 96) : 6;
           t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2.5);
@@ -486,7 +465,7 @@ export class TwinEngine {
           t.temperatureC += (targetTemp - t.temperatureC) * Math.min(1, dt * 0.5);
           t.status = t.temperatureC >= 72 ? "warning" : "nominal";
           t.currentTask = describeTask(entity, playing, paused);
-        } else if (o.asset === "robot_transfer") {
+        } else if (asset === "robot_transfer") {
           t.speedMps = active ? 0.9 * scale : 0;
           const targetUtil = active ? clamp(68 * scale, 25, 95) : 6;
           t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2.5);
@@ -495,7 +474,7 @@ export class TwinEngine {
           t.temperatureC += (targetTemp - t.temperatureC) * Math.min(1, dt * 0.5);
           t.status = t.temperatureC >= 72 ? "warning" : "nominal";
           t.currentTask = describeTask(entity, playing, paused);
-        } else if (o.asset === "humanoid") {
+        } else if (asset === "humanoid") {
           t.speedMps = active ? t.speedMps * 0.65 + speedMps * 0.35 : 0;
           const targetUtil = active ? (speedMps > 0.05 ? 68 : 34) : 0;
           t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2.5);
@@ -503,45 +482,17 @@ export class TwinEngine {
           t.temperatureC = 36.8;
           t.status = "nominal";
           t.currentTask = active ? describeTask(entity, playing, paused) : "Shift Standby";
-        } else if (o.asset === "truck") {
-          t.speedMps = active ? t.speedMps * 0.65 + speedMps * 0.35 : 0;
-          const targetUtil = active ? (speedMps > 0.08 ? 78 : 42) : 0;
-          t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2.5);
-          t.powerKw = active && speedMps > 0.08 ? 1.45 : 0.08;
-          t.temperatureC += ((active ? 44 : 28) - t.temperatureC) * Math.min(1, dt * 0.4);
-          t.status = "nominal";
-          t.currentTask = active && speedMps <= 0.08 ? "Docked · Bay D-2" : describeTask(entity, playing, paused);
-        } else if (o.asset === "conveyor") {
-          t.speedMps = active && entity?.belt ? entity.belt.speed * scale : 0;
-          const targetUtil = active && entity?.belt ? clamp(54 * scale, 20, 96) : 5;
-          t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2.5);
-          t.powerKw = active ? 0.65 + t.speedMps * 0.85 : 0.1;
-          const targetTemp = active ? 39 + t.utilizationPct * 0.22 : 30;
-          t.temperatureC += (targetTemp - t.temperatureC) * Math.min(1, dt * 0.5);
-          t.status = t.temperatureC > 72 ? "warning" : "nominal";
-          t.currentTask = active && entity?.belt
-            ? `Belt active · ${t.speedMps.toFixed(2)} m/s`
-            : paused ? "Belt paused" : "Standby";
-        } else if (o.asset === "station") {
-          const targetUtil = active ? 62 : 10;
-          t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2);
-          t.powerKw = active ? 1.15 : 0.18;
-          t.temperatureC += ((active ? 41 : 31) - t.temperatureC) * Math.min(1, dt * 0.4);
-          t.status = t.temperatureC >= 70 ? "warning" : "nominal";
-          t.currentTask = active ? "Workstation Online · Tower Active" : "Station Standby";
-        } else if (o.asset === "charger") {
-          const targetUtil = active ? 52 : 8;
-          t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2);
-          t.powerKw = active ? 3.2 : 0.08;
-          t.temperatureC += ((active ? 38 : 27) - t.temperatureC) * Math.min(1, dt * 0.4);
-          t.status = "nominal";
-          t.currentTask = active ? "Inductive Dock Ready · 3.2 kW" : "Charger Standby";
         } else {
-          t.speedMps = 0;
-          t.utilizationPct = active ? 45 : 0;
-          t.powerKw = 0;
-          t.status = "nominal";
-          t.currentTask = o.asset === "rack" ? "Storage bay static" : carryingNow ? "In transit (AMR)" : "Stored inventory";
+          // Generic / custom robot entity
+          t.speedMps = active ? t.speedMps * 0.65 + speedMps * 0.35 : 0;
+          const hasScript = Boolean(entity?.script);
+          const targetUtil = !active ? 6 : speedMps > 0.05 ? clamp((speedMps / 1.4) * 88, 30, 96) : hasScript ? 55 : 14;
+          t.utilizationPct += (targetUtil - t.utilizationPct) * Math.min(1, dt * 2.5);
+          t.powerKw = active ? 0.25 + t.speedMps * 0.4 : 0.06;
+          const targetTemp = active ? 36 + t.utilizationPct * 0.22 : 30;
+          t.temperatureC += (targetTemp - t.temperatureC) * Math.min(1, dt * 0.5);
+          t.status = t.temperatureC >= 72 ? "warning" : "nominal";
+          t.currentTask = describeTask(entity, playing, paused);
         }
       }
 
@@ -565,8 +516,46 @@ export class TwinEngine {
         }
       }
 
-      if (o.asset === "station") {
-        runtime.setStatusLamp(o.id, t.status);
+      // Apply live ROS 2 telemetry when RosBridgeClient is connected
+      if (ros && rosDriveEnabled && ros.getStatus() === "connected") {
+        const diag = ros.diagnostics.get(o.label);
+        const pose = ros.poses.get(o.label);
+        const bat = ros.batteries.get(o.label);
+        const jState = ros.jointStates.get(o.label);
+
+        if (pose && nowMs - pose.updatedAt < 5000) {
+          const v = Math.hypot(pose.vx, pose.vy, pose.vz);
+          t.speedMps = v;
+          t.utilizationPct = clamp(v > 0.05 ? 45 + v * 28 : 16, 0, 99);
+          t.powerKw = asset === "drone" ? 0.34 + v * 0.24 : 0.2 + v * 0.48;
+        }
+        if (jState && nowMs - jState.updatedAt < 5000) {
+          t.utilizationPct = 72;
+          t.powerKw = 0.85;
+          t.currentTask = `ROS /joint_states · ${Object.keys(jState.joints).length} axes`;
+        }
+        if (bat !== undefined) {
+          t.batteryPct = bat;
+        }
+        if (diag && nowMs - diag.updatedAt < 6000) {
+          if (diag.batteryPct !== undefined && bat === undefined) t.batteryPct = diag.batteryPct;
+          if (diag.temperatureC !== undefined) t.temperatureC = diag.temperatureC;
+          if (diag.speedMps !== undefined && !pose) t.speedMps = diag.speedMps;
+          if (diag.level >= 2) {
+            t.status = "fault";
+            t.faultReason = diag.message;
+            t.currentTask = `ROS FAULT · ${diag.message}`;
+            this.pushAlert(o.id, t.label, "fault", "ROS Diagnostic Fault", diag.message);
+          } else if (diag.level === 1) {
+            t.status = "warning";
+            t.faultReason = null;
+            t.currentTask = `ROS · ${diag.message}`;
+          } else {
+            t.status = "nominal";
+            t.faultReason = null;
+            t.currentTask = `ROS · ${diag.message}`;
+          }
+        }
       }
     }
 
@@ -591,14 +580,13 @@ export class TwinEngine {
       }
     }
 
-    const fleetUnits = Array.from(this.telemetry.values()).filter((t) => AUTOMATION_FLEET_ASSETS.has(t.asset ?? ""));
-    const monitored = Array.from(this.telemetry.values()).filter((t) => MONITORED_ASSETS.has(t.asset ?? ""));
-    const activeRobots = fleetUnits.filter((r) => active && r.status !== "fault").length;
-    const avgUtil = monitored.length
-      ? monitored.reduce((s, m) => s + m.utilizationPct, 0) / monitored.length
+    const robots = Array.from(this.telemetry.values());
+    const activeRobots = robots.filter((r) => active && r.status !== "fault").length;
+    const avgUtil = robots.length
+      ? robots.reduce((s, m) => s + m.utilizationPct, 0) / robots.length
       : 0;
-    const totalPowerKw = monitored.reduce((s, m) => s + m.powerKw, 0);
-    const totalCycles = monitored.reduce((s, r) => s + r.cyclesCompleted, 0) + runtime.deliveries;
+    const totalPowerKw = robots.reduce((s, m) => s + m.powerKw, 0);
+    const totalCycles = robots.reduce((s, r) => s + r.cyclesCompleted, 0) + runtime.deliveries;
     const uptimeHr = Math.max(this.simUptime / 3600, 1 / 120);
     const throughputPerHr = active || totalCycles > 0 ? Math.round(totalCycles / uptimeHr) : 0;
     const avgCycleSec = this.cycleTimes.length
@@ -608,7 +596,7 @@ export class TwinEngine {
     this.kpis = {
       throughputPerHr,
       activeRobots,
-      totalRobots: fleetUnits.length,
+      totalRobots: robots.length,
       avgUtilizationPct: Math.round(avgUtil),
       avgCycleSec: Number(avgCycleSec.toFixed(1)),
       totalPowerKw: Number(totalPowerKw.toFixed(2)),
@@ -647,11 +635,22 @@ export class TwinEngine {
   // ---------------------------------------------------------------- WebSocket live stream
   connectStream(url: string, onStatus: (s: StreamStatus, detail?: string) => void) {
     this.disconnectStream();
-    if (!url.trim()) return;
+    const clean = normalizeRosWsUrl(url);
+    if (!clean) return;
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:" &&
+      clean.startsWith("ws://") &&
+      !/^ws:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(clean)
+    ) {
+      this.streamStatus = "error";
+      onStatus("error", "HTTPS page requires wss:// (e.g. wss://xxxx.ngrok-free.app)");
+      return;
+    }
     this.streamStatus = "connecting";
     onStatus("connecting");
     try {
-      const ws = new WebSocket(url.trim());
+      const ws = new WebSocket(clean);
       this.ws = ws;
       ws.onopen = () => {
         this.streamStatus = "connected";

@@ -1,5 +1,13 @@
 import * as THREE from "three";
-import type { LightProps, SceneObjectData, Vec3 } from "./workTypes";
+import {
+  isRobotAsset,
+  STATIC_OBSTACLE_ASSETS,
+  type EntityKind,
+  type LightProps,
+  type SceneObjectData,
+  type TransformComponent,
+  type Vec3,
+} from "./workTypes";
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
@@ -18,11 +26,12 @@ export function newId(): string {
 }
 
 export function localMatrix(
-  o: Pick<SceneObjectData, "position" | "rotation" | "scale">, out = new THREE.Matrix4(),
+  o: Pick<SceneObjectData, "transform">, out = new THREE.Matrix4(),
 ): THREE.Matrix4 {
-  _e.set(o.rotation[0] * D2R, o.rotation[1] * D2R, o.rotation[2] * D2R, "XYZ");
+  const t = o.transform;
+  _e.set(t.rotation[0] * D2R, t.rotation[1] * D2R, t.rotation[2] * D2R, "XYZ");
   _q.setFromEuler(_e);
-  return out.compose(_p.set(o.position[0], o.position[1], o.position[2]), _q, _s.setScalar(o.scale));
+  return out.compose(_p.set(t.position[0], t.position[1], t.position[2]), _q, _s.setScalar(t.scale));
 }
 
 /** World matrix of every object (parent chain applied). Cycles are tolerated (treated as roots). */
@@ -72,7 +81,7 @@ export function descendantsOf(objects: SceneObjectData[], id: string): Set<strin
 }
 
 /** Static = drawn by instancing and never moves. An object only counts if its whole ancestor
- *  chain is static too — otherwise it would drift away from a moving parent. */
+ *  chain is static-compatible — otherwise it would drift away from a moving parent. */
 export function effectiveStatic(objects: SceneObjectData[], enabled: boolean): Set<string> {
   const out = new Set<string>();
   if (!enabled) return out;
@@ -81,7 +90,12 @@ export function effectiveStatic(objects: SceneObjectData[], enabled: boolean): S
   const es = (o: SceneObjectData, depth = 0): boolean => {
     const hit = memo.get(o.id);
     if (hit !== undefined) return hit;
-    let r = o.static && o.kind !== "light";
+    let r =
+      o.kind === "light" || o.kind === "robot"
+        ? false
+        : o.kind === "group"
+          ? true
+          : Boolean(o.components.renderer?.static);
     if (r && o.parentId && depth < 64) {
       const p = byId.get(o.parentId);
       if (p) r = es(p, depth + 1);
@@ -96,7 +110,7 @@ export function effectiveStatic(objects: SceneObjectData[], enabled: boolean): S
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export function decomposeToData(m: THREE.Matrix4): { position: Vec3; rotation: Vec3; scale: number } {
+export function decomposeToData(m: THREE.Matrix4): TransformComponent {
   m.decompose(_p, _q, _s);
   _e.setFromQuaternion(_q, "XYZ");
   return {
@@ -107,7 +121,7 @@ export function decomposeToData(m: THREE.Matrix4): { position: Vec3; rotation: V
 }
 
 /** A world matrix expressed relative to a parent's world matrix. */
-export function toLocalData(world: THREE.Matrix4, parentWorld?: THREE.Matrix4) {
+export function toLocalData(world: THREE.Matrix4, parentWorld?: THREE.Matrix4): TransformComponent {
   if (!parentWorld) return decomposeToData(world);
   return decomposeToData(new THREE.Matrix4().multiplyMatrices(parentWorld.clone().invert(), world));
 }
@@ -124,7 +138,7 @@ export function reparent(
   const world = worlds.get(id);
   if (!world) return objects;
   const data = toLocalData(world, newParentId ? worlds.get(newParentId) : undefined);
-  return objects.map((o) => (o.id === id ? { ...o, parentId: newParentId, ...data } : o));
+  return objects.map((o) => (o.id === id ? { ...o, parentId: newParentId, transform: data } : o));
 }
 
 export function removeSubtree(objects: SceneObjectData[], id: string): SceneObjectData[] {
@@ -141,32 +155,160 @@ export function cloneSubtree(objects: SceneObjectData[], id: string, offset: Vec
     if (!ids.has(o.id)) continue;
     const isRoot = o.id === id;
     copies.push({
-      ...o, id: map.get(o.id)!, joints: { ...o.joints },
+      ...o,
+      id: map.get(o.id)!,
       parentId: isRoot ? o.parentId : map.get(o.parentId!) ?? null,
       label: isRoot ? `${o.label}-copy` : o.label,
-      position: isRoot ? [o.position[0] + offset[0], o.position[1] + offset[1], o.position[2] + offset[2]] : o.position,
+      transform: {
+        position: isRoot
+          ? [o.transform.position[0] + offset[0], o.transform.position[1] + offset[1], o.transform.position[2] + offset[2]]
+          : [...o.transform.position],
+        rotation: [...o.transform.rotation],
+        scale: o.transform.scale,
+      },
+      components: {
+        ...(o.components.renderer
+          ? { renderer: { ...o.components.renderer, joints: { ...o.components.renderer.joints } } }
+          : {}),
+        ...(o.components.light ? { light: { ...o.components.light } } : {}),
+        ...(o.kind === "robot" && o.components.robot ? { robot: { ...o.components.robot } } : {}),
+      },
     });
   }
   return { copies, rootId: map.get(id)! };
 }
 
-/** Accepts scene objects of any saved version (v1 had only { asset, position, rotationY, ... }). */
+function toVec3(raw: unknown, fallback: Vec3): Vec3 {
+  return Array.isArray(raw) && raw.length >= 3
+    ? [Number(raw[0]) || 0, Number(raw[1]) || 0, Number(raw[2]) || 0]
+    : [...fallback];
+}
+
+/** Normalizes scene entities from any saved version (v1/v2 flat or v3 Unity-style components). */
 export function normalizeObject(raw: any): SceneObjectData {
-  const kind = raw.kind ?? "model";
-  const rotation: Vec3 = Array.isArray(raw.rotation) ? raw.rotation : [0, raw.rotationY ?? 0, 0];
+  // v3 shape already has `transform` and `components`
+  if (raw && raw.transform && raw.components && typeof raw.components === "object") {
+    const rawKind = raw.kind as string;
+    const asset: string | null = raw.components.renderer?.asset ?? null;
+    const kind: EntityKind =
+      rawKind === "group" || rawKind === "light" || rawKind === "robot" || rawKind === "obstacle"
+        ? rawKind
+        : isRobotAsset(asset)
+          ? "robot"
+          : "obstacle";
+    const transform: TransformComponent = {
+      position: toVec3(raw.transform.position, [0, 0, 0]),
+      rotation: toVec3(raw.transform.rotation, [0, 0, 0]),
+      scale: typeof raw.transform.scale === "number" ? raw.transform.scale : 1,
+    };
+
+    if (kind === "group") {
+      return {
+        id: raw.id ?? newId(),
+        kind: "group",
+        label: raw.label ?? "group",
+        parentId: raw.parentId ?? null,
+        transform,
+        components: {},
+      };
+    }
+
+    if (kind === "light") {
+      return {
+        id: raw.id ?? newId(),
+        kind: "light",
+        label: raw.label ?? "light",
+        parentId: raw.parentId ?? null,
+        transform,
+        components: {
+          light: { ...DEFAULT_LIGHT, ...(raw.components.light ?? {}) },
+        },
+      };
+    }
+
+    const r = raw.components.renderer;
+    const renderer = r && typeof r.asset === "string"
+      ? {
+          asset: r.asset,
+          static: kind === "robot" ? false : Boolean(r.static),
+          opacity: typeof r.opacity === "number" ? Math.min(1, Math.max(0.05, r.opacity)) : 1,
+          joints: r.joints && typeof r.joints === "object" ? { ...r.joints } : {},
+        }
+      : undefined;
+
+    return {
+      id: raw.id ?? newId(),
+      kind,
+      label: raw.label ?? asset ?? kind,
+      parentId: raw.parentId ?? null,
+      transform,
+      components: {
+        ...(renderer ? { renderer } : {}),
+        ...(kind === "robot"
+          ? { robot: { script: typeof raw.components.robot?.script === "string" ? raw.components.robot.script : "" } }
+          : {}),
+      },
+    };
+  }
+
+  // Legacy v1/v2 migration
+  const rawKind = raw?.kind ?? "model";
+  const asset: string | null = raw?.asset ?? null;
+  const legacyRotation: Vec3 = Array.isArray(raw?.rotation)
+    ? toVec3(raw.rotation, [0, 0, 0])
+    : [0, Number(raw?.rotationY) || 0, 0];
+  const transform: TransformComponent = {
+    position: toVec3(raw?.position, [0, 0, 0]),
+    rotation: legacyRotation,
+    scale: typeof raw?.scale === "number" ? raw.scale : 1,
+  };
+
+  if (rawKind === "group") {
+    return {
+      id: raw?.id ?? newId(),
+      kind: "group",
+      label: raw?.label ?? "group",
+      parentId: raw?.parentId ?? null,
+      transform,
+      components: {},
+    };
+  }
+
+  if (rawKind === "light") {
+    return {
+      id: raw?.id ?? newId(),
+      kind: "light",
+      label: raw?.label ?? "light",
+      parentId: raw?.parentId ?? null,
+      transform,
+      components: {
+        light: { ...DEFAULT_LIGHT, ...(raw?.light ?? {}) },
+      },
+    };
+  }
+
+  const legacyScript = typeof raw?.script === "string" ? raw.script : "";
+  const isCustomScripted = Boolean(asset && !STATIC_OBSTACLE_ASSETS.has(asset) && legacyScript.trim());
+  const kind: EntityKind = isRobotAsset(asset) || isCustomScripted ? "robot" : "obstacle";
+
   return {
-    id: raw.id ?? newId(),
+    id: raw?.id ?? newId(),
     kind,
-    asset: raw.asset ?? null,
-    label: raw.label ?? raw.asset ?? "object",
-    parentId: raw.parentId ?? null,
-    position: raw.position ?? [0, 0, 0],
-    rotation,
-    scale: raw.scale ?? 1,
-    joints: raw.joints ?? {},
-    static: !!raw.static,
-    opacity: typeof raw.opacity === "number" ? Math.min(1, Math.max(0.05, raw.opacity)) : 1,
-    light: kind === "light" ? { ...DEFAULT_LIGHT, ...(raw.light ?? {}) } : undefined,
-    script: raw.script,
+    label: raw?.label ?? asset ?? "object",
+    parentId: raw?.parentId ?? null,
+    transform,
+    components: {
+      ...(asset
+        ? {
+            renderer: {
+              asset,
+              static: kind === "robot" ? false : Boolean(raw?.static),
+              opacity: typeof raw?.opacity === "number" ? Math.min(1, Math.max(0.05, raw.opacity)) : 1,
+              joints: raw?.joints && typeof raw.joints === "object" ? { ...raw.joints } : {},
+            },
+          }
+        : {}),
+      ...(kind === "robot" ? { robot: { script: legacyScript } } : {}),
+    },
   };
 }

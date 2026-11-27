@@ -1,6 +1,7 @@
 export type Vec3 = [number, number, number];
 
-export type ObjectKind = "model" | "group" | "light";
+export type EntityKind = "robot" | "obstacle" | "group" | "light";
+export type ObjectKind = EntityKind;
 export type LightType = "point" | "spot" | "directional";
 
 export interface LightProps {
@@ -12,20 +13,79 @@ export interface LightProps {
   castShadow: boolean;
 }
 
+/** Mandatory Unity-style Transform component on every entity. */
+export interface TransformComponent {
+  position: Vec3;     // metres, Y up
+  rotation: Vec3;     // degrees, Euler XYZ
+  scale: number;      // uniform
+}
+
+/** Rendering component attached to entities with a 3D mesh (robots & obstacles). */
+export interface MeshRendererComponent {
+  asset: string;                  // key in model_sets.files, ai_<id>, or up_<id>
+  static: boolean;                // true = drawn through GPU instancing (never moves)
+  opacity?: number;               // 0.05..1.0 transparency (1 = solid opaque)
+  joints: Record<string, number>; // radians (revolute/continuous) or metres (prismatic)
+}
+
+/** Behaviour script component attached strictly to Robot entities. */
+export interface RobotScriptComponent {
+  script: string;
+}
+
+export interface EntityComponents {
+  renderer?: MeshRendererComponent;
+  light?: LightProps;
+  robot?: RobotScriptComponent;
+}
+
 export interface SceneObjectData {
   id: string;
-  kind: ObjectKind;
-  asset: string | null;           // key in model_sets.files (models only)
-  label: string;                  // scripts refer to objects by label — keep them free of spaces
-  parentId: string | null;        // hierarchy; position/rotation/scale are LOCAL to the parent
-  position: Vec3;                 // metres, Y up
-  rotation: Vec3;                 // degrees, Euler XYZ
-  scale: number;                  // uniform
-  joints: Record<string, number>; // radians (revolute/continuous) or metres (prismatic)
-  static: boolean;                // true = drawn through GPU instancing (and never moves)
-  opacity?: number;               // 0.05..1.0 transparency (1 = solid opaque)
-  light?: LightProps;
-  script?: string;                // behaviour script, run in Play mode
+  kind: EntityKind;
+  label: string;                  // scripts refer to entities by label — keep free of spaces
+  parentId: string | null;        // hierarchy; transform is LOCAL to parent
+  transform: TransformComponent;  // every entity has Transform
+  components: EntityComponents;   // attached components (only robots have `robot`)
+}
+
+export type SceneEntity = SceneObjectData;
+
+export const ROBOT_ASSETS = new Set([
+  "robot",
+  "robot_arm",
+  "robot_transfer",
+  "drone",
+  "humanoid",
+]);
+
+export const STATIC_OBSTACLE_ASSETS = new Set([
+  "warehouse",
+  "rack",
+  "tote",
+  "pallet",
+  "goods",
+  "bag",
+  "track",
+  "station",
+  "charger",
+  "conveyor",
+  "truck",
+]);
+
+export function isRobotAsset(asset: string | null | undefined): boolean {
+  return Boolean(asset && ROBOT_ASSETS.has(asset));
+}
+
+export function isRobotEntity(e: Pick<SceneObjectData, "kind">): boolean {
+  return e.kind === "robot";
+}
+
+export function getEntityAsset(e: Pick<SceneObjectData, "components">): string | null {
+  return e.components.renderer?.asset ?? null;
+}
+
+export function getEntityScript(e: Pick<SceneObjectData, "kind" | "components">): string | undefined {
+  return e.kind === "robot" ? e.components.robot?.script : undefined;
 }
 
 export type AiPartShape =
@@ -91,7 +151,7 @@ export interface AiGenerateOptions {
 }
 
 export interface SceneDoc {
-  version: 2;
+  version: 3;
   objects: SceneObjectData[];
   zones?: ZoneDef[];
   aiBlueprints?: Record<string, AiModelBlueprint>;
@@ -112,7 +172,7 @@ export interface SceneRow {
   name: string;
   model_set_name: string | null;
   model_set_version: string | null;
-  data: { version: number; objects: unknown[]; zones?: ZoneDef[]; aiBlueprints?: Record<string, AiModelBlueprint> }; // v1 docs are migrated on load (see sceneMath.normalizeObject)
+  data: { version: number; objects: unknown[]; zones?: ZoneDef[]; aiBlueprints?: Record<string, AiModelBlueprint> }; // v1/v2 docs are migrated on load (see sceneMath.normalizeObject)
   created_at: string;
   updated_at: string;
 }
@@ -171,7 +231,7 @@ export interface PerfStats {
 export type WorkspaceMode = "author" | "twin";
 export type HealthStatus = "nominal" | "warning" | "fault" | "offline";
 export type CameraPreset = "overview" | "isometric" | "top" | "conveyor" | "dock";
-export type TwinScenario = "nominal" | "peak_rush" | "conveyor_jam" | "low_battery";
+export type TwinScenario = "nominal" | "peak_rush" | "robot_jam" | "low_battery";
 export type FaultKind = "overheat" | "battery" | "jam" | "sensor";
 export type StreamStatus = "disconnected" | "connecting" | "connected" | "error";
 
@@ -196,7 +256,7 @@ export interface AssetTelemetry {
   id: string;
   label: string;
   asset: string | null;
-  kind: ObjectKind;
+  kind: "robot";
   status: HealthStatus;
   utilizationPct: number;
   speedMps: number;
@@ -250,3 +310,62 @@ export interface ReplayFrame {
   entities: Record<string, ReplayEntityPose>;
   kpis: FacilityKpis;
 }
+
+export type RosConnectionMode = "builtin" | "external";
+
+export interface RosTopicInfo {
+  topic: string;
+  type: string;
+  hz: number;
+  msgCount: number;
+  lastMsg?: unknown;
+}
+
+export interface RosLogEntry {
+  stamp: string;
+  level: number;
+  name: string;
+  msg: string;
+}
+
+export interface RosPoseState {
+  id: string;
+  ns: string;
+  pos: Vec3;
+  yaw: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  wz: number;
+  updatedAt: number;
+}
+
+export interface RosJointState {
+  id: string;
+  ns: string;
+  joints: Record<string, number>;
+  updatedAt: number;
+}
+
+export interface RosLaserScan {
+  id: string;
+  frameId: string;
+  angleMin: number;
+  angleIncrement: number;
+  rangeMin: number;
+  rangeMax: number;
+  ranges: number[];
+  updatedAt: number;
+}
+
+export interface RosDiagnostic {
+  id: string;
+  level: number; // 0=OK, 1=WARN, 2=ERROR
+  message: string;
+  mode: string;
+  batteryPct?: number;
+  temperatureC?: number;
+  speedMps?: number;
+  updatedAt: number;
+}
+

@@ -2,31 +2,38 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Dropdown, Empty, Input, Segmented, Select, Slider, Switch, Tabs, Tag, Tooltip } from "antd";
 import {
   Activity, AlertCircle, ArrowLeftRight, BatteryCharging, Bot, Box, Boxes, Building2, ChevronDown, ChevronRight, Container, Cpu,
-  Download, FilePlus, Folder, FolderOpen, FolderPlus, FolderTree, Layers, Lightbulb, Lock, LogIn, Monitor, Package, Plane, Plus, Route,
+  Download, FilePlus, Folder, FolderOpen, FolderPlus, FolderTree, Layers, Lightbulb, Lock, LogIn, Monitor, Package, Plane, Plus, Radio, Route,
   Search, ShoppingBag, SlidersHorizontal, Sparkles, Trash2, Truck, UploadCloud, User, Zap,
 } from "lucide-react";
 import { childrenIndex } from "../../lib/sceneMath";
 import type { BuiltAiAsset } from "./aiModelBuilder";
 import type { UploadedModelAsset } from "./uploadedModelLoader";
-import type {
-  AiGenerateOptions,
-  AssetTelemetry,
-  CameraMode,
-  CanvasBgMode,
-  LightType,
-  ModelSetRow,
-  PerfStats,
-  SceneObjectData,
-  SceneSummary,
-  StreamStatus,
-  TwinAlert,
-  TwinScenario,
-  ViewPrefs,
-  WorkspaceMode,
-  ZoneDef,
+import {
+  getEntityAsset,
+  getEntityScript,
+  isRobotAsset,
+  type AiGenerateOptions,
+  type AssetTelemetry,
+  type CanvasBgMode,
+  type LightType,
+  type ModelSetRow,
+  type PerfStats,
+  type RosConnectionMode,
+  type RosLogEntry,
+  type RosTopicInfo,
+  type SceneObjectData,
+  type SceneSummary,
+  type StreamStatus,
+  type TwinAlert,
+  type TwinScenario,
+  type Vec3,
+  type ViewPrefs,
+  type WorkspaceMode,
+  type ZoneDef,
 } from "../../lib/workTypes";
 import AiDetailModal from "./AiDetailModal";
 import AreasSidebarTab from "./AreasSidebarTab";
+import RosSidebarTab from "./RosSidebarTab";
 import TwinSidebarTab from "./TwinSidebarTab";
 import HelpTip from "../../components/HelpTip";
 import { CANVAS_BG_OPTIONS } from "./canvasBackdrop";
@@ -94,9 +101,11 @@ interface Props {
   scenario: TwinScenario;
   alerts: TwinAlert[];
   streamStatus: StreamStatus;
+  streamUrl: string;
   onScenario: (s: TwinScenario) => void;
   onAcknowledgeAlert: (alertId: string) => void;
   onClearAlerts: () => void;
+  onStreamUrlChange: (url: string) => void;
   onConnectStream: (url: string) => void;
   onDisconnectStream: () => void;
   // areas / zones
@@ -111,6 +120,33 @@ interface Props {
   onUpdateZone: (id: string, patch: Partial<ZoneDef>) => void;
   onDeleteZone: (id: string) => void;
   onResetZones: () => void;
+  // ROS 2
+  rosStatus: StreamStatus;
+  rosMode: RosConnectionMode;
+  rosUrl: string;
+  rosDriveScene: boolean;
+  rosShowLidar: boolean;
+  rosGoalPick: boolean;
+  rosTeleopKeys: boolean;
+  rosSelectedRobot: string;
+  rosNodes: string[];
+  rosTopics: RosTopicInfo[];
+  rosLogs: RosLogEntry[];
+  onRosModeChange: (m: RosConnectionMode) => void;
+  onRosUrlChange: (url: string) => void;
+  onRosConnect: () => void;
+  onRosDisconnect: () => void;
+  onToggleRosDriveScene: (v: boolean) => void;
+  onToggleRosShowLidar: (v: boolean) => void;
+  onToggleRosGoalPick: () => void;
+  onToggleRosTeleopKeys: (v: boolean) => void;
+  onRosSelectRobot: (id: string) => void;
+  onRosPublishTwist: (robotId: string, linear: Vec3, angularZ: number) => void;
+  onRosSendGoal: (robotId: string, x: number, z: number) => void;
+  onRosResumePatrol: (robotId?: string) => void;
+  onRosArmPreset: (preset: "home" | "pick" | "place" | "auto") => void;
+  onRosArmJointCmd: (joints: Record<string, number>) => void;
+  onRosRefreshGraph: () => void;
 }
 
 const renderTabIcon = (title: string, icon: React.ReactNode, badgeCount?: number) => (
@@ -140,13 +176,10 @@ export default function WorkSidebar(p: Props) {
         selectedId={p.selectedId}
         scenario={p.scenario}
         alerts={p.alerts}
-        streamStatus={p.streamStatus}
         onSelectAsset={p.onSelectObject}
         onScenario={p.onScenario}
         onAcknowledgeAlert={p.onAcknowledgeAlert}
         onClearAlerts={p.onClearAlerts}
-        onConnectStream={p.onConnectStream}
-        onDisconnectStream={p.onDisconnectStream}
       />
     ),
   };
@@ -175,6 +208,51 @@ export default function WorkSidebar(p: Props) {
     ),
   };
 
+  const rosOrWsConnected = p.rosStatus === "connected" || p.streamStatus === "connected";
+  const rosItem = {
+    key: "ros",
+    label: renderTabIcon(
+      rosOrWsConnected ? "ROS 2 & WebSocket (Connected)" : "ROS 2 & WebSocket Connections",
+      <Radio size={16} />,
+      rosOrWsConnected ? (p.rosStatus === "connected" ? p.rosNodes.length || 1 : 1) : undefined,
+    ),
+    children: (
+      <RosSidebarTab
+        status={p.rosStatus}
+        mode={p.rosMode}
+        url={p.rosUrl}
+        streamStatus={p.streamStatus}
+        streamUrl={p.streamUrl}
+        driveScene={p.rosDriveScene}
+        showLidar={p.rosShowLidar}
+        goalPickActive={p.rosGoalPick}
+        teleopKeys={p.rosTeleopKeys}
+        selectedRobot={p.rosSelectedRobot}
+        nodes={p.rosNodes}
+        topics={p.rosTopics}
+        logs={p.rosLogs}
+        onModeChange={p.onRosModeChange}
+        onUrlChange={p.onRosUrlChange}
+        onConnect={p.onRosConnect}
+        onDisconnect={p.onRosDisconnect}
+        onStreamUrlChange={p.onStreamUrlChange}
+        onConnectStream={p.onConnectStream}
+        onDisconnectStream={p.onDisconnectStream}
+        onToggleDriveScene={p.onToggleRosDriveScene}
+        onToggleShowLidar={p.onToggleRosShowLidar}
+        onToggleGoalPick={p.onToggleRosGoalPick}
+        onToggleTeleopKeys={p.onToggleRosTeleopKeys}
+        onSelectRobot={p.onRosSelectRobot}
+        onPublishTwist={p.onRosPublishTwist}
+        onSendGoal={p.onRosSendGoal}
+        onResumePatrol={p.onRosResumePatrol}
+        onArmPreset={p.onRosArmPreset}
+        onArmJointCmd={p.onRosArmJointCmd}
+        onRefreshGraph={p.onRosRefreshGraph}
+      />
+    ),
+  };
+
   const authorItems = [
     { key: "models", label: renderTabIcon("Models & AI 3D Generator", <Boxes size={16} />), children: <ModelsTab {...p} /> },
     areasItem,
@@ -183,7 +261,7 @@ export default function WorkSidebar(p: Props) {
     { key: "view", label: renderTabIcon("View & Renderer", <SlidersHorizontal size={16} />), children: <ViewTab {...p} /> },
   ];
 
-  const items = p.workspaceMode === "twin" ? [twinItem, ...authorItems] : [...authorItems, twinItem];
+  const items = p.workspaceMode === "twin" ? [twinItem, rosItem, ...authorItems] : [...authorItems, twinItem, rosItem];
 
   return (
     <Tabs
@@ -505,6 +583,7 @@ function ModelsTab(p: Props) {
             onDragStart={(e) => { e.dataTransfer.setData(DRAG_MIME, a); e.dataTransfer.effectAllowed = "copy"; }}>
             <span className="work-asset-icon">{assetIcon(a)}</span>
             <span className="work-asset-name">{a}</span>
+            <span className="work-ai-asset-meta">{isRobotAsset(a) ? "Robot" : "Obstacle"}</span>
             <Tooltip title="Add to scene">
               <button type="button" className="work-asset-add" onClick={() => p.onAddAsset(a)}><Plus size={14} /></button>
             </Tooltip>
@@ -570,12 +649,14 @@ function HierarchyTab(p: Props) {
     if (!q) return { matchedIds: matched, visibleIds: visible };
 
     for (const o of p.objects) {
+      const asset = getEntityAsset(o);
+      const hasScript = Boolean(getEntityScript(o)?.trim());
       const hit =
         o.label.toLowerCase().includes(q) ||
-        (o.asset && o.asset.toLowerCase().includes(q)) ||
+        (asset && asset.toLowerCase().includes(q)) ||
         o.kind.toLowerCase().includes(q) ||
-        (o.light?.type && o.light.type.toLowerCase().includes(q)) ||
-        (o.script?.trim() && "script".includes(q));
+        (o.components.light?.type && o.components.light.type.toLowerCase().includes(q)) ||
+        (hasScript && "script".includes(q));
       if (!hit) continue;
       matched.add(o.id);
       visible.add(o.id);
@@ -608,6 +689,8 @@ function HierarchyTab(p: Props) {
     if (q && !visibleIds.has(id)) return null;
     const o = byId.get(id);
     if (!o) return null;
+    const asset = getEntityAsset(o);
+    const hasScript = Boolean(getEntityScript(o)?.trim());
     const allKids = idx.get(id) ?? [];
     const kids = q ? allKids.filter((k) => visibleIds.has(k)) : allKids;
     const expanded = q ? kids.length > 0 : open.has(id);
@@ -630,11 +713,11 @@ function HierarchyTab(p: Props) {
             {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </button>
           <span className="work-tree-icon">
-            {o.kind === "group" ? <Folder size={13} /> : o.kind === "light" ? <Lightbulb size={13} /> : assetIcon(o.asset, 13)}
+            {o.kind === "group" ? <Folder size={13} /> : o.kind === "light" ? <Lightbulb size={13} /> : assetIcon(asset, 13)}
           </span>
           <span className="work-tree-label">{o.label}</span>
           {kids.length > 0 && <span className="work-tree-count">{kids.length}</span>}
-          {o.script?.trim() && <Tooltip title="Has a behaviour script"><Zap size={11} className="work-tree-badge" /></Tooltip>}
+          {hasScript && <Tooltip title="Robot script"><Zap size={11} className="work-tree-badge" /></Tooltip>}
           {isStatic && <Tooltip title="Static (instanced)"><span className="work-tree-s">S</span></Tooltip>}
           <button type="button" className="work-row-btn" title="Delete (with children)"
             onClick={(e) => { e.stopPropagation(); p.onDeleteObject(id); }}><Trash2 size={12} /></button>
@@ -796,18 +879,6 @@ function ViewTab({ prefs, onPrefs, stats, backend }: Props) {
               </span>
             ),
           }))}
-        />
-      </div>
-      <div className="work-pref-row">
-        <span>Camera projection</span>
-        <Segmented
-          size="small"
-          value={prefs.cameraMode}
-          onChange={(v) => onPrefs({ cameraMode: v as CameraMode })}
-          options={[
-            { value: "perspective", label: "Perspective" },
-            { value: "orthographic", label: "Orthogonal" },
-          ]}
         />
       </div>
       {sw("Show gizmos", "showGizmos", "View cube, light icons, group axes, selection box")}
